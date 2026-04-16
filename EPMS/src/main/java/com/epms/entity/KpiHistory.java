@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+
 import java.util.Date;
 
 @Entity
@@ -12,7 +13,8 @@ import java.util.Date;
 @NoArgsConstructor
 @AllArgsConstructor
 public class KpiHistory {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
     private Integer kpiId;
     private String title;

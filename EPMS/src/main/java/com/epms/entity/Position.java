@@ -37,12 +37,12 @@ public class Position {
     private Set<KpiPosition> kpiPositions = new HashSet<>();
 
     // Helper method to get all KPIs for this position
-    public Set<Kpi> getKpis() {
-        Set<Kpi> kpis = new HashSet<>();
+    public Set<KpiForm> getKpis() {
+        Set<KpiForm> kpiForms = new HashSet<>();
         for (KpiPosition kp : kpiPositions) {
-            kpis.add(kp.getKpi());
+            kpiForms.add(kp.getKpiForm());
         }
-        return kpis;
+        return kpiForms;
     }
 
     // Helper method to calculate total weighted score for this position
@@ -55,7 +55,7 @@ public class Position {
     // Helper method to get KPI performance for this position
     public KpiPosition getKpiPerformance(Integer kpiId) {
         for (KpiPosition kp : kpiPositions) {
-            if (kp.getKpi().getId().equals(kpiId)) {
+            if (kp.getKpiForm().getId().equals(kpiId)) {
                 return kp;
             }
         }
