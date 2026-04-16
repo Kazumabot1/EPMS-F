@@ -1,0 +1,64 @@
+package com.epms.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import java.util.*;
+
+@Entity
+@Table(name = "positions")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class Position {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(name = "position_title")
+    private String positionTitle;
+
+    @Column(name = "position_level")
+    private Integer positionLevel;
+
+    private String description;
+
+    private Boolean status = true;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdAt;
+
+    private String createdBy;
+
+    // One-to-Many relationship with KpiPosition
+    @OneToMany(mappedBy = "position", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Set<KpiPosition> kpiPositions = new HashSet<>();
+
+    // Helper method to get all KPIs for this position
+    public Set<Kpi> getKpis() {
+        Set<Kpi> kpis = new HashSet<>();
+        for (KpiPosition kp : kpiPositions) {
+            kpis.add(kp.getKpi());
+        }
+        return kpis;
+    }
+
+    // Helper method to calculate total weighted score for this position
+    public Double getTotalWeightedScore() {
+        return kpiPositions.stream()
+                .mapToDouble(kp -> kp.getWeightedScore() != null ? kp.getWeightedScore() : 0.0)
+                .sum();
+    }
+
+    // Helper method to get KPI performance for this position
+    public KpiPosition getKpiPerformance(Integer kpiId) {
+        for (KpiPosition kp : kpiPositions) {
+            if (kp.getKpi().getId().equals(kpiId)) {
+                return kp;
+            }
+        }
+        return null;
+    }
+}
