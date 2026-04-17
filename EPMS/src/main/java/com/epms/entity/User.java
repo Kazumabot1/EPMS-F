@@ -42,7 +42,7 @@ public class User {
 
     // One-to-Many relationship with KPIs created by this user
     @OneToMany(mappedBy = "createdByUser", fetch = FetchType.LAZY)
-    private List<Kpi> createdKpis = new ArrayList<>();
+    private List<KpiForm> createdKpiForms = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     private List<Notification> notifications = new ArrayList<>();

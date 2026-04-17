@@ -19,7 +19,7 @@ public class KpiVersionHistory {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "kpi_id", nullable = false)
-    private Kpi kpi;
+    private KpiForm kpiForm;
 
     @Column(name = "column_name", nullable = false)
     private String kpiColumnName;

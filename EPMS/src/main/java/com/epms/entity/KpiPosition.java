@@ -18,7 +18,7 @@ public class KpiPosition {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "kpi_id", nullable = false)
-    private Kpi kpi;
+    private KpiForm kpiForm;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "position_id", nullable = false)
@@ -54,8 +54,8 @@ public class KpiPosition {
     @PrePersist
     @PreUpdate
     public void calculateWeightedScore() {
-        if (score != null && kpi != null && kpi.getWeight() != null) {
-            this.weightedScore = (score * kpi.getWeight()) / 100.0;
+        if (score != null && kpiForm != null && kpiForm.getWeight() != null) {
+            this.weightedScore = (score * kpiForm.getWeight()) / 100.0;
         }
     }
 
