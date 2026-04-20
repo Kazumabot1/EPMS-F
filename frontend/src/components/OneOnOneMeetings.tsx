@@ -108,6 +108,7 @@ const OneOnOneMeetings = () => {
                     value={form.managerId}
                     onChange={(e) => setForm({ ...form, managerId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter manager ID"
                     required
                   />
                 </div>
@@ -118,6 +119,7 @@ const OneOnOneMeetings = () => {
                     value={form.employeeId}
                     onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter employee ID"
                     required
                   />
                 </div>
@@ -128,6 +130,7 @@ const OneOnOneMeetings = () => {
                     value={form.scheduledDate}
                     onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Select scheduled date and time"
                   />
                 </div>
                 <div>
@@ -136,6 +139,7 @@ const OneOnOneMeetings = () => {
                     value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter meeting notes"
                     rows={3}
                   />
                 </div>
@@ -146,6 +150,7 @@ const OneOnOneMeetings = () => {
                     value={form.status}
                     onChange={(e) => setForm({ ...form, status: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., SCHEDULED, COMPLETED"
                   />
                 </div>
                 <div>
@@ -155,6 +160,7 @@ const OneOnOneMeetings = () => {
                     value={form.followUpDate}
                     onChange={(e) => setForm({ ...form, followUpDate: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Select follow-up date"
                   />
                 </div>
                 <div>

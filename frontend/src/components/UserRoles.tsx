@@ -101,6 +101,7 @@ const UserRoles = () => {
                     value={form.userId}
                     onChange={(e) => setForm({ ...form, userId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter user ID"
                     required
                   />
                 </div>
@@ -111,6 +112,7 @@ const UserRoles = () => {
                     value={form.roleId}
                     onChange={(e) => setForm({ ...form, roleId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter role ID"
                     required
                   />
                 </div>

@@ -39,27 +39,27 @@ public class FeedbackEvaluationServiceImpl implements FeedbackEvaluationService 
         List<FeedbackEvaluatorAssignment> assignments = new ArrayList<>();
 
         // 1. Assign Manager
-        Long managerId = employeeHierarchyService.getManagerId(targetEmployeeId);
-        if (managerId != null && !assignmentRepository.existsByFeedbackRequestIdAndEvaluatorEmployeeId(feedbackRequestId, managerId)) {
-            assignments.add(createAssignment(request, managerId, EvaluatorSourceType.MANAGER, isAnonymousEnabled));
+        Integer managerId = employeeHierarchyService.getManagerId(targetEmployeeId.intValue());
+        if (managerId != null && !assignmentRepository.existsByFeedbackRequestIdAndEvaluatorEmployeeId(feedbackRequestId, managerId.longValue())) {
+            assignments.add(createAssignment(request, managerId.longValue(), EvaluatorSourceType.MANAGER, isAnonymousEnabled));
         }
 
         // 2. Assign Peers (Random Selection)
-        List<Long> peerIds = employeeHierarchyService.getRandomPeers(targetEmployeeId, 3);
+        List<Integer> peerIds = employeeHierarchyService.getRandomPeers(targetEmployeeId.intValue(), 3);
         if (peerIds != null) {
-            for (Long peerId : peerIds) {
-                if (!assignmentRepository.existsByFeedbackRequestIdAndEvaluatorEmployeeId(feedbackRequestId, peerId)) {
-                    assignments.add(createAssignment(request, peerId, EvaluatorSourceType.PEER, isAnonymousEnabled));
+            for (Integer peerId : peerIds) {
+                if (!assignmentRepository.existsByFeedbackRequestIdAndEvaluatorEmployeeId(feedbackRequestId, peerId.longValue())) {
+                    assignments.add(createAssignment(request, peerId.longValue(), EvaluatorSourceType.PEER, isAnonymousEnabled));
                 }
             }
         }
 
         // 3. Assign Subordinates
-        List<Long> subordinateIds = employeeHierarchyService.getSubordinates(targetEmployeeId);
+        List<Integer> subordinateIds = employeeHierarchyService.getSubordinates(targetEmployeeId.intValue());
         if (subordinateIds != null) {
-            for (Long subId : subordinateIds) {
-                if (!assignmentRepository.existsByFeedbackRequestIdAndEvaluatorEmployeeId(feedbackRequestId, subId)) {
-                    assignments.add(createAssignment(request, subId, EvaluatorSourceType.SUBORDINATE, isAnonymousEnabled));
+            for (Integer subId : subordinateIds) {
+                if (!assignmentRepository.existsByFeedbackRequestIdAndEvaluatorEmployeeId(feedbackRequestId, subId.longValue())) {
+                    assignments.add(createAssignment(request, subId.longValue(), EvaluatorSourceType.SUBORDINATE, isAnonymousEnabled));
                 }
             }
         }

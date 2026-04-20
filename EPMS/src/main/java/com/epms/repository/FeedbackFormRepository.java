@@ -34,4 +34,5 @@ public interface FeedbackFormRepository extends JpaRepository<FeedbackForm, Long
            "LEFT JOIN FETCH s.questions " +
            "WHERE f.id = :formId")
     Optional<FeedbackForm> findByIdWithSectionsAndQuestions(@Param("formId") Long formId);
+
 }
