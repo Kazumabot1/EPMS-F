@@ -105,6 +105,7 @@ const OneOnOneActionItems = () => {
                     value={form.meetingId}
                     onChange={(e) => setForm({ ...form, meetingId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter meeting ID"
                     required
                   />
                 </div>
@@ -115,6 +116,7 @@ const OneOnOneActionItems = () => {
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter action item description"
                     required
                   />
                 </div>
@@ -125,6 +127,7 @@ const OneOnOneActionItems = () => {
                     value={form.owner}
                     onChange={(e) => setForm({ ...form, owner: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter owner name"
                   />
                 </div>
                 <div>
@@ -134,6 +137,7 @@ const OneOnOneActionItems = () => {
                     value={form.dueDate}
                     onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Select due date"
                   />
                 </div>
                 <div>
@@ -143,6 +147,7 @@ const OneOnOneActionItems = () => {
                     value={form.status}
                     onChange={(e) => setForm({ ...form, status: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., PENDING, COMPLETED"
                   />
                 </div>
                 <div className="flex justify-end space-x-3 pt-4">

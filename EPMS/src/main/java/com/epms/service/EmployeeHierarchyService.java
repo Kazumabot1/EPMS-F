@@ -7,7 +7,7 @@ import java.util.List;
  * Represents external module interactions needed for auto-selecting evaluators.
  */
 public interface EmployeeHierarchyService {
-    Long getManagerId(Long employeeId);
-    List<Long> getRandomPeers(Long employeeId, int count);
-    List<Long> getSubordinates(Long employeeId);
+    Integer getManagerId(Integer employeeId);
+    List<Integer> getRandomPeers(Integer employeeId, int count);
+    List<Integer> getSubordinates(Integer employeeId);
 }
