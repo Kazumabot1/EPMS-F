@@ -102,6 +102,7 @@ const NotificationTemplates = () => {
                     value={form.channelType}
                     onChange={(e) => setForm({ ...form, channelType: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., EMAIL, SMS, PUSH"
                   />
                 </div>
                 <div>
@@ -111,6 +112,7 @@ const NotificationTemplates = () => {
                     value={form.subjectTemplate}
                     onChange={(e) => setForm({ ...form, subjectTemplate: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter subject template"
                     required
                   />
                 </div>
@@ -120,6 +122,7 @@ const NotificationTemplates = () => {
                     value={form.bodyTemplate}
                     onChange={(e) => setForm({ ...form, bodyTemplate: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter body template"
                     rows={4}
                     required
                   />

@@ -100,8 +100,7 @@ const Permissions = () => {
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"                    placeholder="Enter permission name"                    required
                   />
                 </div>
                 <div>
@@ -111,6 +110,7 @@ const Permissions = () => {
                     value={form.module}
                     onChange={(e) => setForm({ ...form, module: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter module name"
                   />
                 </div>
                 <div className="flex justify-end space-x-3 pt-4">
