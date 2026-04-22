@@ -28,6 +28,10 @@ public class Team {
     private Department department;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "team_leader_id", nullable = false)
+    private User teamLeader;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_id", nullable = false)
     private User createdByUser;
 
@@ -38,6 +42,9 @@ public class Team {
     @Column(name = "team_goal", length = 500)
     private String teamGoal;
 
-    @OneToMany(mappedBy = "team", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Column(name = "status", nullable = false, length = 20)
+    private String status = "Active";
+
+    @OneToMany(mappedBy = "team", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<TeamMember> teamMembers = new ArrayList<>();
 }
