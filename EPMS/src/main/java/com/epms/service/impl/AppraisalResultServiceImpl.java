@@ -1,14 +1,17 @@
+
 package com.epms.service.impl;
 
 import com.epms.dto.AppraisalResultRequestDto;
 import com.epms.dto.AppraisalResultResponseDto;
 import com.epms.entity.AppraisalResult;
+import com.epms.exception.BadRequestException;
 import com.epms.exception.ResourceNotFoundException;
 import com.epms.repository.AppraisalResultRepository;
 import com.epms.service.AppraisalResultService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -20,56 +23,88 @@ public class AppraisalResultServiceImpl implements AppraisalResultService {
     @Override
     public AppraisalResultResponseDto createAppraisalResult(AppraisalResultRequestDto requestDto) {
         AppraisalResult result = new AppraisalResult();
-        result.setEmployeeId(requestDto.getEmployeeId());
-        result.setCycleId(requestDto.getCycleId());
-        result.setSelfScore(requestDto.getSelfScore());
-        result.setManagerScore(requestDto.getManagerScore());
-        result.setPerformanceCategory(requestDto.getPerformanceCategory());
-        result.setStatus(requestDto.getStatus() != null ? requestDto.getStatus() : "DRAFT");
-        result.setSelfComment(requestDto.getSelfComment());
-        result.setManagerComment(requestDto.getManagerComment());
-
+        applyChanges(result, requestDto);
         AppraisalResult savedResult = appraisalResultRepository.save(result);
         return mapToResponseDto(savedResult);
     }
 
     @Override
     public List<AppraisalResultResponseDto> getAllAppraisalResults() {
-        return appraisalResultRepository.findAll()
-                .stream()
-                .map(this::mapToResponseDto)
-                .toList();
+        return appraisalResultRepository.findAll().stream().map(this::mapToResponseDto).toList();
     }
 
     @Override
     public AppraisalResultResponseDto getAppraisalResultById(Integer id) {
-        AppraisalResult result = getAppraisalResultEntityById(id);
-        return mapToResponseDto(result);
+        return mapToResponseDto(getAppraisalResultEntityById(id));
     }
 
     @Override
     public AppraisalResultResponseDto updateAppraisalResult(Integer id, AppraisalResultRequestDto requestDto) {
-        AppraisalResult existingResult = getAppraisalResultEntityById(id);
+        AppraisalResult existing = getAppraisalResultEntityById(id);
 
-        existingResult.setEmployeeId(requestDto.getEmployeeId());
-        existingResult.setCycleId(requestDto.getCycleId());
-        existingResult.setSelfScore(requestDto.getSelfScore());
-        existingResult.setManagerScore(requestDto.getManagerScore());
-        existingResult.setPerformanceCategory(requestDto.getPerformanceCategory());
-        if (requestDto.getStatus() != null) {
-            existingResult.setStatus(requestDto.getStatus());
+        if ("LOCKED".equalsIgnoreCase(existing.getStatus())) {
+            throw new BadRequestException("Locked appraisal results cannot be modified.");
         }
-        existingResult.setSelfComment(requestDto.getSelfComment());
-        existingResult.setManagerComment(requestDto.getManagerComment());
 
-        AppraisalResult updatedResult = appraisalResultRepository.save(existingResult);
-        return mapToResponseDto(updatedResult);
+        applyChanges(existing, requestDto);
+        AppraisalResult updated = appraisalResultRepository.save(existing);
+        return mapToResponseDto(updated);
     }
 
     @Override
     public void deleteAppraisalResult(Integer id) {
-        AppraisalResult existingResult = getAppraisalResultEntityById(id);
-        appraisalResultRepository.delete(existingResult);
+        AppraisalResult existing = getAppraisalResultEntityById(id);
+        if ("LOCKED".equalsIgnoreCase(existing.getStatus())) {
+            throw new BadRequestException("Locked appraisal results cannot be deleted.");
+        }
+        appraisalResultRepository.delete(existing);
+    }
+
+    private void applyChanges(AppraisalResult result, AppraisalResultRequestDto requestDto) {
+        result.setEmployeeId(requestDto.getEmployeeId());
+        result.setCycleId(requestDto.getCycleId());
+        result.setSelfScore(requestDto.getSelfScore());
+        result.setManagerScore(requestDto.getManagerScore());
+        result.setSelfComment(requestDto.getSelfComment());
+        result.setManagerComment(requestDto.getManagerComment());
+
+        String status = requestDto.getStatus() != null ? requestDto.getStatus().trim().toUpperCase() : defaultStatus(result.getStatus());
+        result.setStatus(status);
+
+        double finalScore = calculateFinalScore(requestDto.getSelfScore(), requestDto.getManagerScore());
+        result.setFinalScore(finalScore);
+        result.setPerformanceCategory(resolveCategory(finalScore, requestDto.getPerformanceCategory()));
+
+        if ("SUBMITTED".equals(status) && result.getSubmittedAt() == null) {
+            result.setSubmittedAt(new Date());
+        }
+        if ("LOCKED".equals(status) && result.getLockedAt() == null) {
+            result.setLockedAt(new Date());
+        }
+    }
+
+    private String defaultStatus(String existingStatus) {
+        return existingStatus != null ? existingStatus : "DRAFT";
+    }
+
+    private double calculateFinalScore(Double selfScore, Double managerScore) {
+        if (selfScore == null && managerScore == null) return 0.0;
+        if (selfScore == null) return round(managerScore);
+        if (managerScore == null) return round(selfScore);
+        return round((selfScore * 0.4) + (managerScore * 0.6));
+    }
+
+    private String resolveCategory(double finalScore, String requestedCategory) {
+        if (requestedCategory != null && !requestedCategory.isBlank()) return requestedCategory;
+        if (finalScore >= 4.5) return "Outstanding";
+        if (finalScore >= 3.5) return "Good";
+        if (finalScore >= 2.5) return "Meets Requirements";
+        if (finalScore >= 1.5) return "Needs Improvement";
+        return "Unsatisfactory";
+    }
+
+    private double round(Double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     private AppraisalResult getAppraisalResultEntityById(Integer id) {
@@ -94,4 +129,3 @@ public class AppraisalResultServiceImpl implements AppraisalResultService {
         return dto;
     }
 }
-

@@ -1,3 +1,4 @@
+
 package com.epms.controller;
 
 import com.epms.dto.FeedbackResponseItemRequest;
@@ -6,6 +7,7 @@ import com.epms.dto.GenericApiResponse;
 import com.epms.entity.FeedbackQuestion;
 import com.epms.entity.FeedbackResponse;
 import com.epms.entity.FeedbackResponseItem;
+import com.epms.security.SecurityUtils;
 import com.epms.service.FeedbackResponseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,11 +34,11 @@ public class FeedbackResponseController {
     public ResponseEntity<GenericApiResponse<Long>> submitFeedbackResponse(@Valid @RequestBody FeedbackResponseSubmitRequest request) {
         log.info("Received request to submit feedback response for assignment ID: {}", request.getEvaluatorAssignmentId());
 
-        Long submittingEmployeeId = 1L; // Context injected via Spring Security Principal later
+        Long submittingEmployeeId = SecurityUtils.currentUserId().longValue();
 
         List<FeedbackResponseItem> items = new ArrayList<>();
         double totalScore = 0.0;
-        
+
         for (FeedbackResponseItemRequest itemReq : request.getResponses()) {
             FeedbackResponseItem item = new FeedbackResponseItem();
             FeedbackQuestion question = new FeedbackQuestion();
@@ -45,7 +47,6 @@ public class FeedbackResponseController {
             item.setRatingValue(itemReq.getRatingValue());
             item.setComment(itemReq.getComment());
             items.add(item);
-            
             totalScore += itemReq.getRatingValue();
         }
 
