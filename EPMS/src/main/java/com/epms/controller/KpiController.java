@@ -26,29 +26,29 @@ public class KpiController {
     private final KpiService kpiService;
 
     @PostMapping
-    public ResponseEntity<KpiResponseDto> create(@Valid @RequestBody KpiRequestDto requestDto) {
+    public ResponseEntity<KpiResponseDto> createKpi(@Valid @RequestBody KpiRequestDto requestDto) {
         return new ResponseEntity<>(kpiService.create(requestDto), HttpStatus.CREATED);
     }
 
     @GetMapping
-    public ResponseEntity<List<KpiResponseDto>> getAll() {
+    public ResponseEntity<List<KpiResponseDto>> getAllKpi() {
         return ResponseEntity.ok(kpiService.getAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<KpiResponseDto> getById(@PathVariable Integer id) {
+    public ResponseEntity<KpiResponseDto> getKpiById(@PathVariable Integer id) {
         return ResponseEntity.ok(kpiService.getById(id));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<KpiResponseDto> update(
+    public ResponseEntity<KpiResponseDto> updateKpi(
             @PathVariable Integer id,
             @Valid @RequestBody KpiRequestDto requestDto) {
         return ResponseEntity.ok(kpiService.update(id, requestDto));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+    public ResponseEntity<Void> deleteKpi(@PathVariable Integer id) {
         kpiService.delete(id);
         return ResponseEntity.noContent().build();
     }
