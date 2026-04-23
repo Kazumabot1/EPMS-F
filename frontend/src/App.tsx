@@ -17,7 +17,12 @@ import KpiUnitPage from './pages/hr/performance-kpi/unit/KpiUnitPage';
 import KpiCategoryPage from './pages/hr/performance-kpi/category/KpiCategoryPage';
 import KpiItemPage from './pages/hr/performance-kpi/item/KpiItemPage';
 import KpiFormPage from './pages/hr/performance-kpi/form/KpiFormPage';
+import TeamManagement from './pages/team/TeamManagement';
+import TeamCreate from './pages/team/TeamCreate';
+import DepartmentManagement from './pages/department/DepartmentManagement';
 import './components/layout/hr-layout.css';
+import EmployeeManagement from "./pages/employee/EmployeeManagement";
+import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 
 function App() {
   return (
@@ -25,10 +30,15 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-
+<Route path="/employees" element={<EmployeeManagement />} />
         <Route element={<HRLayout />}>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/hr/employee" element={<EmployeeDashboard />} />
+          <Route path="/dashboard" element={<Home />} />
           <Route path="/permissions" element={<Permissions />} />
+          <Route path="/hr/team" element={<TeamManagement />} />
+          <Route path="/hr/team/create" element={<TeamCreate />} />
+          <Route path="/hr/department" element={<DepartmentManagement />} />
           <Route path="/user-roles" element={<UserRoles />} />
           <Route path="/role-permissions" element={<RolePermissions />} />
           <Route path="/pip-updates" element={<PipUpdates />} />
@@ -44,7 +54,7 @@ function App() {
           <Route path="/hr/performance-kpi/form" element={<KpiFormPage />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   );
