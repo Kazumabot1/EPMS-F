@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { getAllEmployees, Employee } from "../../services/employeeService";
+import { useEffect, useState } from "react";
+import { fetchEmployees } from "../../services/employeeService";
+import type { EmployeeResponse } from "../../services/employeeService";
 import "./employee-ui.css";
 
 const EmployeeManagement = () => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
   const [search, setSearch] = useState("");
   const [genderFilter, setGenderFilter] = useState("");
 
@@ -12,13 +13,13 @@ const EmployeeManagement = () => {
   }, []);
 
   const loadEmployees = async () => {
-    const data = await getAllEmployees();
+    const data = await fetchEmployees();
     setEmployees(data);
   };
 
   const filteredEmployees = employees.filter((emp) => {
     return (
-      emp.name.toLowerCase().includes(search.toLowerCase()) &&
+      emp.fullName.toLowerCase().includes(search.toLowerCase()) &&
       (genderFilter ? emp.gender === genderFilter : true)
     );
   });
@@ -57,11 +58,11 @@ const EmployeeManagement = () => {
         <tbody>
           {filteredEmployees.map((emp) => (
             <tr key={emp.id}>
-              <td>{emp.name}</td>
-              <td>{emp.email}</td>
+              <td>{emp.fullName}</td>
+              <td>-</td>
               <td>{emp.gender}</td>
-              <td>{emp.position}</td>
-              <td>{emp.department || "-"}</td>
+              <td>{emp.assignedBy || "-"}</td>
+              <td>{emp.currentDepartment || "-"}</td>
             </tr>
           ))}
         </tbody>

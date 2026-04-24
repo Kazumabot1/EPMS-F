@@ -22,5 +22,5 @@ public class AppraisalQuestionRequestDto {
 
     private Boolean isRequired = true;
     private Double weight = 1.0;
-    private Long ratingScaleId;
+    private Integer ratingScaleId;
 }

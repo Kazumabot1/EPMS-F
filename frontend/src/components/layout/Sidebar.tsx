@@ -61,6 +61,7 @@ const navItems: NavItem[] = [
     label: 'Appraisals',
     icon: 'bi-clipboard-check',
     children: [
+      { to: '/hr/appraisal-forms', label: 'Appraisal Forms', icon: 'bi-ui-checks-grid' },
       { to: '/one-on-one-meetings', label: 'Meetings', icon: 'bi-calendar-check' },
       { to: '/one-on-one-action-items', label: 'Action Items', icon: 'bi-list-check' },
     ],

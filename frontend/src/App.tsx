@@ -23,10 +23,13 @@ import DepartmentManagement from './pages/department/DepartmentManagement';
 import './components/layout/hr-layout.css';
 import EmployeeManagement from "./pages/employee/EmployeeManagement";
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
+import { appraisalRoutes } from './routes/appraisalRoutes';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   return (
     <Router>
+      <Toaster position="top-right" />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -52,6 +55,7 @@ function App() {
           <Route path="/hr/performance-kpi/category" element={<KpiCategoryPage />} />
           <Route path="/hr/performance-kpi/item" element={<KpiItemPage />} />
           <Route path="/hr/performance-kpi/form" element={<KpiFormPage />} />
+          {appraisalRoutes}
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

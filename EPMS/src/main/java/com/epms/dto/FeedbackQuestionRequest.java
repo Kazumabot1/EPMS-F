@@ -14,7 +14,7 @@ public class FeedbackQuestionRequest {
     private Integer questionOrder;
 
     @NotNull(message = "Rating scale ID is required")
-    private Long ratingScaleId;
+    private Integer ratingScaleId;
 
     @NotNull(message = "Weight is required")
     private Double weight;

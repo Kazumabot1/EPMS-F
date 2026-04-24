@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "feedback_questions", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"section_id", "question_order"})
+        @UniqueConstraint(columnNames = {"section_id", "question_order"})
 })
 @Getter
 @Setter
@@ -31,7 +31,7 @@ public class FeedbackQuestion {
     private Integer questionOrder;
 
     @Column(name = "rating_scale_id")
-    private Long ratingScaleId;
+    private Integer ratingScaleId;
 
     @Column(name = "weight")
     private Double weight;
