@@ -1,18 +1,24 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import { authStorage } from '../services/authStorage';
+import type { AuthResponse } from '../types/auth';
 
 interface User {
   id: number;
   email: string;
   fullName: string;
   employeeCode: string;
+  position: string;
+  roles: string[];
+  permissions: string[];
+  dashboard: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (user: User) => void;
+  login: (payload: AuthResponse) => void;
   logout: () => void;
 }
 
@@ -34,41 +40,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Hydrate from authStorage on mount
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const fullName = localStorage.getItem('fullName');
-    const email = localStorage.getItem('email');
-    const id = localStorage.getItem('id');
-    const employeeCode = localStorage.getItem('employeeCode');
-
-    if (token && fullName && email && id && employeeCode) {
-      setUser({
-        id: parseInt(id),
-        email,
-        fullName,
-        employeeCode,
-      });
+    const stored = authStorage.getUser();
+    if (stored && authStorage.getAccessToken()) {
+      setUser(stored as User);
     }
     setLoading(false);
   }, []);
 
-  const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('token', 'dummy-token'); // Assuming token is set elsewhere
-    localStorage.setItem('fullName', userData.fullName);
-    localStorage.setItem('email', userData.email);
-    localStorage.setItem('id', userData.id.toString());
-    localStorage.setItem('employeeCode', userData.employeeCode);
-  };
+  const login = useCallback((payload: AuthResponse) => {
+    authStorage.setSession(payload);
 
-  const logout = () => {
+    setUser({
+      id: payload.id,
+      email: payload.email,
+      fullName: payload.fullName,
+      employeeCode: payload.employeeCode,
+      position: payload.position,
+      roles: payload.roles ?? [],
+      permissions: payload.permissions ?? [],
+      dashboard: payload.dashboard,
+    });
+  }, []);
+
+  const logout = useCallback(() => {
+    authStorage.clearSession();
     setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('fullName');
-    localStorage.removeItem('email');
-    localStorage.removeItem('id');
-    localStorage.removeItem('employeeCode');
-  };
+  }, []);
 
   const value: AuthContextType = {
     user,

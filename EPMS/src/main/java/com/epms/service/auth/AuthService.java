@@ -136,7 +136,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .employeeCode(user.getEmployeeCode())
-                .position(user.getPosition())
+                .position(user.getPosition() != null ? user.getPosition().getPositionTitle() : null)
                 .roles(principal.getRoles())
                 .permissions(principal.getPermissions())
                 .dashboard(principal.getDashboard())

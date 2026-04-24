@@ -30,6 +30,6 @@ type ApiResponse<T> = {
 };
 
 export const fetchEmployees = async (): Promise<EmployeeResponse[]> => {
-  const response = await api.get<ApiResponse<EmployeeResponse[]>>('/api/employees');
+  const response = await api.get<ApiResponse<EmployeeResponse[]>>('/employees');
   return response.data.data;
 };

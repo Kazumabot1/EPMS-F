@@ -39,7 +39,9 @@ public class UserPrincipal implements UserDetails {
         this.departmentId = user.getDepartmentId();
         this.fullName = user.getFullName();
         this.employeeCode = user.getEmployeeCode();
-        this.position = user.getPosition();
+        // Modified by KHN
+        this.position = user.getPosition() != null ? user.getPosition().getPositionTitle() : null;
+        // END HERE
         this.roles = roles;
         this.permissions = permissions;
         this.dashboard = dashboard;

@@ -2,7 +2,6 @@ import type { AxiosResponse } from 'axios';
 import { httpClient } from './httpClient';
 import type { AppraisalForm, AppraisalFormPayload, AppraisalListItem } from '../types/appraisal';
 import { calculateScoreSummary } from '../utils/appraisal';
-import { MOCK_FORMS, MOCK_LIST } from './mockData';
 
 const ENDPOINT = '/appraisal-forms';
 
@@ -38,24 +37,14 @@ const toListItem = (form: AppraisalForm): AppraisalListItem => {
 
 export const appraisalFormApi = {
   async getAll(): Promise<AppraisalListItem[]> {
-    try {
-      const response = await httpClient.get<unknown>(ENDPOINT);
-      const forms = extractArray<AppraisalForm>(response);
-      return forms.length ? forms.map(toListItem) : MOCK_LIST;
-    } catch {
-      return MOCK_LIST;
-    }
+    const response = await httpClient.get<unknown>(ENDPOINT);
+    const forms = extractArray<AppraisalForm>(response);
+    return forms.map(toListItem);
   },
 
   async getById(id: string): Promise<AppraisalForm> {
-    try {
-      const response = await httpClient.get<AppraisalForm>(`${ENDPOINT}/${id}`);
-      return response.data;
-    } catch {
-      const found = MOCK_FORMS.find((f) => f.id === id);
-      if (found) return found;
-      throw new Error(`Appraisal form with id "${id}" not found.`);
-    }
+    const response = await httpClient.get<AppraisalForm>(`${ENDPOINT}/${id}`);
+    return response.data;
   },
 
   async create(payload: AppraisalFormPayload): Promise<AppraisalForm> {

@@ -1,6 +1,3 @@
-// KHN new file
-// (DTO for team data responses)
-
 package com.epms.dto;
 
 import lombok.AllArgsConstructor;
@@ -31,8 +28,18 @@ public class TeamResponseDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class MemberInfo {
-        private Integer employeeId;
-        private String employeeName;
+        // Preferred field for frontend.
+        private Integer userId;
+        private String userName;
         private Date startedDate;
+
+        // Backward-compatible getters for frontend code that still reads employeeId/employeeName.
+        public Integer getEmployeeId() {
+            return userId;
+        }
+
+        public String getEmployeeName() {
+            return userName;
+        }
     }
 }

@@ -12,6 +12,7 @@ import com.epms.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
@@ -26,6 +27,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final PipRepository pipRepository;
 
     @Override
+    @Transactional(readOnly = true)  // Modified by KHN - required for lazy Position fetch
     public DashboardSummaryResponse getDashboardSummary(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + email));
@@ -56,7 +58,9 @@ public class DashboardServiceImpl implements DashboardService {
                         .email(user.getEmail())
                         .fullName(user.getFullName())
                         .employeeCode(user.getEmployeeCode())
-                        .position(user.getPosition())
+                        // Modified by KHN
+                        .position(user.getPosition() != null ? user.getPosition().getPositionTitle() : null)
+                        // END HERE
                         .managerId(user.getManagerId())
                         .departmentId(user.getDepartmentId())
                         .active(Boolean.TRUE.equals(user.getActive()))

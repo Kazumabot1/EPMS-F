@@ -1,8 +1,8 @@
-import type { AuthResponse } from '../types/auth';
+import type { AuthResponse } from "../types/auth";
 
-const ACCESS_TOKEN_KEY = 'epmsAccessToken';
-const REFRESH_TOKEN_KEY = 'epmsRefreshToken';
-const USER_KEY = 'epmsUser';
+const ACCESS_TOKEN_KEY = "epmsAccessToken";
+const REFRESH_TOKEN_KEY = "epmsRefreshToken";
+const USER_KEY = "epmsUser";
 
 export const authStorage = {
   setSession(payload: AuthResponse) {

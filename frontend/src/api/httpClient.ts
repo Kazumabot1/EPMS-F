@@ -1,19 +1,6 @@
-import axios from 'axios';
+// Re-export the single authoritative axios instance so every module
+// (services/* and api/*) shares the same baseURL, auth interceptor,
+// and Vite-proxy configuration.
+import api from '../services/api';
 
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
-const baseURL = typeof rawBaseUrl === 'string' && rawBaseUrl.trim() ? rawBaseUrl : 'http://localhost:8080/api';
-
-export const httpClient = axios.create({
-  baseURL,
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-httpClient.interceptors.response.use(
-  (response) => response,
-  (error: unknown) => {
-    return Promise.reject(error);
-  },
-);
+export const httpClient = api;

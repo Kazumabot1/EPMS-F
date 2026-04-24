@@ -25,20 +25,20 @@ const normalizeDepartmentList = (payload: any): Department[] => {
 };
 
 export const fetchDepartments = async (): Promise<Department[]> => {
-  const response = await api.get<ApiResponse<any[]>>('/api/departments');
+  const response = await api.get<ApiResponse<any[]>>('/departments');
   return normalizeDepartmentList(response.data);
 };
 
 export const createDepartment = async (payload: DepartmentPayload): Promise<Department> => {
-  const response = await api.post<ApiResponse<any>>('/api/departments', payload);
+  const response = await api.post<ApiResponse<any>>('/departments', payload);
   return normalizeDepartment(response.data?.data ?? response.data);
 };
 
 export const updateDepartment = async (id: number, payload: DepartmentPayload): Promise<Department> => {
-  const response = await api.put<ApiResponse<any>>(`/api/departments/${id}`, payload);
+  const response = await api.put<ApiResponse<any>>(`/departments/${id}`, payload);
   return normalizeDepartment(response.data?.data ?? response.data);
 };
 
 export const deleteDepartment = async (id: number): Promise<void> => {
-  await api.delete(`/api/departments/${id}`);
+  await api.delete(`/departments/${id}`);
 };

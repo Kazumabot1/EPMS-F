@@ -1,13 +1,16 @@
-// KHN new file
-// (Service implementation for Team operations with department validation)
-
 package com.epms.service.impl;
 
 import com.epms.dto.CandidateResponseDto;
 import com.epms.dto.TeamRequestDto;
 import com.epms.dto.TeamResponseDto;
-import com.epms.entity.*;
-import com.epms.repository.*;
+import com.epms.entity.Department;
+import com.epms.entity.Team;
+import com.epms.entity.TeamMember;
+import com.epms.entity.User;
+import com.epms.repository.DepartmentRepository;
+import com.epms.repository.TeamMemberRepository;
+import com.epms.repository.TeamRepository;
+import com.epms.repository.UserRepository;
 import com.epms.service.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,32 +30,23 @@ public class TeamServiceImpl implements TeamService {
     private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
-    private final EmployeeRepository employeeRepository;
 
     @Override
     @Transactional
     public TeamResponseDto createTeam(TeamRequestDto dto) {
-        // KHN added parts
-        // (Validation: Ensure the Team Leader belongs to the same department)
-        User leader = userRepository.findById(dto.getTeamLeaderId())
-                .orElseThrow(() -> new RuntimeException("Team Leader not found"));
-        
-        if (!leader.getDepartmentId().equals(dto.getDepartmentId())) {
-            throw new RuntimeException("Selected Team Leader must belong to the same department as the team");
-        }
-
-        // KHN added parts
-        // (Validation: Ensure leader is not already in an Active team)
-        List<Team> activeLeaderTeams = teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(leader.getId(), "Active");
-        if (!activeLeaderTeams.isEmpty()) {
-            throw new RuntimeException("Selected Team Leader is already leading an Active team: " + activeLeaderTeams.get(0).getTeamName());
-        }
+        validateCreateRequest(dto);
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
-                .orElseThrow(() -> new RuntimeException("Department not found"));
-        
+                .orElseThrow(() -> new RuntimeException("Department not found: " + dto.getDepartmentId()));
+
+        User leader = userRepository.findById(dto.getTeamLeaderId())
+                .orElseThrow(() -> new RuntimeException("Team Leader not found: " + dto.getTeamLeaderId()));
+
         User creator = userRepository.findById(dto.getCreatedById())
-                .orElseThrow(() -> new RuntimeException("Creator not found"));
+                .orElseThrow(() -> new RuntimeException("Creator not found: " + dto.getCreatedById()));
+
+        validateUserBelongsToDepartment(leader, department.getId(), "Selected Team Leader must belong to the same department as the team");
+        validateLeaderIsAvailableForActiveTeam(leader.getId(), null);
 
         Team team = new Team();
         team.setTeamName(dto.getTeamName());
@@ -59,40 +54,18 @@ public class TeamServiceImpl implements TeamService {
         team.setTeamLeader(leader);
         team.setCreatedByUser(creator);
         team.setTeamGoal(dto.getTeamGoal());
-        team.setStatus(dto.getStatus() != null ? dto.getStatus() : "Active");
+        team.setStatus(normalizeStatus(dto.getStatus()));
         team.setCreatedDate(new Date());
 
         Team savedTeam = teamRepository.save(team);
+        syncMembers(savedTeam, dto.getEffectiveMemberUserIds(), creator);
 
-        // KHN added parts
-        // (Save team members)
-        if (dto.getMemberEmployeeIds() != null) {
-            for (Integer employeeId : dto.getMemberEmployeeIds()) {
-                Employee employee = employeeRepository.findById(employeeId)
-                        .orElseThrow(() -> new RuntimeException("Employee not found: " + employeeId));
-                
-                // KHN added parts
-                // (Validation: Ensure member is not already in another Active team)
-                List<TeamMember> existingMemberships = teamMemberRepository.findByEmployeeId(employeeId);
-                for (TeamMember m : existingMemberships) {
-                    if ("Active".equalsIgnoreCase(m.getTeam().getStatus())) {
-                        throw new RuntimeException("Employee " + employee.getFirstName() + " is already in an Active team: " + m.getTeam().getTeamName());
-                    }
-                }
-
-                TeamMember member = new TeamMember();
-                member.setTeam(savedTeam);
-                member.setEmployee(employee);
-                member.setStartedDate(new Date());
-                member.setEditedByUser(creator);
-                teamMemberRepository.save(member);
-            }
-        }
-
+        savedTeam.setTeamMembers(teamMemberRepository.findByTeamId(savedTeam.getId()));
         return mapToResponseDto(savedTeam);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<TeamResponseDto> getAllTeams() {
         return teamRepository.findAll().stream()
                 .map(this::mapToResponseDto)
@@ -100,6 +73,7 @@ public class TeamServiceImpl implements TeamService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<TeamResponseDto> getTeamsByDepartment(Integer departmentId) {
         return teamRepository.findByDepartmentId(departmentId).stream()
                 .map(this::mapToResponseDto)
@@ -107,183 +81,283 @@ public class TeamServiceImpl implements TeamService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public TeamResponseDto getTeamById(Integer id) {
         Team team = teamRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Team not found"));
+                .orElseThrow(() -> new RuntimeException("Team not found: " + id));
         return mapToResponseDto(team);
+    }
+
+    @Override
+    @Transactional
+    public TeamResponseDto updateTeam(Integer id, TeamRequestDto dto) {
+        Team team = teamRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Team not found: " + id));
+
+        if (dto.getTeamName() != null && !dto.getTeamName().trim().isEmpty()) {
+            team.setTeamName(dto.getTeamName().trim());
+        }
+
+        if (dto.getTeamGoal() != null) {
+            team.setTeamGoal(dto.getTeamGoal());
+        }
+
+        if (dto.getTeamLeaderId() != null && !Objects.equals(dto.getTeamLeaderId(), team.getTeamLeader().getId())) {
+            User newLeader = userRepository.findById(dto.getTeamLeaderId())
+                    .orElseThrow(() -> new RuntimeException("New Team Leader not found: " + dto.getTeamLeaderId()));
+
+            validateUserBelongsToDepartment(newLeader, team.getDepartment().getId(), "New Team Leader must belong to the same department");
+
+            if (isActive(team.getStatus())) {
+                validateLeaderIsAvailableForActiveTeam(newLeader.getId(), team.getId());
+            }
+
+            team.setTeamLeader(newLeader);
+        }
+
+        if (dto.getStatus() != null && !dto.getStatus().equalsIgnoreCase(team.getStatus())) {
+            String newStatus = normalizeStatus(dto.getStatus());
+            if (isActive(newStatus)) {
+                validateLeaderIsAvailableForActiveTeam(team.getTeamLeader().getId(), team.getId());
+                validateCurrentMembersAreAvailableForActiveTeam(team);
+            }
+            team.setStatus(newStatus);
+        }
+
+        User editor = null;
+        if (dto.getCreatedById() != null) {
+            editor = userRepository.findById(dto.getCreatedById())
+                    .orElseThrow(() -> new RuntimeException("Editor not found: " + dto.getCreatedById()));
+        }
+
+        Team updatedTeam = teamRepository.save(team);
+
+        if (dto.getEffectiveMemberUserIds() != null) {
+            if (editor == null) {
+                editor = updatedTeam.getCreatedByUser();
+            }
+            syncMembers(updatedTeam, dto.getEffectiveMemberUserIds(), editor);
+        }
+
+        updatedTeam.setTeamMembers(teamMemberRepository.findByTeamId(updatedTeam.getId()));
+        return mapToResponseDto(updatedTeam);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CandidateResponseDto> getCandidateUsers(Integer departmentId) {
+        List<User> users = userRepository.findByDepartmentIdAndActiveTrue(departmentId);
+        List<CandidateResponseDto> candidates = new ArrayList<>();
+
+        for (User user : users) {
+            if (user.getPosition() == null || user.getPosition().getPositionTitle() == null) {
+                continue;
+            }
+
+            String positionTitle = user.getPosition().getPositionTitle().toLowerCase().replace(" ", "");
+            if (!positionTitle.contains("teamleader")) {
+                continue;
+            }
+
+            Team activeTeam = getFirstActiveLeaderTeam(user.getId());
+            candidates.add(toCandidate(user, activeTeam));
+        }
+
+        return candidates;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CandidateResponseDto> getCandidateMembers(Integer deptId) {
+        List<User> users = userRepository.findByDepartmentIdAndActiveTrue(deptId);
+        List<CandidateResponseDto> candidates = new ArrayList<>();
+
+        for (User user : users) {
+            Team activeTeam = getFirstActiveMemberTeam(user.getId());
+
+            if (activeTeam == null) {
+                activeTeam = getFirstActiveLeaderTeam(user.getId());
+            }
+
+            candidates.add(toCandidate(user, activeTeam));
+        }
+
+        return candidates;
+    }
+
+    private void validateCreateRequest(TeamRequestDto dto) {
+        if (dto.getTeamName() == null || dto.getTeamName().trim().isEmpty()) {
+            throw new RuntimeException("Team name is required");
+        }
+        if (dto.getDepartmentId() == null) {
+            throw new RuntimeException("Department is required");
+        }
+        if (dto.getTeamLeaderId() == null) {
+            throw new RuntimeException("Team Leader is required");
+        }
+        if (dto.getCreatedById() == null) {
+            throw new RuntimeException("Created by user is required");
+        }
+    }
+
+    private void syncMembers(Team team, List<Integer> memberUserIds, User editor) {
+        List<TeamMember> currentMembers = teamMemberRepository.findByTeamId(team.getId());
+        teamMemberRepository.deleteAll(currentMembers);
+        teamMemberRepository.flush();
+
+        if (memberUserIds == null || memberUserIds.isEmpty()) {
+            team.setTeamMembers(new ArrayList<>());
+            return;
+        }
+
+        List<TeamMember> newMembers = new ArrayList<>();
+        for (Integer userId : memberUserIds) {
+            if (userId == null) {
+                continue;
+            }
+
+            if (Objects.equals(userId, team.getTeamLeader().getId())) {
+                throw new RuntimeException("Team Leader cannot also be added as a team member");
+            }
+
+            User memberUser = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+
+            validateUserBelongsToDepartment(memberUser, team.getDepartment().getId(),
+                    "Team member " + memberUser.getFullName() + " must belong to the same department");
+
+            if (isActive(team.getStatus())) {
+                validateMemberIsAvailableForActiveTeam(userId, team.getId(), memberUser.getFullName());
+                validateLeaderIsAvailableForActiveTeam(userId, team.getId(),
+                        "User " + memberUser.getFullName() + " is already leading an Active team");
+            }
+
+            TeamMember member = new TeamMember();
+            member.setTeam(team);
+            member.setMemberUser(memberUser);
+            member.setStartedDate(new Date());
+            member.setEditedByUser(editor);
+            newMembers.add(teamMemberRepository.save(member));
+        }
+
+        team.setTeamMembers(newMembers);
+    }
+
+    private void validateCurrentMembersAreAvailableForActiveTeam(Team team) {
+        List<TeamMember> members = teamMemberRepository.findByTeamId(team.getId());
+        for (TeamMember member : members) {
+            validateMemberIsAvailableForActiveTeam(
+                    member.getMemberUser().getId(),
+                    team.getId(),
+                    member.getMemberUser().getFullName()
+            );
+        }
+    }
+
+    private void validateMemberIsAvailableForActiveTeam(Integer userId, Integer currentTeamId, String fullName) {
+        List<TeamMember> memberships = teamMemberRepository.findByMemberUserId(userId);
+        for (TeamMember membership : memberships) {
+            Team otherTeam = membership.getTeam();
+            if (otherTeam != null && isActive(otherTeam.getStatus()) && !Objects.equals(otherTeam.getId(), currentTeamId)) {
+                throw new RuntimeException("User " + fullName + " is already in an Active team: " + otherTeam.getTeamName());
+            }
+        }
+    }
+
+    private void validateLeaderIsAvailableForActiveTeam(Integer leaderId, Integer currentTeamId) {
+        validateLeaderIsAvailableForActiveTeam(leaderId, currentTeamId, "Selected Team Leader is already leading an Active team");
+    }
+
+    private void validateLeaderIsAvailableForActiveTeam(Integer leaderId, Integer currentTeamId, String message) {
+        List<Team> activeLeaderTeams = teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(leaderId, "Active");
+        for (Team activeTeam : activeLeaderTeams) {
+            if (!Objects.equals(activeTeam.getId(), currentTeamId)) {
+                throw new RuntimeException(message + ": " + activeTeam.getTeamName());
+            }
+        }
+    }
+
+    private void validateUserBelongsToDepartment(User user, Integer departmentId, String message) {
+        if (user.getDepartmentId() == null || !user.getDepartmentId().equals(departmentId)) {
+            throw new RuntimeException(message);
+        }
+    }
+
+    private Team getFirstActiveLeaderTeam(Integer userId) {
+        List<Team> teams = teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(userId, "Active");
+        return teams.isEmpty() ? null : teams.get(0);
+    }
+
+    private Team getFirstActiveMemberTeam(Integer userId) {
+        List<TeamMember> memberships = teamMemberRepository.findByMemberUserId(userId);
+        for (TeamMember membership : memberships) {
+            if (membership.getTeam() != null && isActive(membership.getTeam().getStatus())) {
+                return membership.getTeam();
+            }
+        }
+        return null;
+    }
+
+    private CandidateResponseDto toCandidate(User user, Team activeTeam) {
+        return new CandidateResponseDto(
+                user.getId(),
+                user.getFullName(),
+                "USER",
+                user.getDepartmentId(),
+                null,
+                activeTeam == null,
+                activeTeam != null ? activeTeam.getId() : null,
+                activeTeam != null ? activeTeam.getTeamName() : null
+        );
     }
 
     private TeamResponseDto mapToResponseDto(Team team) {
         TeamResponseDto dto = new TeamResponseDto();
         dto.setId(team.getId());
         dto.setTeamName(team.getTeamName());
-        dto.setDepartmentId(team.getDepartment().getId());
-        dto.setDepartmentName(team.getDepartment().getDepartmentName());
+        dto.setDepartmentId(team.getDepartment() != null ? team.getDepartment().getId() : null);
+        dto.setDepartmentName(team.getDepartment() != null ? team.getDepartment().getDepartmentName() : null);
         dto.setTeamLeaderId(team.getTeamLeader() != null ? team.getTeamLeader().getId() : null);
-        dto.setTeamLeaderName(team.getTeamLeader() != null ? team.getTeamLeader().getFullName() : "N/A");
-        dto.setCreatedById(team.getCreatedByUser().getId());
-        dto.setCreatedByName(team.getCreatedByUser().getFullName());
+        dto.setTeamLeaderName(team.getTeamLeader() != null ? team.getTeamLeader().getFullName() : null);
+        dto.setCreatedById(team.getCreatedByUser() != null ? team.getCreatedByUser().getId() : null);
+        dto.setCreatedByName(team.getCreatedByUser() != null ? team.getCreatedByUser().getFullName() : null);
         dto.setCreatedDate(team.getCreatedDate());
         dto.setStatus(team.getStatus());
         dto.setTeamGoal(team.getTeamGoal());
 
-        // KHN added parts
-        // (Map member info)
-        List<TeamResponseDto.MemberInfo> members = team.getTeamMembers().stream()
-                .map(m -> new TeamResponseDto.MemberInfo(
-                        m.getEmployee().getId(),
-                        m.getEmployee().getFirstName() + " " + m.getEmployee().getLastName(),
-                        m.getStartedDate()
+        List<TeamMember> teamMembers = team.getTeamMembers();
+        if (teamMembers == null) {
+            teamMembers = teamMemberRepository.findByTeamId(team.getId());
+        }
+
+        List<TeamResponseDto.MemberInfo> members = teamMembers.stream()
+                .filter(member -> member.getMemberUser() != null)
+                .map(member -> new TeamResponseDto.MemberInfo(
+                        member.getMemberUser().getId(),
+                        member.getMemberUser().getFullName(),
+                        member.getStartedDate()
                 ))
                 .collect(Collectors.toList());
-        dto.setMembers(members);
 
+        dto.setMembers(members);
         return dto;
     }
 
-    @Override
-    @Transactional
-    public TeamResponseDto updateTeam(Integer id, TeamRequestDto dto) {
-        // KHN added parts
-        // (Full update workflow with validation and sync)
-        Team team = teamRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Team not found"));
-
-        if (dto.getTeamName() != null && !dto.getTeamName().isEmpty()) {
-            team.setTeamName(dto.getTeamName());
+    private String normalizeStatus(String status) {
+        if (status == null || status.trim().isEmpty()) {
+            return "Active";
         }
-        if (dto.getTeamGoal() != null) {
-            team.setTeamGoal(dto.getTeamGoal());
+        String trimmed = status.trim();
+        if (trimmed.equalsIgnoreCase("Active")) {
+            return "Active";
         }
-        
-        // Status toggle logic
-        if (dto.getStatus() != null && !dto.getStatus().equalsIgnoreCase(team.getStatus())) {
-            // Cannot activate a team if any member is currently active in another team
-            if ("Active".equalsIgnoreCase(dto.getStatus())) {
-                if (team.getTeamLeader() != null) {
-                    List<Team> activeLeaderTeams = teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(team.getTeamLeader().getId(), "Active");
-                    if (!activeLeaderTeams.isEmpty() && !activeLeaderTeams.get(0).getId().equals(team.getId())) {
-                        throw new RuntimeException("Cannot activate team: Leader is already active in another team.");
-                    }
-                }
-                
-                for (TeamMember m : team.getTeamMembers()) {
-                    List<TeamMember> activeMemberships = teamMemberRepository.findByEmployeeId(m.getEmployee().getId());
-                    for (TeamMember am : activeMemberships) {
-                        if ("Active".equalsIgnoreCase(am.getTeam().getStatus()) && !am.getTeam().getId().equals(team.getId())) {
-                            throw new RuntimeException("Cannot activate team: Member " + m.getEmployee().getFirstName() + " is active in another team.");
-                        }
-                    }
-                }
-            }
-            team.setStatus(dto.getStatus());
+        if (trimmed.equalsIgnoreCase("Inactive")) {
+            return "Inactive";
         }
-
-        if (dto.getTeamLeaderId() != null && (team.getTeamLeader() == null || !dto.getTeamLeaderId().equals(team.getTeamLeader().getId()))) {
-            User newLeader = userRepository.findById(dto.getTeamLeaderId())
-                    .orElseThrow(() -> new RuntimeException("New Team Leader not found"));
-            
-            if (!newLeader.getDepartmentId().equals(team.getDepartment().getId())) {
-                throw new RuntimeException("New Team Leader must belong to the same department");
-            }
-
-            if ("Active".equalsIgnoreCase(team.getStatus())) {
-                List<Team> activeLeaderTeams = teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(newLeader.getId(), "Active");
-                if (!activeLeaderTeams.isEmpty()) {
-                    throw new RuntimeException("Selected Team Leader is already leading an Active team.");
-                }
-            }
-            team.setTeamLeader(newLeader);
-        }
-
-        Team updatedTeam = teamRepository.save(team);
-
-        // Sync members if provided
-        if (dto.getMemberEmployeeIds() != null) {
-            List<TeamMember> currentMembers = teamMemberRepository.findByTeamId(updatedTeam.getId());
-            teamMemberRepository.deleteAll(currentMembers);
-
-            User editor = userRepository.findById(dto.getCreatedById())
-                    .orElseThrow(() -> new RuntimeException("Editor not found"));
-
-            for (Integer employeeId : dto.getMemberEmployeeIds()) {
-                Employee employee = employeeRepository.findById(employeeId)
-                        .orElseThrow(() -> new RuntimeException("Employee not found"));
-
-                if ("Active".equalsIgnoreCase(updatedTeam.getStatus())) {
-                    List<TeamMember> existingMemberships = teamMemberRepository.findByEmployeeId(employeeId);
-                    for (TeamMember m : existingMemberships) {
-                        // Skip if it is the team we are currently updating (since we just deleted members, this is a safety net)
-                        if ("Active".equalsIgnoreCase(m.getTeam().getStatus()) && !m.getTeam().getId().equals(updatedTeam.getId())) {
-                            throw new RuntimeException("Employee " + employee.getFirstName() + " is already in an Active team.");
-                        }
-                    }
-                }
-
-                TeamMember member = new TeamMember();
-                member.setTeam(updatedTeam);
-                member.setEmployee(employee);
-                member.setStartedDate(new Date());
-                member.setEditedByUser(editor);
-                teamMemberRepository.save(member);
-            }
-            
-            // Refresh relationship for mapping
-            updatedTeam.setTeamMembers(teamMemberRepository.findByTeamId(updatedTeam.getId()));
-        }
-
-        return mapToResponseDto(updatedTeam);
+        return trimmed;
     }
 
-    @Override
-    public List<CandidateResponseDto> getCandidateUsers(Integer departmentId) {
-        List<User> users = userRepository.findByDepartmentIdAndActiveTrue(departmentId);
-        List<CandidateResponseDto> candidates = new ArrayList<>();
-        
-        for (User u : users) {
-            List<Team> activeTeams = teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(u.getId(), "Active");
-            Team activeTeam = activeTeams.isEmpty() ? null : activeTeams.get(0);
-            
-            candidates.add(new CandidateResponseDto(
-                u.getId(),
-                u.getFullName(),
-                "USER",
-                u.getDepartmentId(),
-                null, // Join/derive if needed
-                activeTeam == null,
-                activeTeam != null ? activeTeam.getId() : null,
-                activeTeam != null ? activeTeam.getTeamName() : null
-            ));
-        }
-        return candidates;
-    }
-
-    @Override
-    public List<CandidateResponseDto> getCandidateEmployees() {
-        List<Employee> employees = employeeRepository.findAll();
-        List<CandidateResponseDto> candidates = new ArrayList<>();
-        
-        for (Employee e : employees) {
-            List<TeamMember> memberships = teamMemberRepository.findByEmployeeId(e.getId());
-            Team activeTeam = null;
-            for (TeamMember m : memberships) {
-                if ("Active".equalsIgnoreCase(m.getTeam().getStatus())) {
-                    activeTeam = m.getTeam();
-                    break;
-                }
-            }
-            
-            candidates.add(new CandidateResponseDto(
-                e.getId(),
-                e.getFirstName() + " " + e.getLastName(),
-                "EMPLOYEE",
-                null,
-                null,
-                activeTeam == null,
-                activeTeam != null ? activeTeam.getId() : null,
-                activeTeam != null ? activeTeam.getTeamName() : null
-            ));
-        }
-        return candidates;
+    private boolean isActive(String status) {
+        return "Active".equalsIgnoreCase(status);
     }
 }

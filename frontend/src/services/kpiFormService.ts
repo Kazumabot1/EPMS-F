@@ -2,7 +2,7 @@ import api from './api';
 import { extractApiErrorMessage } from './apiError';
 import type { KpiForm, KpiFormRequest } from '../types/kpiForm';
 
-const KPI_FORM_ENDPOINT = '/api/kpis';
+const KPI_FORM_ENDPOINT = '/kpis';
 
 export const kpiFormService = {
   async getAll(): Promise<KpiForm[]> {

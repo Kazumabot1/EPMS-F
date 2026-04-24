@@ -1,6 +1,3 @@
-// KHN new file
-// (DTO for team creation/update requests)
-
 package com.epms.dto;
 
 import lombok.AllArgsConstructor;
@@ -19,5 +16,18 @@ public class TeamRequestDto {
     private Integer createdById;
     private String teamGoal;
     private String status;
+
+    // Preferred field: these are USER ids from the users table.
+    private List<Integer> memberUserIds;
+
+    // Backward-compatible field for your current frontend.
+    // Despite the old name, TeamMember.memberUser points to users.id, not employee.id.
     private List<Integer> memberEmployeeIds;
+
+    public List<Integer> getEffectiveMemberUserIds() {
+        if (memberUserIds != null) {
+            return memberUserIds;
+        }
+        return memberEmployeeIds;
+    }
 }
