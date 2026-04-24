@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { authStorage } from '../../services/authStorage';
 
 type HeaderProps = {
   collapsed: boolean;
@@ -39,9 +38,53 @@ const Header = ({ collapsed }: HeaderProps) => {
           <i className="bi bi-chevron-down" />
         </div>
 
-        <button type="button" className="hr-logout-button" onClick={handleLogout} title="Logout">
-          <i className="bi bi-box-arrow-right" />
-        </button>
+          {isUserMenuOpen && (
+            <div id="hr-user-dropdown-menu" className="hr-user-dropdown" role="menu" aria-label="User menu">
+              <button
+                ref={profileMenuItemRef}
+                type="button"
+                className="hr-user-dropdown-item"
+                role="menuitem"
+                onClick={handleProfile}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    moveFocus(1);
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    moveFocus(-1);
+                  }
+                }}
+              >
+                <i className="bi bi-person" />
+                <span>Profile</span>
+              </button>
+              <button
+                ref={logoutMenuItemRef}
+                type="button"
+                className="hr-user-dropdown-item hr-user-dropdown-item-danger"
+                role="menuitem"
+                onClick={handleLogout}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    moveFocus(1);
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    moveFocus(-1);
+                  }
+                }}
+              >
+                <i className="bi bi-box-arrow-right" />
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+
       </div>
     </header>
   );

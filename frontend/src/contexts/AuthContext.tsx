@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface User {
   id: number;
@@ -29,7 +29,7 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const login = (userData: User) => {
     setUser(userData);
-    localStorage.setItem('token', 'dummy-token');
+    localStorage.setItem('token', 'dummy-token'); // Assuming token is set elsewhere
     localStorage.setItem('fullName', userData.fullName);
     localStorage.setItem('email', userData.email);
     localStorage.setItem('id', userData.id.toString());

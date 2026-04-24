@@ -17,7 +17,7 @@ public class RatingScale {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Integer id;
 
     @Column(nullable = false, unique = true, updatable = false)
     private Integer scales;

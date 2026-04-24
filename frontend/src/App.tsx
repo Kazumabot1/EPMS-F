@@ -1,22 +1,9 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import Login from './components/Login';
+import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import Home from './components/Home';
-import HRLayout from './components/layout/HRLayout';
-import EmployeeLayout from './components/layout/EmployeeLayout';
-import EmployeeDashboard from './pages/employee/EmployeeDashboard';
-
-// ✅ Components
-import Permissions from "./components/Permissions";
-import UserRoles from "./components/UserRoles";
-
-// ✅ Team
-import TeamManagement from "./pages/team/TeamManagement";
-import TeamCreate from "./pages/team/TeamCreate";
-
-// ✅ Department
-import DepartmentManagement from "./pages/department/DepartmentManagement";
-
-// ✅ Other pages (check if these are REALLY in pages/)
+import Login from './components/Login';
+import Register from './components/Register';
+import Permissions from './components/Permissions';
+import UserRoles from './components/UserRoles';
 import RolePermissions from './components/RolePermissions';
 import PipUpdates from './components/PipUpdates';
 import NotificationTemplates from './components/NotificationTemplates';
@@ -51,6 +38,8 @@ function App() {
 
         {/* HR/Admin routes */}
         <Route element={<HRLayout />}>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/hr/employee" element={<EmployeeDashboard />} />
           <Route path="/dashboard" element={<Home />} />
           <Route path="/permissions" element={<Permissions />} />
           <Route path="/hr/team" element={<TeamManagement />} />
@@ -63,22 +52,17 @@ function App() {
           <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
           <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
           <Route path="/hr/position/create" element={<PositionCreate />} />
-          <Route path="/hr/position/table" element={<PositionTable />} />
           <Route path="/hr/position-level/create" element={<PositionLevelCreate />} />
+          <Route path="/hr/position/table" element={<PositionTable />} />
           <Route path="/hr/performance-kpi/unit" element={<KpiUnitPage />} />
           <Route path="/hr/performance-kpi/category" element={<KpiCategoryPage />} />
           <Route path="/hr/performance-kpi/item" element={<KpiItemPage />} />
           <Route path="/hr/performance-kpi/form" element={<KpiFormPage />} />
         </Route>
 
-        {/* DEFAULT redirect (IMPORTANT FIX) */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* fallback */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
 }
 
