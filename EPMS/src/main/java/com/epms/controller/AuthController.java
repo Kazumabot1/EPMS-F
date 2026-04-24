@@ -2,89 +2,49 @@ package com.epms.controller;
 
 import com.epms.dto.GenericApiResponse;
 import com.epms.dto.auth.AuthResponse;
+import com.epms.dto.auth.ChangePasswordRequest;
 import com.epms.dto.auth.CurrentUserResponse;
 import com.epms.dto.auth.LoginRequest;
-import com.epms.entity.RefreshToken;
-import com.epms.entity.User;
-import com.epms.repository.RefreshTokenRepository;
-import com.epms.repository.UserRepository;
-import com.epms.security.CustomUserDetailsService;
-import com.epms.security.JwtService;
+import com.epms.dto.auth.RefreshTokenRequest;
 import com.epms.security.SecurityUtils;
 import com.epms.security.UserPrincipal;
+import com.epms.service.auth.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Date;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthenticationManager authenticationManager;
-    private final JwtService jwtService;
-    private final CustomUserDetailsService customUserDetailsService;
-    private final UserRepository userRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
-
-    @Value("${app.jwt.access-token-expiration-ms:3600000}")
-    private long accessTokenExpirationMs;
-
-    @Value("${app.jwt.refresh-token-expiration-ms:604800000}")
-    private long refreshTokenExpirationMs;
+    private final AuthService authService;
 
     @PostMapping("/login")
-    @Transactional
     public ResponseEntity<GenericApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
-        try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-            );
-        } catch (BadCredentialsException ex) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(GenericApiResponse.error("Invalid email or password"));
-        }
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Login successful", authService.login(request))
+        );
+    }
 
-        UserPrincipal principal =
-                (UserPrincipal) customUserDetailsService.loadUserByUsername(request.getEmail());
+    @PostMapping("/refresh")
+    public ResponseEntity<GenericApiResponse<AuthResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Token refreshed successfully", authService.refresh(request))
+        );
+    }
 
-        User user = userRepository.findByEmailAndActiveTrue(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    @PostMapping("/logout")
+    public ResponseEntity<GenericApiResponse<Void>> logout(@Valid @RequestBody RefreshTokenRequest request) {
+        authService.logout(request.getRefreshToken());
+        return ResponseEntity.ok(GenericApiResponse.success("Logout successful", null));
+    }
 
-        refreshTokenRepository.deleteByUserId(user.getId());
-
-        RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setUserId(user.getId());
-        refreshToken.setToken(UUID.randomUUID().toString());
-        refreshToken.setExpiryDate(new Date(System.currentTimeMillis() + refreshTokenExpirationMs));
-        refreshToken = refreshTokenRepository.save(refreshToken);
-
-        AuthResponse response = AuthResponse.builder()
-                .accessToken(jwtService.generateAccessToken(principal))
-                .refreshToken(refreshToken.getToken())
-                .tokenType("Bearer")
-                .expiresIn(accessTokenExpirationMs / 1000)
-                .id(user.getId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .employeeCode(user.getEmployeeCode())
-                .position(user.getPosition())
-                .roles(principal.getRoles())
-                .permissions(principal.getPermissions())
-                .dashboard(principal.getDashboard())
-                .build();
-
-        return ResponseEntity.ok(GenericApiResponse.success("Login successful", response));
+    @PostMapping("/change-password")
+    public ResponseEntity<GenericApiResponse<Void>> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(SecurityUtils.currentUserId(), request);
+        return ResponseEntity.ok(GenericApiResponse.success("Password changed successfully", null));
     }
 
     @GetMapping("/me")

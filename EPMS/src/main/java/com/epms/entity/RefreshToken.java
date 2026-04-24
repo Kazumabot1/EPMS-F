@@ -1,9 +1,10 @@
 package com.epms.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+
 import java.util.Date;
 
 @Entity
@@ -12,10 +13,17 @@ import java.util.Date;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RefreshToken {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
     private Integer userId;
+
+    @Column(nullable = false, unique = true)
     private String token;
+
     @Temporal(TemporalType.TIMESTAMP)
+    @Column(nullable = false)
     private Date expiryDate;
 }

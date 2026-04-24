@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+
 import Home from './components/Home';
 import Login from './components/Login';
 import Register from './components/Register';
@@ -9,15 +10,20 @@ import PipUpdates from './components/PipUpdates';
 import NotificationTemplates from './components/NotificationTemplates';
 import OneOnOneMeetings from './components/OneOnOneMeetings';
 import OneOnOneActionItems from './components/OneOnOneActionItems';
+import ProtectedRoute from './routes/ProtectedRoute';
 
-// ✅ Position
-import PositionCreate from "./pages/position/Create";
-             import PositionTable from "./pages/position/Table";
+import EmployeeLayout from './components/layout/EmployeeLayout';
+import HRLayout from './components/layout/HRLayout';
 
-// ✅ Position Level
-import PositionLevelCreate from "./pages/position-level/Create";
+import EmployeeDashboard from './pages/employee/EmployeeDashboard';
+import TeamManagement from './pages/team/TeamManagement';
+import TeamCreate from './pages/team/TeamCreate';
+import DepartmentManagement from './pages/department/DepartmentManagement';
 
-// ✅ KPI (match your structure EXACTLY)
+import PositionCreate from './pages/position/Create';
+import PositionTable from './pages/position/Table';
+import PositionLevelCreate from './pages/position-level/Create';
+
 import KpiUnitPage from './pages/hr/performance-kpi/unit/KpiUnitPage';
 import KpiCategoryPage from './pages/hr/performance-kpi/category/KpiCategoryPage';
 import KpiItemPage from './pages/hr/performance-kpi/item/KpiItemPage';
@@ -27,42 +33,46 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-
-        {/* Login */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-        {/* Employee routes */}
-        <Route element={<EmployeeLayout />}>
-          <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<EmployeeLayout />}>
+            <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
+          </Route>
+
+          <Route element={<HRLayout />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Home />} />
+
+            <Route path="/hr/employee" element={<EmployeeDashboard />} />
+            <Route path="/hr/team" element={<TeamManagement />} />
+            <Route path="/hr/team/create" element={<TeamCreate />} />
+            <Route path="/hr/department" element={<DepartmentManagement />} />
+
+            <Route path="/permissions" element={<Permissions />} />
+            <Route path="/user-roles" element={<UserRoles />} />
+            <Route path="/role-permissions" element={<RolePermissions />} />
+
+            <Route path="/pip-updates" element={<PipUpdates />} />
+            <Route path="/notifications" element={<NotificationTemplates />} />
+            <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
+            <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
+
+            <Route path="/hr/position/create" element={<PositionCreate />} />
+            <Route path="/hr/position-level/create" element={<PositionLevelCreate />} />
+            <Route path="/hr/position/table" element={<PositionTable />} />
+
+            <Route path="/hr/performance-kpi/unit" element={<KpiUnitPage />} />
+            <Route path="/hr/performance-kpi/category" element={<KpiCategoryPage />} />
+            <Route path="/hr/performance-kpi/item" element={<KpiItemPage />} />
+            <Route path="/hr/performance-kpi/form" element={<KpiFormPage />} />
+          </Route>
         </Route>
 
-        {/* HR/Admin routes */}
-        <Route element={<HRLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/hr/employee" element={<EmployeeDashboard />} />
-          <Route path="/dashboard" element={<Home />} />
-          <Route path="/permissions" element={<Permissions />} />
-          <Route path="/hr/team" element={<TeamManagement />} />
-          <Route path="/hr/team/create" element={<TeamCreate />} />
-          <Route path="/hr/department" element={<DepartmentManagement />} />
-          <Route path="/user-roles" element={<UserRoles />} />
-          <Route path="/role-permissions" element={<RolePermissions />} />
-          <Route path="/pip-updates" element={<PipUpdates />} />
-          <Route path="/notifications" element={<NotificationTemplates />} />
-          <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
-          <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
-          <Route path="/hr/position/create" element={<PositionCreate />} />
-          <Route path="/hr/position-level/create" element={<PositionLevelCreate />} />
-          <Route path="/hr/position/table" element={<PositionTable />} />
-          <Route path="/hr/performance-kpi/unit" element={<KpiUnitPage />} />
-          <Route path="/hr/performance-kpi/category" element={<KpiCategoryPage />} />
-          <Route path="/hr/performance-kpi/item" element={<KpiItemPage />} />
-          <Route path="/hr/performance-kpi/form" element={<KpiFormPage />} />
-        </Route>
-
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
 }
 

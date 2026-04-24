@@ -1,30 +1,25 @@
+import type { AuthResponse } from '../types/auth';
+
 const ACCESS_TOKEN_KEY = 'epmsAccessToken';
 const REFRESH_TOKEN_KEY = 'epmsRefreshToken';
 const USER_KEY = 'epmsUser';
 
-type SessionPayload = {
-  accessToken: string;
-  refreshToken: string;
-  dashboard: string;
-  fullName: string;
-  email: string;
-  position?: string;
-  employeeCode?: string;
-};
-
 export const authStorage = {
-  setSession(payload: SessionPayload) {
+  setSession(payload: AuthResponse) {
     localStorage.setItem(ACCESS_TOKEN_KEY, payload.accessToken);
     localStorage.setItem(REFRESH_TOKEN_KEY, payload.refreshToken);
 
     localStorage.setItem(
       USER_KEY,
       JSON.stringify({
-        dashboard: payload.dashboard,
-        fullName: payload.fullName,
+        id: payload.id,
         email: payload.email,
-        position: payload.position ?? '',
-        employeeCode: payload.employeeCode ?? '',
+        fullName: payload.fullName,
+        employeeCode: payload.employeeCode,
+        position: payload.position,
+        roles: payload.roles ?? [],
+        permissions: payload.permissions ?? [],
+        dashboard: payload.dashboard,
       })
     );
   },
@@ -50,11 +45,12 @@ export const authStorage = {
     try {
       return JSON.parse(raw);
     } catch {
+      this.clearSession();
       return null;
     }
   },
 
   isLoggedIn() {
-    return !!localStorage.getItem(ACCESS_TOKEN_KEY);
+    return !!this.getAccessToken();
   },
 };

@@ -10,6 +10,7 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const navigate = useNavigate();
 
   const resolveRoute = (dashboard?: string) => {
@@ -29,8 +30,9 @@ function Login() {
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+
     setError('');
     setIsSubmitting(true);
 
@@ -41,13 +43,19 @@ function Login() {
       });
 
       const payload = res.data.data;
+
+      if (!payload?.accessToken || !payload?.refreshToken) {
+        throw new Error('Login response did not include tokens.');
+      }
+
       authStorage.setSession(payload);
       navigate(resolveRoute(payload.dashboard), { replace: true });
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
-          'Login failed. Please check your email/password and make sure the backend is running.'
+          err?.message ||
+          'Login failed. Please check your email/password.'
       );
     } finally {
       setIsSubmitting(false);
@@ -64,25 +72,31 @@ function Login() {
         </div>
 
         <form onSubmit={handleLogin} className="login-form">
-          <label className="login-label" htmlFor="email">Email</label>
+          <label className="login-label" htmlFor="email">
+            Email
+          </label>
+
           <input
             id="email"
             className="login-input"
             type="email"
             placeholder="you@company.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(event) => setEmail(event.target.value)}
             required
           />
 
-          <label className="login-label" htmlFor="password">Password</label>
+          <label className="login-label" htmlFor="password">
+            Password
+          </label>
+
           <input
             id="password"
             className="login-input"
             type="password"
             placeholder="Enter your password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
             required
           />
 
