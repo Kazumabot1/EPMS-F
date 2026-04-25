@@ -165,7 +165,7 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
 
         Set<Long> ratingScales = form.getSections().stream()
                 .flatMap(section -> section.getQuestions().stream())
-                .map(FeedbackQuestion::getRatingScaleId)
+                .map(q -> q.getRatingScaleId() == null ? null : q.getRatingScaleId().longValue())
                 .collect(java.util.stream.Collectors.toSet());
         if (ratingScales.size() > 1) {
             throw new BusinessValidationException("All questions in the same form must use one unified rating scale.");

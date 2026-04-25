@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { authStorage } from '../../services/authStorage';
+import './hr-layout.css';
 
 type SidebarProps = {
   collapsed: boolean;
@@ -37,9 +38,9 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       : [
           { to: '/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' },
           { to: '/hr/team', label: 'Team Management', icon: 'bi bi-people' },
-          { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-circle' },
           { to: '/hr/department', label: 'Departments', icon: 'bi bi-building' },
           { to: '/hr/employee', label: 'Employees', icon: 'bi bi-person' },
+          { to: '/hr/feedback', label: '360 Feedback', icon: 'bi bi-chat-left-text' },
           { to: '/user-roles', label: 'User Roles', icon: 'bi bi-person-gear' },
           { to: '/role-permissions', label: 'Role Permissions', icon: 'bi bi-shield-check' },
           { to: '/permissions', label: 'Permissions', icon: 'bi bi-key' },
@@ -58,26 +59,15 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
 
   return (
     <aside className={`hr-sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="hr-sidebar-top">
-        <div className="hr-brand">
-          <div className="hr-brand-mark">E</div>
+      <div className="hr-sidebar-brand">
+        <div className="hr-sidebar-logo">E</div>
 
-          {!collapsed && (
-            <div className="hr-brand-copy">
-              <h2>EPMS</h2>
-              <p>Performance System</p>
-            </div>
-          )}
-        </div>
-
-        <button
-          type="button"
-          className="hr-collapse-btn"
-          onClick={onToggle}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <i className={`bi ${collapsed ? 'bi-chevron-right' : 'bi-chevron-left'}`} />
-        </button>
+        {!collapsed && (
+          <div className="hr-sidebar-brand-text">
+            <h1>EPMS</h1>
+            <p>Performance System</p>
+          </div>
+        )}
       </div>
 
       {!collapsed && (
@@ -87,18 +77,29 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
         </div>
       )}
 
-      <nav className="hr-nav">
+      <nav className="hr-sidebar-nav">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            className={({ isActive }) => `hr-nav-link ${isActive ? 'active' : ''}`}
+            className={({ isActive }) => `hr-nav-item ${isActive ? 'active' : ''}`}
+            title={collapsed ? item.label : ''}
           >
             <i className={item.icon} />
-            {!collapsed && <span>{item.label}</span>}
+            {!collapsed && <span className="hr-nav-label">{item.label}</span>}
           </NavLink>
         ))}
       </nav>
+
+      <button
+        type="button"
+        className={`hr-sidebar-collapse ${collapsed ? 'collapsed' : ''}`}
+        onClick={onToggle}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        <i className={`bi ${collapsed ? 'bi-chevron-right' : 'bi-chevron-left'}`} />
+        {!collapsed && <span>Collapse Sidebar</span>}
+      </button>
     </aside>
   );
 };
