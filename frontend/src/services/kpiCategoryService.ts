@@ -2,7 +2,7 @@ import api from './api';
 import { extractApiErrorMessage } from './apiError';
 import type { KpiCategory, KpiCategoryRequest } from '../types/kpiCategory';
 
-const KPI_CATEGORY_ENDPOINT = '/api/kpi-categories';
+const KPI_CATEGORY_ENDPOINT = '/kpi-categories';
 
 export const kpiCategoryService = {
   async getAll(): Promise<KpiCategory[]> {

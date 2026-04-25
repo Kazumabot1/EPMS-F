@@ -1,125 +1,93 @@
 import { useEffect, useState } from "react";
-import { getAllEmployees, type Employee } from "../../services/employeeService";
+import { fetchEmployees, type EmployeeResponse } from "../../services/employeeService";
 import "./employee-ui.css";
 
 const EmployeeManagement = () => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
   const [search, setSearch] = useState("");
   const [genderFilter, setGenderFilter] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    loadEmployees();
+    void loadEmployees();
   }, []);
 
   const loadEmployees = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const data = await getAllEmployees();
+      setError("");
+      const data = await fetchEmployees();
       setEmployees(data);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(`Failed to load employees: ${errorMessage}`);
-      console.error("Error loading employees:", err);
+      console.error("Failed to fetch employees", err);
+      setError("Failed to load employees.");
     } finally {
       setLoading(false);
     }
   };
 
   const filteredEmployees = employees.filter((emp) => {
+    const displayName = emp.fullName || [emp.firstName, emp.lastName].filter(Boolean).join(" ");
+
     return (
-      emp.name.toLowerCase().includes(search.toLowerCase()) &&
+      displayName.toLowerCase().includes(search.toLowerCase()) &&
       (genderFilter ? emp.gender === genderFilter : true)
     );
   });
 
   return (
-    <div className="employee-page">
-      <div className="employee-hero">
-        <span className="employee-hero-badge">
-          <i className="bi bi-person" />
-          Employee Management
-        </span>
-        <h1>Employee Management</h1>
-        <p>Manage and view all employees in the system</p>
+    <div className="employee-container">
+      <h2>Employee Management</h2>
+
+      <div className="filters">
+        <input
+          type="text"
+          placeholder="Search employee..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)}>
+          <option value="">All Genders</option>
+          <option value="MALE">Male</option>
+          <option value="FEMALE">Female</option>
+        </select>
       </div>
 
-      {loading && (
-        <div className="employee-state">
-          <i className="bi bi-hourglass-split" />
-          Loading employees...
-        </div>
-      )}
-
-      {error && (
-        <div className="employee-state">
-          <i className="bi bi-exclamation-triangle" />
-          <div className="employee-alert error">{error}</div>
-        </div>
-      )}
-
-      {!loading && !error && (
-        <div className="employee-surface">
-          <div className="employee-surface-inner">
-            {/* Filters */}
-            <div className="employee-toolbar">
-              <div className="employee-toolbar-left">
-                <input
-                  type="text"
-                  placeholder="Search employee..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-
-                <select onChange={(e) => setGenderFilter(e.target.value)}>
-                  <option value="">All Genders</option>
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                </select>
-              </div>
-
-              <button className="employee-btn secondary" onClick={loadEmployees}>
-                <i className="bi bi-arrow-clockwise" />
-                Refresh
-              </button>
-            </div>
-
-            {filteredEmployees.length === 0 ? (
-              <div className="employee-state">
-                <i className="bi bi-inbox" />
-                <h3>No employees found</h3>
-                <p>Try changing the search criteria or add employees to the system.</p>
-              </div>
+      {loading ? (
+        <p>Loading employees...</p>
+      ) : error ? (
+        <p>{error}</p>
+      ) : (
+        <table className="employee-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Phone Number</th>
+              <th>Gender</th>
+              <th>Staff NRC</th>
+              <th>Department</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredEmployees.length > 0 ? (
+              filteredEmployees.map((emp) => (
+                <tr key={emp.id}>
+                  <td>{emp.fullName || `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim() || "-"}</td>
+                  <td>{emp.phoneNumber || "-"}</td>
+                  <td>{emp.gender || "-"}</td>
+                  <td>{emp.staffNrc || "-"}</td>
+                  <td>{emp.currentDepartment || emp.parentDepartment || "-"}</td>
+                </tr>
+              ))
             ) : (
-              <div className="employee-table-wrap">
-                <table className="employee-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Gender</th>
-                      <th>Position</th>
-                      <th>Department</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEmployees.map((emp) => (
-                      <tr key={emp.id}>
-                        <td>{emp.name}</td>
-                        <td>{emp.email}</td>
-                        <td>{emp.gender || '-'}</td>
-                        <td>{emp.position || '-'}</td>
-                        <td>{emp.department || "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <tr>
+                <td colSpan={5}>No employees found.</td>
+              </tr>
             )}
-          </div>
-        </div>
+          </tbody>
+        </table>
       )}
     </div>
   );

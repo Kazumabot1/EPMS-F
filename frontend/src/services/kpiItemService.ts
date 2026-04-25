@@ -2,7 +2,7 @@ import api from './api';
 import { extractApiErrorMessage } from './apiError';
 import type { KpiItem, KpiItemRequest } from '../types/kpiItem';
 
-const KPI_ITEM_ENDPOINT = '/api/kpi-items';
+const KPI_ITEM_ENDPOINT = '/kpi-items';
 
 export const kpiItemService = {
   async getAll(): Promise<KpiItem[]> {

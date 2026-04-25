@@ -1,10 +1,10 @@
-import axios from 'axios';
-import { authStorage } from './authStorage';
+import axios from "axios";
+import { authStorage } from "./authStorage";
 
 const api = axios.create({
-  baseURL: 'http://localhost:8081',
+  baseURL: "/api",
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 

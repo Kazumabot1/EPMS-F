@@ -16,7 +16,10 @@ public class CandidateResponseDto {
     private String type; // "USER" (for leaders) or "EMPLOYEE" (for members)
     private Integer departmentId; // Only relevant for leaders
     private String departmentName; // Only relevant for leaders
-    private boolean isAvailable;
+    // Modified by KHN
+    // (Renamed from isAvailable to available - Jackson strips "is" prefix which caused frontend null bug)
+    private Boolean available;
+    // END HERE
     private Integer currentTeamId;
     private String currentTeamName;
 }

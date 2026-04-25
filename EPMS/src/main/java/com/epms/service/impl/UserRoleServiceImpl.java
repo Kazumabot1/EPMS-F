@@ -3,7 +3,8 @@ package com.epms.service.impl;
 import com.epms.dto.UserRoleRequestDto;
 import com.epms.dto.UserRoleResponseDto;
 import com.epms.entity.UserRole;
-import com.epms.exception.ResourceNotFoundException;
+import com.epms.repository.RoleRepository;
+import com.epms.repository.UserRepository;
 import com.epms.repository.UserRoleRepository;
 import com.epms.service.UserRoleService;
 import lombok.RequiredArgsConstructor;
@@ -16,9 +17,17 @@ import java.util.List;
 public class UserRoleServiceImpl implements UserRoleService {
 
     private final UserRoleRepository userRoleRepository;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
 
     @Override
     public UserRoleResponseDto createUserRole(UserRoleRequestDto requestDto) {
+        validateUserAndRole(requestDto.getUserId(), requestDto.getRoleId());
+
+        if (userRoleRepository.existsByUserIdAndRoleId(requestDto.getUserId(), requestDto.getRoleId())) {
+            throw new RuntimeException("This role is already assigned to this user");
+        }
+
         UserRole userRole = new UserRole();
         userRole.setUserId(requestDto.getUserId());
         userRole.setRoleId(requestDto.getRoleId());
@@ -44,6 +53,9 @@ public class UserRoleServiceImpl implements UserRoleService {
     @Override
     public UserRoleResponseDto updateUserRole(Integer id, UserRoleRequestDto requestDto) {
         UserRole existingUserRole = getUserRoleEntityById(id);
+
+        validateUserAndRole(requestDto.getUserId(), requestDto.getRoleId());
+
         existingUserRole.setUserId(requestDto.getUserId());
         existingUserRole.setRoleId(requestDto.getRoleId());
 
@@ -53,13 +65,23 @@ public class UserRoleServiceImpl implements UserRoleService {
 
     @Override
     public void deleteUserRole(Integer id) {
-        UserRole existingUserRole = getUserRoleEntityById(id);
-        userRoleRepository.delete(existingUserRole);
+        UserRole userRole = getUserRoleEntityById(id);
+        userRoleRepository.delete(userRole);
     }
 
     private UserRole getUserRoleEntityById(Integer id) {
         return userRoleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("UserRole not found with id: " + id));
+                .orElseThrow(() -> new RuntimeException("User role not found with id: " + id));
+    }
+
+    private void validateUserAndRole(Integer userId, Integer roleId) {
+        if (!userRepository.existsById(userId)) {
+            throw new RuntimeException("User not found with id: " + userId);
+        }
+
+        if (!roleRepository.existsById(roleId)) {
+            throw new RuntimeException("Role not found with id: " + roleId);
+        }
     }
 
     private UserRoleResponseDto mapToResponseDto(UserRole userRole) {

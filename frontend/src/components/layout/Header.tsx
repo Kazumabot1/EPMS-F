@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { authStorage } from '../../services/authStorage';
 
 type HeaderProps = {
   collapsed: boolean;
@@ -6,12 +7,15 @@ type HeaderProps = {
 
 const Header = ({ collapsed }: HeaderProps) => {
   const navigate = useNavigate();
-  const email = localStorage.getItem('epmsUserEmail') ?? 'hr@company.com';
-  const userName = 'Emily Rodriguez';
+  const user = authStorage.getUser();
+
+  const email = user?.email ?? 'user@company.com';
+  const userName = user?.fullName ?? 'User';
+  const primaryRole = user?.roles?.[0] ?? 'User';
 
   const handleLogout = () => {
-    localStorage.removeItem('epmsUserEmail');
-    navigate('/login');
+    authStorage.clearSession();
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -29,16 +33,16 @@ const Header = ({ collapsed }: HeaderProps) => {
 
         <div className="hr-user-chip">
           <span className="hr-user-avatar">{email.charAt(0).toUpperCase()}</span>
+
           <div>
             <strong>{userName}</strong>
-            <small>Hr</small>
+            <small>{primaryRole}</small>
           </div>
-          <i className="bi bi-chevron-down" />
-        </div>
 
-        <button type="button" className="hr-logout-button" onClick={handleLogout} title="Logout">
-          <i className="bi bi-box-arrow-right" />
-        </button>
+          <button type="button" className="hr-icon-button" onClick={handleLogout} title="Logout">
+            <i className="bi bi-box-arrow-right" />
+          </button>
+        </div>
       </div>
     </header>
   );

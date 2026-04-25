@@ -1,10 +1,3 @@
-import axios from 'axios';
-
-const api = axios.create({
-  baseURL: 'http://localhost:8081',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-export default api;
+// Re-export the single authoritative API client.
+// This file exists for backward compatibility with imports from 'src/api'.
+export { default as default } from './services/api';

@@ -1,252 +1,308 @@
-// KHN modified files
-// (Component to create new teams with candidate exclusivity rules)
+import React, { useEffect, useState } from "react";
+import {
+  createTeam,
+  fetchCandidateMembers,
+  fetchCandidateUsers,
+  fetchDepartments,
+} from "../../services/teamService";
 
-import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-    createTeam, 
-    fetchDepartments, 
-    fetchCandidateEmployees, 
-    fetchCandidateUsers,
-    type CandidateResponse
-} from '../../services/teamService';
-import './team-ui.css';
+import type {
+  CandidateUser,
+  Department,
+  TeamRequest,
+} from "../../services/teamService";
+import { authStorage } from "../../services/authStorage";
 
 interface TeamCreateProps {
-    embedded?: boolean;
-    onCancel?: () => void;
-    onCreated?: () => void;
+  embedded?: boolean;
+  onCancel?: () => void;
+  onCreated?: () => void;
 }
 
-const TeamCreate = ({ embedded = false, onCancel, onCreated }: TeamCreateProps) => {
-    const navigate = useNavigate();
-    const [departments, setDepartments] = useState<any[]>([]);
-    const [employees, setEmployees] = useState<CandidateResponse[]>([]);
-    const [potentialLeaders, setPotentialLeaders] = useState<CandidateResponse[]>([]);
-    
-    const [formData, setFormData] = useState({
-        teamName: '',
-        departmentId: '',
-        teamLeaderId: '',
-        teamGoal: '',
-        status: 'Active'
-    });
-    const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+const TeamCreate: React.FC<TeamCreateProps> = ({
+  embedded = false,
+  onCancel,
+  onCreated,
+}) => {
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [leaders, setLeaders] = useState<CandidateUser[]>([]);
+  const [members, setMembers] = useState<CandidateUser[]>([]);
 
-    useEffect(() => {
-        const loadInitialData = async () => {
-            try {
-                // KHN added part (Load candidates instead of all employees)
-                const [depts, emps] = await Promise.all([fetchDepartments(), fetchCandidateEmployees()]);
-                setDepartments(depts);
-                setEmployees(emps);
-            } catch (err) {
-                console.error('Failed to load initial data', err);
+  const [teamName, setTeamName] = useState("");
+  const [departmentId, setDepartmentId] = useState<number | "">("");
+  const [teamLeaderId, setTeamLeaderId] = useState<number | "">("");
+  const [teamGoal, setTeamGoal] = useState("");
+  const [status, setStatus] = useState("Active");
+  const [memberUserIds, setMemberUserIds] = useState<number[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const getCurrentUserId = (): number => {
+    const user = authStorage.getUser();
+    return Number(user?.id || user?.userId || 1);
+  };
+
+  useEffect(() => {
+    loadDepartments();
+  }, []);
+
+  useEffect(() => {
+    if (departmentId !== "") {
+      loadCandidates(Number(departmentId));
+    } else {
+      setLeaders([]);
+      setMembers([]);
+      setTeamLeaderId("");
+      setMemberUserIds([]);
+    }
+  }, [departmentId]);
+
+  const loadDepartments = async () => {
+    try {
+      const data = await fetchDepartments();
+      setDepartments(data);
+    } catch (error) {
+      console.error("Failed to fetch departments", error);
+      setMessage("Failed to fetch departments. Please login again.");
+    }
+  };
+
+  const loadCandidates = async (deptId: number) => {
+    try {
+      const [leaderData, memberData] = await Promise.all([
+        fetchCandidateUsers(deptId),
+        fetchCandidateMembers(deptId),
+      ]);
+
+      setLeaders(leaderData);
+      setMembers(memberData);
+      setTeamLeaderId("");
+      setMemberUserIds([]);
+    } catch (error) {
+      console.error("Failed to fetch candidates", error);
+      setMessage("Failed to fetch users. Please check your login session.");
+    }
+  };
+
+  const toggleMember = (id: number) => {
+    setMemberUserIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const resetForm = () => {
+    setTeamName("");
+    setDepartmentId("");
+    setTeamLeaderId("");
+    setTeamGoal("");
+    setStatus("Active");
+    setMemberUserIds([]);
+    setLeaders([]);
+    setMembers([]);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!teamName.trim() || departmentId === "" || teamLeaderId === "") {
+      setMessage("Please fill all required fields.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setMessage("");
+
+      const request: TeamRequest = {
+        teamName: teamName.trim(),
+        departmentId: Number(departmentId),
+        teamLeaderId: Number(teamLeaderId),
+        createdById: getCurrentUserId(),
+        teamGoal,
+        status,
+        memberUserIds,
+        memberEmployeeIds: memberUserIds,
+      };
+
+      await createTeam(request);
+
+      setMessage("Team created successfully.");
+      resetForm();
+
+      if (onCreated) {
+        onCreated();
+      }
+    } catch (error: any) {
+      console.error("Failed to create team", error);
+      setMessage(
+        error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.response?.data?.data ||
+          "Failed to create team."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={embedded ? "" : "p-6 max-w-3xl mx-auto"}>
+      {!embedded && <h1 className="text-2xl font-semibold mb-6">Create Team</h1>}
+
+      {message && <div className="team-alert mb-3">{message}</div>}
+
+      <form onSubmit={handleSubmit} className="team-form">
+        <div className="team-field">
+          <label>
+            Team Name <span className="team-required">*</span>
+          </label>
+          <input
+            className="team-input"
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+            placeholder="Enter team name"
+            required
+          />
+        </div>
+
+        <div className="team-field">
+          <label>
+            Department <span className="team-required">*</span>
+          </label>
+          <select
+            className="team-select"
+            value={departmentId}
+            onChange={(e) =>
+              setDepartmentId(e.target.value ? Number(e.target.value) : "")
             }
-        };
-        loadInitialData();
-    }, []);
+            required
+          >
+            <option value="">Select department</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.departmentName || dept.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
-    const handleDepartmentChange = async (deptId: string) => {
-        setFormData(prev => ({ ...prev, departmentId: deptId, teamLeaderId: '' }));
-        if (deptId) {
-            try {
-                // KHN added part (Load candidate users for exclusivity)
-                const users = await fetchCandidateUsers(Number(deptId));
-                setPotentialLeaders(users);
-            } catch (err) {
-                console.error('Failed to load candidate users for department', err);
-                setPotentialLeaders([]);
+        <div className="team-field">
+          <label>
+            Team Leader <span className="team-required">*</span>
+          </label>
+          <select
+            className="team-select"
+            value={teamLeaderId}
+            onChange={(e) =>
+              setTeamLeaderId(e.target.value ? Number(e.target.value) : "")
             }
-        } else {
-            setPotentialLeaders([]);
-        }
-    };
+            disabled={!departmentId}
+            required
+          >
+            <option value="">Select team leader</option>
+            {leaders.map((leader) => (
+              <option
+                key={leader.id}
+                value={leader.id}
+                disabled={leader.isAvailable === false}
+              >
+                {leader.name}
+                {leader.isAvailable === false
+                  ? ` (Already in ${leader.currentTeamName})`
+                  : ""}
+              </option>
+            ))}
+          </select>
+        </div>
 
-    const handleMemberToggle = (id: number) => {
-        setSelectedMembers(prev => 
-            prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
-        );
-    };
+        <div className="team-field">
+          <label>Team Goal</label>
+          <textarea
+            className="team-textarea"
+            value={teamGoal}
+            onChange={(e) => setTeamGoal(e.target.value)}
+            placeholder="Enter team goal"
+            rows={3}
+          />
+        </div>
 
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setSuccess('');
+        <div className="team-field">
+          <label>Status</label>
+          <select
+            className="team-select"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
 
-        if (!formData.teamName || !formData.departmentId || !formData.teamLeaderId) {
-            setError('Please fill in all required fields.');
-            return;
-        }
+        <div className="team-field">
+          <label>Team Members</label>
 
-        try {
-            setLoading(true);
-            const currentUserId = localStorage.getItem('id'); // KHN added part
-            
-            await createTeam({
-                teamName: formData.teamName,
-                departmentId: Number(formData.departmentId),
-                teamLeaderId: Number(formData.teamLeaderId),
-                createdById: Number(currentUserId) || 1, // KHN: Use real ID from login
-                teamGoal: formData.teamGoal,
-                status: formData.status,
-                memberEmployeeIds: selectedMembers
-            });
-            setSuccess('Team created successfully!');
-            if (onCreated) {
-                setTimeout(() => onCreated(), 500);
-            } else {
-                setTimeout(() => navigate('/hr/team'), 2000);
-            }
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to create team. Please check your input.');
-            console.error('Team creation error:', err); // KHN added part
-        } finally {
-            setLoading(false);
-        }
-    };
+          {!departmentId && (
+            <p className="text-muted">Select a department first.</p>
+          )}
 
-    const handleCancel = () => {
-        if (onCancel) {
-            onCancel();
-            return;
-        }
-        navigate('/hr/team');
-    };
+          {departmentId && members.length === 0 && (
+            <p className="text-muted">No available members found.</p>
+          )}
 
-    const formMarkup = (
-        <form onSubmit={handleSubmit}>
-            <div className="team-field">
-                <label>Team Name <span className="team-required">*</span></label>
-                <input 
-                    type="text" 
-                    className="team-input"
-                    placeholder="e.g. Frontend Development"
-                    value={formData.teamName}
-                    onChange={e => setFormData({...formData, teamName: e.target.value})}
-                    required
-                />
-            </div>
+          <div className="team-members-list">
+            {members.map((member) => {
+              const isLeader = Number(teamLeaderId) === member.id;
+              const isSelected = memberUserIds.includes(member.id);
+              const isDisabled =
+                isLeader || (member.isAvailable === false && !isSelected);
 
-            <div className="team-form-grid">
-                <div className="team-field">
-                    <label>Department <span className="team-required">*</span></label>
-                    <select 
-                        className="team-select"
-                        value={formData.departmentId}
-                        onChange={e => handleDepartmentChange(e.target.value)}
-                        required
-                    >
-                        <option value="">Select Department</option>
-                        {departments.map(d => (
-                            // KHN added part (Use department_name to match user requirement)
-                            <option key={d.id} value={d.id}>{d.department_name || d.departmentName}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="team-field">
-                    <label>Team Leader <span className="team-required">*</span></label>
-                    <select 
-                        className="team-select"
-                        value={formData.teamLeaderId}
-                        onChange={e => setFormData({...formData, teamLeaderId: e.target.value})}
-                        disabled={!formData.departmentId}
-                        required
-                    >
-                        <option value="">{formData.departmentId ? 'Select Leader' : 'Choose Department first'}</option>
-                        {potentialLeaders.map(l => (
-                            // KHN added part (Exclusivity disable logic with text)
-                            <option key={l.id} value={l.id} disabled={!l.isAvailable}>
-                                {l.name} {!l.isAvailable ? `(Already in ${l.currentTeamName})` : ''}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-
-            <div className="team-field">
-                <label>Team Goal</label>
-                <textarea 
-                    className="team-textarea"
-                    rows={3}
-                    placeholder="What is the objective of this team?"
-                    value={formData.teamGoal}
-                    onChange={e => setFormData({...formData, teamGoal: e.target.value})}
-                />
-            </div>
-
-            <div className="team-field">
-                <label>Members</label>
-                <div className="team-members-list">
-                    {employees.map(emp => (
-                        // KHN added part (Exclusivity tooltip and styling)
-                        <label key={emp.id} className={`team-member-item ${!emp.isAvailable ? 'disabled' : ''}`} title={!emp.isAvailable ? `This user is in ${emp.currentTeamName}` : ''}>
-                            <input 
-                                type="checkbox" 
-                                checked={selectedMembers.includes(emp.id)}
-                                onChange={() => handleMemberToggle(emp.id)}
-                                disabled={!emp.isAvailable}
-                            />
-                            <span>{emp.name}</span>
-                            {!emp.isAvailable && <i className="bi bi-slash-circle ms-2 text-danger" style={{fontSize: '0.8rem'}} />}
-                        </label>
-                    ))}
-                </div>
-            </div>
-
-            <div className="team-field">
-                <label>Status</label>
-                <select 
-                    className="team-select"
-                    value={formData.status}
-                    onChange={e => setFormData({...formData, status: e.target.value})}
+              return (
+                <label
+                  key={member.id}
+                  className={`team-member-item ${
+                    isDisabled ? "disabled" : ""
+                  }`}
+                  title={
+                    isLeader
+                      ? "Team leader cannot also be a member"
+                      : isDisabled
+                      ? `This user is in ${member.currentTeamName}`
+                      : ""
+                  }
                 >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                </select>
-            </div>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleMember(member.id)}
+                    disabled={isDisabled}
+                  />
+                  <span>{member.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
 
-            {error && <div className="team-alert error">{error}</div>}
-            {success && <div className="team-alert success">{success}</div>}
+        <div className="team-modal-footer">
+          {embedded && (
+            <button
+              type="button"
+              className="team-btn secondary"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+          )}
 
-            <div className="flex justify-end gap-3 mt-8">
-                <button type="button" className="team-btn secondary" onClick={handleCancel}>Cancel</button>
-                <button type="submit" className="team-btn primary" disabled={loading}>
-                    <i className={`bi ${loading ? 'bi-arrow-repeat animate-spin' : 'bi-check-lg'}`} />
-                    {loading ? 'Creating...' : 'Create Team'}
-                </button>
-            </div>
-        </form>
-    );
-
-    return (
-        embedded ? (
-            <div className="team-surface-inner">
-                {formMarkup}
-            </div>
-        ) : (
-            <div className="team-page">
-                <div className="team-hero">
-                    <span className="team-hero-badge">
-                        <i className="bi bi-plus-circle" />
-                        New Team
-                    </span>
-                    <h1>Create Team</h1>
-                    <p>Define your team details, select a leader, and add department members.</p>
-                </div>
-
-                <div className="team-form-card team-surface">
-                    <div className="team-surface-inner">
-                        {formMarkup}
-                    </div>
-                </div>
-            </div>
-        )
-    );
+          <button type="submit" disabled={loading} className="team-btn primary">
+            {loading ? "Creating..." : "Create Team"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 };
 
 export default TeamCreate;

@@ -8,6 +8,7 @@ import java.util.List;
 @Data
 @Builder
 public class CurrentUserResponse {
+
     private Integer id;
     private String email;
     private String fullName;

@@ -1,10 +1,12 @@
 package com.epms.service;
 
 import com.epms.entity.Department;
+import com.epms.entity.Position;
 import com.epms.entity.Role;
 import com.epms.entity.User;
 import com.epms.entity.UserRole;
 import com.epms.repository.DepartmentRepository;
+import com.epms.repository.PositionRepository;
 import com.epms.repository.RoleRepository;
 import com.epms.repository.UserRepository;
 import com.epms.repository.UserRoleRepository;
@@ -24,17 +26,20 @@ public class StaffImportService {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
+    private final PositionRepository positionRepository;
 
     public StaffImportService(
             DepartmentRepository departmentRepository,
             RoleRepository roleRepository,
             UserRepository userRepository,
-            UserRoleRepository userRoleRepository
+            UserRoleRepository userRoleRepository,
+            PositionRepository positionRepository
     ) {
         this.departmentRepository = departmentRepository;
         this.roleRepository = roleRepository;
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
+        this.positionRepository = positionRepository;
     }
 
     @Transactional
@@ -52,6 +57,14 @@ public class StaffImportService {
                 .filter(r -> normalize(r.getName()) != null)
                 .collect(Collectors.toMap(
                         r -> normalize(r.getName()),
+                        Function.identity(),
+                        (a, b) -> a
+                ));
+
+        Map<String, Position> positionMap = positionRepository.findAll().stream()
+                .filter(p -> normalize(p.getPositionTitle()) != null)
+                .collect(Collectors.toMap(
+                        p -> normalize(p.getPositionTitle()),
                         Function.identity(),
                         (a, b) -> a
                 ));
@@ -80,7 +93,7 @@ public class StaffImportService {
             String fullName = normalize(row.getFullName());
             String email = normalizeEmail(row.getEmail());
             String departmentName = normalize(row.getDepartmentName());
-            String position = normalize(row.getPosition());
+            String positionName = normalize(row.getPosition());
             String roleName = normalize(row.getRoleName());
 
             if (employeeCode == null && email == null) {
@@ -98,6 +111,15 @@ public class StaffImportService {
                     Department d = new Department();
                     d.setDepartmentName(name);
                     return departmentRepository.save(d);
+                });
+            }
+
+            Position position = null;
+            if (positionName != null) {
+                position = positionMap.computeIfAbsent(positionName, name -> {
+                    Position p = new Position();
+                    p.setPositionTitle(name);
+                    return positionRepository.save(p);
                 });
             }
 
@@ -125,7 +147,7 @@ public class StaffImportService {
                 user = new User();
                 user.setCreatedAt(new Date());
                 user.setActive(true);
-                user.setPassword("ChangeMe123!"); // change later if using encoder
+                user.setPassword("ChangeMe123!");
             }
 
             if (fullName != null) {

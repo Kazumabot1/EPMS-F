@@ -7,8 +7,8 @@ import type {
   PositionResponse,
 } from '../types/position';
 
-const POSITION_LEVEL_ENDPOINT = '/api/position-levels';
-const POSITION_ENDPOINT = '/api/positions';
+const POSITION_LEVEL_ENDPOINT = '/position-levels';
+const POSITION_ENDPOINT = '/positions';
 
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   if (isAxiosError(error)) {

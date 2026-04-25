@@ -17,6 +17,6 @@ public class AppraisalQuestionResponseDto {
     private String responseType;
     private Boolean isRequired;
     private Double weight;
-    private Long ratingScaleId;
+    private Integer ratingScaleId;
     private LocalDateTime createdAt;
 }
