@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { authStorage } from '../services/authStorage';
 import type { ApiEnvelope, AuthResponse } from '../types/auth';
 import './login.css';
+import { useAuth } from '../contexts/AuthContext';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -12,6 +12,7 @@ function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const resolveRoute = (dashboard?: string) => {
     switch (dashboard) {
@@ -48,7 +49,7 @@ function Login() {
         throw new Error('Login response did not include tokens.');
       }
 
-      authStorage.setSession(payload);
+      login(payload);
       navigate(resolveRoute(payload.dashboard), { replace: true });
     } catch (err: any) {
       setError(

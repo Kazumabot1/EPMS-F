@@ -60,8 +60,8 @@ public class TeamServiceImpl implements TeamService {
         Team savedTeam = teamRepository.save(team);
         syncMembers(savedTeam, dto.getEffectiveMemberUserIds(), creator);
 
-        savedTeam.setTeamMembers(teamMemberRepository.findByTeamId(savedTeam.getId()));
         return mapToResponseDto(savedTeam);
+
     }
 
     @Override
@@ -139,7 +139,7 @@ public class TeamServiceImpl implements TeamService {
             syncMembers(updatedTeam, dto.getEffectiveMemberUserIds(), editor);
         }
 
-        updatedTeam.setTeamMembers(teamMemberRepository.findByTeamId(updatedTeam.getId()));
+
         return mapToResponseDto(updatedTeam);
     }
 
@@ -201,16 +201,13 @@ public class TeamServiceImpl implements TeamService {
     }
 
     private void syncMembers(Team team, List<Integer> memberUserIds, User editor) {
-        List<TeamMember> currentMembers = teamMemberRepository.findByTeamId(team.getId());
-        teamMemberRepository.deleteAll(currentMembers);
-        teamMemberRepository.flush();
+
+        team.clearTeamMembers();
 
         if (memberUserIds == null || memberUserIds.isEmpty()) {
-            team.setTeamMembers(new ArrayList<>());
             return;
         }
 
-        List<TeamMember> newMembers = new ArrayList<>();
         for (Integer userId : memberUserIds) {
             if (userId == null) {
                 continue;
@@ -223,26 +220,31 @@ public class TeamServiceImpl implements TeamService {
             User memberUser = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
-            validateUserBelongsToDepartment(memberUser, team.getDepartment().getId(),
-                    "Team member " + memberUser.getFullName() + " must belong to the same department");
+            validateUserBelongsToDepartment(
+                    memberUser,
+                    team.getDepartment().getId(),
+                    "Team member " + memberUser.getFullName() + " must belong to the same department"
+            );
 
             if (isActive(team.getStatus())) {
                 validateMemberIsAvailableForActiveTeam(userId, team.getId(), memberUser.getFullName());
-                validateLeaderIsAvailableForActiveTeam(userId, team.getId(),
-                        "User " + memberUser.getFullName() + " is already leading an Active team");
+                validateLeaderIsAvailableForActiveTeam(
+                        userId,
+                        team.getId(),
+                        "User " + memberUser.getFullName() + " is already leading an Active team"
+                );
             }
 
             TeamMember member = new TeamMember();
-            member.setTeam(team);
             member.setMemberUser(memberUser);
             member.setStartedDate(new Date());
             member.setEditedByUser(editor);
-            newMembers.add(teamMemberRepository.save(member));
+
+            team.addTeamMember(member);
         }
 
-        team.setTeamMembers(newMembers);
+        teamRepository.save(team);
     }
-
     private void validateCurrentMembersAreAvailableForActiveTeam(Team team) {
         List<TeamMember> members = teamMemberRepository.findByTeamId(team.getId());
         for (TeamMember member : members) {

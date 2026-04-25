@@ -1,10 +1,14 @@
-import { Navigate, Outlet } from "react-router-dom";
-import { authStorage } from "../services/authStorage";
+import { Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const ProtectedRoute = () => {
-  const token = authStorage.getAccessToken();
+  const { isAuthenticated, loading } = useAuth();
 
-  if (!token) {
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
