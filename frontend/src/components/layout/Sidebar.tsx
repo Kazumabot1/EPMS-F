@@ -24,22 +24,23 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
     dashboard === 'EMPLOYEE_DASHBOARD'
       ? 'Employee'
       : dashboard === 'HR_DASHBOARD'
-        ? 'HR'
-        : dashboard === 'ADMIN_DASHBOARD'
-          ? 'Admin'
-          : dashboard === 'MANAGER_DASHBOARD'
-            ? 'Manager'
-            : dashboard === 'DEPARTMENT_HEAD_DASHBOARD'
-              ? 'Department Head'
-              : dashboard === 'EXECUTIVE_DASHBOARD'
-                ? 'Executive'
-                : 'User';
+      ? 'HR'
+      : dashboard === 'ADMIN_DASHBOARD'
+      ? 'Admin'
+      : dashboard === 'MANAGER_DASHBOARD'
+      ? 'Manager'
+      : dashboard === 'DEPARTMENT_HEAD_DASHBOARD'
+      ? 'Department Head'
+      : dashboard === 'EXECUTIVE_DASHBOARD'
+      ? 'Executive'
+      : 'User';
 
   const navItems: NavItem[] =
     dashboard === 'EMPLOYEE_DASHBOARD'
       ? [{ to: '/employee/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' }]
       : [
           { to: '/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' },
+
           {
             to: '/hr/team',
             label: 'Team Management',
@@ -49,6 +50,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-circle' },
             ],
           },
+
           {
             to: '/hr/employee',
             label: 'Organization',
@@ -56,8 +58,11 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
             children: [
               { to: '/hr/department', label: 'Departments', icon: 'bi bi-building' },
               { to: '/hr/employee', label: 'Employees', icon: 'bi bi-person' },
+              { to: '/hr/employee/create', label: 'Create Employee', icon: 'bi bi-person-plus' },
+              { to: '/hr/employee/import', label: 'Import Employees', icon: 'bi bi-upload' },
             ],
           },
+
           {
             to: '/user-roles',
             label: 'Access Control',
@@ -68,6 +73,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               { to: '/permissions', label: 'Permissions', icon: 'bi bi-key' },
             ],
           },
+
           {
             to: '/pip-updates',
             label: 'One-on-One',
@@ -78,7 +84,9 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               { to: '/one-on-one-action-items', label: 'Action Items', icon: 'bi bi-list-check' },
             ],
           },
+
           { to: '/notifications', label: 'Notifications', icon: 'bi bi-bell' },
+
           {
             to: '/hr/position/create',
             label: 'Positions',
@@ -89,6 +97,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               { to: '/hr/position/table', label: 'Positions Table', icon: 'bi bi-table' },
             ],
           },
+
           {
             to: '/hr/performance-kpi/unit',
             label: 'KPI Management',
@@ -188,7 +197,11 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
                 {!collapsed && (
                   <>
                     <span>{item.label}</span>
-                    <i className={`bi ${isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} hr-submenu-caret`} />
+                    <i
+                      className={`bi ${
+                        isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'
+                      } hr-submenu-caret`}
+                    />
                   </>
                 )}
               </button>
@@ -199,7 +212,9 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
                     <NavLink
                       key={child.to}
                       to={child.to}
-                      className={({ isActive }) => `hr-submenu-link ${isActive ? 'active' : ''}`}
+                      className={({ isActive }) =>
+                        `hr-submenu-link ${isActive ? 'active' : ''}`
+                      }
                     >
                       <i className={child.icon} />
                       <span>{child.label}</span>
@@ -218,7 +233,6 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
           className="hr-sidebar-collapse"
           onClick={onToggle}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <i className={`bi ${collapsed ? 'bi-chevron-right' : 'bi-chevron-left'}`} />
           {!collapsed && <span>Collapse</span>}
