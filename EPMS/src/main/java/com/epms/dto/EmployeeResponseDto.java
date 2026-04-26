@@ -21,8 +21,18 @@ public class EmployeeResponseDto {
     private String religion;
     private Date dateOfBirth;
     private String maritalStatus;
+    private String spouseName;
+    private String spouseNrc;
+    private String fatherName;
+    private String fatherNrc;
+    private Boolean active;
     private String contactAddress;
     private String permanentAddress;
+    private Integer positionId;
+    private String positionTitle;
+    private String positionLevelCode;
+    /** Department entity id of the current (open) assignment, if any. */
+    private Integer currentDepartmentId;
     private String currentDepartment;
     private String parentDepartment;
     private String assignedBy;

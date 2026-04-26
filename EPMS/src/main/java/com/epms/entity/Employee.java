@@ -37,7 +37,18 @@ public class Employee {
     private String fatherName;
     private String fatherNrc;
 
+    /**
+     * When false, the employee is soft-deleted / deactivated and excluded from default listings.
+     * Null is treated as active for legacy rows.
+     */
+    private Boolean active = true;
+
     // Many-to-Many with Department is managed through EmployeeDepartment (supports history tracking)
     @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<EmployeeDepartment> employeeDepartments;
+
+    /** Many employees reference one job position. Inverse: Position.employees. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "position_id", nullable = true)
+    private Position position;
 }
