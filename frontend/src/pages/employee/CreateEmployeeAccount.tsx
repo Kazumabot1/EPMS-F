@@ -48,19 +48,35 @@ const CreateEmployeeAccount = () => {
         | {
             success?: boolean;
             message?: string;
+            accountCreated?: boolean;
             temporaryPasswordEmailSent?: boolean;
             smtpErrorDetail?: string | null;
           }
         | undefined;
       const statusOk = data?.success !== false;
-      const detail = data?.message || "Employee account processed.";
       const smtp = data?.smtpErrorDetail?.trim();
-      const emailStatus = form.sendTemporaryPasswordEmail
-        ? data?.temporaryPasswordEmailSent
-          ? " Email sent successfully."
-          : ` Email could not be sent.${smtp ? ` ${smtp}` : " Check SMTP configuration."}`
-        : "";
-      setMessage({ type: statusOk ? "success" : "error", text: `${detail}${emailStatus}`.trim() });
+      const accountCreated = data?.accountCreated === true;
+      const emailRequested = form.sendTemporaryPasswordEmail;
+      const emailFailed = emailRequested && !data?.temporaryPasswordEmailSent;
+
+      let text: string;
+      if (accountCreated && emailRequested && emailFailed) {
+        text =
+          "Account was created, but email delivery failed. Please check SMTP credentials or resend later.";
+        if (smtp) {
+          text += ` ${smtp}`;
+        }
+      } else {
+        const detail = data?.message || "Employee account processed.";
+        const emailStatus = emailRequested
+          ? data?.temporaryPasswordEmailSent
+            ? " Email sent successfully."
+            : ` Email could not be sent.${smtp ? ` ${smtp}` : " Check SMTP configuration."}`
+          : "";
+        text = `${detail}${emailStatus}`.trim();
+      }
+
+      setMessage({ type: statusOk ? "success" : "error", text });
       if (!statusOk) {
         return;
       }

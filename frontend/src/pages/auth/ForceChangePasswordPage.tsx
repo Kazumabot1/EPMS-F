@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { resolveUserRole } from '../../config/roleNavigation';
+import './force-change-password.css';
 
 const ForceChangePasswordPage = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -11,6 +13,7 @@ const ForceChangePasswordPage = () => {
   const [error, setError] = useState('');
   const { user, login } = useAuth();
   const navigate = useNavigate();
+  const currentRole = resolveUserRole(user);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,25 +46,39 @@ const ForceChangePasswordPage = () => {
           mustChangePassword: false,
         });
       }
-      navigate('/dashboard', { replace: true });
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to change password');
+      navigate(currentRole === 'Employee' ? '/employee/dashboard' : '/dashboard', { replace: true });
+    } catch (err: unknown) {
+      const message =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message ===
+          'string'
+          ? (err as { response: { data: { message: string } } }).response.data.message
+          : 'Failed to change password';
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow p-6 border border-slate-100">
-        <h1 className="text-xl font-semibold text-slate-900 mb-2">Change your temporary password</h1>
-        <p className="text-sm text-slate-600 mb-4">
-          You must change your password before using the dashboard.
+    <div className="force-password-screen">
+      <div className="force-password-overlay" />
+      <div className="force-password-modal" role="dialog" aria-modal="true" aria-labelledby="force-password-title">
+        <div className="force-password-icon">
+          <i className="bi bi-shield-lock" />
+        </div>
+        <h1 id="force-password-title">Change Temporary Password</h1>
+        <p>
+          For security, please update your temporary password before continuing to your{' '}
+          {currentRole === 'Employee' ? 'Employee Dashboard' : 'HR Dashboard'}.
         </p>
-        <form onSubmit={handleSubmit} className="space-y-3">
+
+        <form onSubmit={handleSubmit} className="force-password-form">
           <input
             type="password"
-            className="w-full border rounded-lg p-2"
+            className="force-password-input"
             placeholder="Current temporary password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
@@ -69,7 +86,7 @@ const ForceChangePasswordPage = () => {
           />
           <input
             type="password"
-            className="w-full border rounded-lg p-2"
+            className="force-password-input"
             placeholder="New password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
@@ -77,16 +94,16 @@ const ForceChangePasswordPage = () => {
           />
           <input
             type="password"
-            className="w-full border rounded-lg p-2"
+            className="force-password-input"
             placeholder="Confirm new password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
           />
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="force-password-error">{error}</p>}
           <button
             type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 disabled:opacity-60"
+            className="force-password-submit"
             disabled={loading}
           >
             {loading ? 'Updating...' : 'Change password'}

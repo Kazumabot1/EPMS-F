@@ -2,12 +2,11 @@ package com.epms.service;
 
 import com.epms.dto.EmailSendResult;
 import com.epms.util.SmtpErrorSanitizer;
-import jakarta.annotation.PostConstruct;
 import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.env.Environment;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -22,16 +21,15 @@ import java.util.regex.Pattern;
 public class OnboardingEmailService {
 
     private static final Pattern EMAIL = Pattern.compile(
-            "^[A-Za-z0-9+._-]+@[A-Za-z0-9._-]+\\.[A-Za-z]{2,}$"
+            "^[A-Za-z0-9+._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
     );
 
     private final JavaMailSender mailSender;
-    private final Environment environment;
 
     @Value("${app.onboarding.login-url:http://localhost:5173/login}")
     private String loginUrl;
 
-    @Value("${app.mail.from:no-reply@epms.local}")
+    @Value("${app.mail.from:}")
     private String fromAddressRaw;
 
     @Value("${spring.mail.host:}")
@@ -43,144 +41,191 @@ public class OnboardingEmailService {
     @Value("${spring.mail.password:}")
     private String smtpPassword;
 
-    @PostConstruct
-    public void logEffectiveMailConfig() {
-        // Confirms what Spring actually resolved (including values loaded from .env into system properties at startup)
-        String host = environment.getProperty("spring.mail.host", "");
-        String user = environment.getProperty("spring.mail.username", "");
-        String from = environment.getProperty("app.mail.from", "");
-        log.info("Mail config (resolved): host='{}' userSet={} from='{}' — if host is empty, set SMTP_HOST in .env and restart.",
-                StringUtils.hasText(host) ? host : "(empty)",
-                StringUtils.hasText(user),
-                from);
-    }
-
-    /**
-     * Test mail — no temporary password, safe to use for connectivity checks.
-     */
     public EmailSendResult sendTestEmail(String toEmail) {
+        String body = """
+                This is a test message from EPMS.
+
+                If you received this email, SMTP is configured correctly.
+                """;
+
         return sendMimeEmail(
                 toEmail,
                 "EPMS test email",
-                "This is a test message from EPMS.\n\nIf you received this, SMTP is configured correctly.\n",
+                body,
                 false
         );
     }
 
-    /**
-     * Plain text password is only used in the outgoing message body, never stored or logged.
-     * {@code to} must be the employee/user mailbox.
-     */
-    public EmailSendResult sendTemporaryPasswordEmail(String toEmail, String employeeName, String temporaryPassword) {
-        if (!isValidRecipient(toEmail)) {
+    public EmailSendResult sendTemporaryPasswordEmail(
+            String toEmail,
+            String employeeName,
+            String temporaryPassword
+    ) {
+        if (!StringUtils.hasText(temporaryPassword)) {
             return EmailSendResult.builder()
                     .sent(false)
-                    .safeErrorDetail("Invalid or empty recipient email address.")
+                    .safeErrorDetail("Temporary password is empty.")
                     .build();
         }
-        String to = toEmail.trim();
-        String name = (employeeName == null || employeeName.isBlank()) ? "Employee" : employeeName;
-        String body = "Hello " + name + ",\n\n"
-                + "Your password is " + temporaryPassword + ".\n\n"
-                + "Please log in and change your password immediately.\n\n"
-                + "Login here: " + loginUrl + "\n\n"
-                + "Thank you.\n";
-        return sendMimeEmail(to, "Your temporary password", body, true);
+
+        String name = StringUtils.hasText(employeeName)
+                ? employeeName.trim()
+                : "Employee";
+
+        String body = """
+                Hello %s,
+
+                Your password is %s.
+
+                Please log in and change your password immediately.
+
+                Login here: %s
+
+                Thank you.
+                """.formatted(name, temporaryPassword, loginUrl);
+
+        return sendMimeEmail(
+                toEmail,
+                "Your temporary password",
+                body,
+                true
+        );
     }
 
-    private EmailSendResult sendMimeEmail(String to, String subject, String text, boolean bodyContainsPassword) {
-        if (!isValidRecipient(to)) {
-            return EmailSendResult.builder()
-                    .sent(false)
-                    .safeErrorDetail("Invalid recipient address.")
-                    .build();
-        }
-        if (!StringUtils.hasText(smtpHost)) {
-            String detail = "SMTP is not configured: set SMTP_HOST (e.g. smtp.gmail.com) in .env and restart the backend.";
-            log.warn("Email not sent: {}", detail);
-            return EmailSendResult.builder().sent(false).safeErrorDetail(detail).build();
-        }
-        if (!StringUtils.hasText(smtpUsername) || !StringUtils.hasText(smtpPassword)) {
-            String detail = "SMTP auth missing: set SMTP_USER and SMTP_PASS (Gmail: 16-char app password).";
-            log.warn("Email not sent: {}", detail);
-            return EmailSendResult.builder().sent(false).safeErrorDetail(detail).build();
+    private EmailSendResult sendMimeEmail(
+            String toEmail,
+            String subject,
+            String text,
+            boolean bodyContainsPassword
+    ) {
+        if (!isValidRecipient(toEmail)) {
+            return failed("Invalid or empty recipient email address.");
         }
 
-        final String toAddress = to.trim();
+        if (!StringUtils.hasText(smtpHost)) {
+            return failed("SMTP host is missing. Set spring.mail.host=smtp.gmail.com.");
+        }
+
+        if (!StringUtils.hasText(smtpUsername)) {
+            return failed("SMTP username is missing. Set spring.mail.username.");
+        }
+
+        if (!StringUtils.hasText(smtpPassword)) {
+            return failed("SMTP password is missing. For Gmail, use a Google App Password.");
+        }
+
+        String to = toEmail.trim().toLowerCase();
+
         try {
-            InternetAddress from = resolveFromInternetAddress();
-            var mime = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
-            helper.setFrom(from);
-            helper.setTo(toAddress);
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(
+                    mimeMessage,
+                    false,
+                    "UTF-8"
+            );
+
+            helper.setFrom(resolveFromAddress());
+            helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(text, false);
-            mailSender.send(mime);
+
+            mailSender.send(mimeMessage);
+
             if (bodyContainsPassword) {
-                log.info("Temporary-password email accepted by SMTP for recipient {} (message body is not logged).", toAddress);
+                log.info("Temporary password email accepted by SMTP for recipient {}.", to);
             } else {
-                log.info("Email sent to {} subject='{}'.", toAddress, subject);
+                log.info("Email accepted by SMTP for recipient {} subject='{}'.", to, subject);
             }
-            return EmailSendResult.builder().sent(true).build();
+
+            return EmailSendResult.builder()
+                    .sent(true)
+                    .build();
+
         } catch (MailException ex) {
             String safe = SmtpErrorSanitizer.summarize(ex);
-            log.warn("SMTP send failed to {}: {} | {}", toAddress, ex.getClass().getName(), safe);
-            return EmailSendResult.builder().sent(false).safeErrorDetail(safe).build();
+            log.warn("SMTP send failed to {}: {}", to, safe);
+            return failed(safe);
+
         } catch (Exception ex) {
             String safe = SmtpErrorSanitizer.summarize(ex);
-            log.warn("Email send failed to {}: {} | {}", toAddress, ex.getClass().getName(), safe);
-            return EmailSendResult.builder().sent(false).safeErrorDetail(safe).build();
+            log.warn("Email send failed to {}: {}", to, safe);
+            return failed(safe);
         }
     }
 
-    private InternetAddress resolveFromInternetAddress() throws Exception {
-        String raw = stripOuterQuotes(fromAddressRaw);
-        if (!StringUtils.hasText(raw)) {
-            return new InternetAddress(smtpUsername);
+    private InternetAddress resolveFromAddress() throws Exception {
+        String rawFrom = stripOuterQuotes(fromAddressRaw);
+
+        if (!StringUtils.hasText(rawFrom)) {
+            return new InternetAddress(smtpUsername, "EPMS HR");
         }
+
         try {
-            InternetAddress[] parsed = InternetAddress.parse(raw, false);
+            InternetAddress[] parsed = InternetAddress.parse(rawFrom, false);
+
             if (parsed.length == 0) {
-                return new InternetAddress(smtpUsername);
+                return new InternetAddress(smtpUsername, "EPMS HR");
             }
-            InternetAddress addr = parsed[0];
-            String box = addr.getAddress();
-            if (isGmailHost() && StringUtils.hasText(smtpUsername) && StringUtils.hasText(box)
-                    && !box.trim().equalsIgnoreCase(smtpUsername.trim())) {
-                log.warn("Gmail: From mailbox ({}) != SMTP user ({}). Using SMTP user. Set SMTP_FROM to \"Name <{}>\".",
-                        box, smtpUsername, smtpUsername);
-                return new InternetAddress(smtpUsername);
+
+            InternetAddress parsedFrom = parsed[0];
+            String fromMailbox = parsedFrom.getAddress();
+
+            if (isGmailSmtp()
+                    && StringUtils.hasText(fromMailbox)
+                    && !fromMailbox.equalsIgnoreCase(smtpUsername)) {
+
+                log.warn(
+                        "Gmail requires From email to match SMTP username. Using {} instead of {}.",
+                        smtpUsername,
+                        fromMailbox
+                );
+
+                return new InternetAddress(smtpUsername, "EPMS HR");
             }
-            return addr;
-        } catch (Exception e) {
-            log.warn("Could not parse app.mail.from '{}', using SMTP user: {}", raw, e.getMessage());
-            return new InternetAddress(smtpUsername);
+
+            return parsedFrom;
+
+        } catch (Exception ex) {
+            log.warn("Invalid app.mail.from='{}'. Using SMTP username.", rawFrom);
+            return new InternetAddress(smtpUsername, "EPMS HR");
         }
     }
 
-    private String stripOuterQuotes(String s) {
-        if (s == null) {
+    private EmailSendResult failed(String message) {
+        return EmailSendResult.builder()
+                .sent(false)
+                .safeErrorDetail(message)
+                .build();
+    }
+
+    private boolean isValidRecipient(String email) {
+        if (!StringUtils.hasText(email)) {
+            return false;
+        }
+
+        String trimmed = email.trim();
+
+        return trimmed.length() <= 254 && EMAIL.matcher(trimmed).matches();
+    }
+
+    private boolean isGmailSmtp() {
+        return StringUtils.hasText(smtpHost)
+                && smtpHost.toLowerCase().contains("gmail.com");
+    }
+
+    private String stripOuterQuotes(String value) {
+        if (value == null) {
             return null;
         }
-        String t = s.trim();
-        if (t.length() >= 2 && t.startsWith("\"") && t.endsWith("\"")) {
-            return t.substring(1, t.length() - 1).trim();
-        }
-        return t;
-    }
 
-    private boolean isGmailHost() {
-        if (smtpHost == null) {
-            return false;
-        }
-        return smtpHost.toLowerCase().contains("gmail.com");
-    }
+        String trimmed = value.trim();
 
-    private boolean isValidRecipient(String toEmail) {
-        if (toEmail == null) {
-            return false;
+        if (trimmed.length() >= 2
+                && trimmed.startsWith("\"")
+                && trimmed.endsWith("\"")) {
+            return trimmed.substring(1, trimmed.length() - 1).trim();
         }
-        String t = toEmail.trim();
-        return t.length() <= 254 && EMAIL.matcher(t).matches();
+
+        return trimmed;
     }
 }

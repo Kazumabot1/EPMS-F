@@ -192,6 +192,24 @@ export const responseToFormDefaults = (e: EmployeeResponse) => ({
   sendTemporaryPasswordEmail: true,
 });
 
+/** Outcome of login provisioning / resend (password is never included). */
+export type AccountProvisionResult = {
+  userId: number | null;
+  success: boolean;
+  accountCreated: boolean;
+  accountLinked: boolean;
+  temporaryPasswordEmailSent: boolean;
+  message: string;
+  smtpErrorDetail?: string | null;
+};
+
+export const resendTemporaryPasswordEmail = async (userId: number): Promise<AccountProvisionResult> => {
+  const response = await api.post<GenericApiResponse<AccountProvisionResult>>(
+    `/users/${userId}/resend-temporary-password`
+  );
+  return unwrap(response);
+};
+
 export const formatDateForInput = (iso: string | null | undefined): string => {
   if (!iso) {
     return '';
