@@ -16,6 +16,7 @@ import EmployeeLayout from './components/layout/EmployeeLayout';
 import HRLayout from './components/layout/HRLayout';
 
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
+import EmployeeManagement from './pages/employee/EmployeeManagement';
 import TeamManagement from './pages/team/TeamManagement';
 import TeamCreate from './pages/team/TeamCreate';
 import DepartmentManagement from './pages/department/DepartmentManagement';
@@ -28,6 +29,8 @@ import KpiUnitPage from './pages/hr/performance-kpi/unit/KpiUnitPage';
 import KpiCategoryPage from './pages/hr/performance-kpi/category/KpiCategoryPage';
 import KpiItemPage from './pages/hr/performance-kpi/item/KpiItemPage';
 import KpiFormPage from './pages/hr/performance-kpi/form/KpiFormPage';
+import ProfilePage from './pages/hr/ProfilePage';
+import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 
 function App() {
   return (
@@ -37,6 +40,7 @@ function App() {
         <Route path="/register" element={<Register />} />
 
         <Route element={<ProtectedRoute />}>
+          <Route path="/change-password" element={<ForceChangePasswordPage />} />
           <Route element={<EmployeeLayout />}>
             <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
           </Route>
@@ -45,8 +49,10 @@ function App() {
           <Route element={<HRLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Home />} />
+            <Route path="/hr/profile" element={<ProfilePage />} />
 
-            <Route path="/hr/employee" element={<EmployeeDashboard />} />
+            <Route path="/hr/employee" element={<EmployeeManagement />} />
+            <Route path="/hr/employee/workforce" element={<EmployeeDashboard />} />
             <Route path="/hr/employee/create" element={<CreateEmployeeAccount />} />
             <Route path="/hr/employee/import" element={<HrEmployeeAccountImport />} />
             <Route path="/hr/team" element={<TeamManagement />} />
