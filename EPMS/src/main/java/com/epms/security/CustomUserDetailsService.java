@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,7 +32,9 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final PermissionRepository permissionRepository;
     private final DashboardResolver dashboardResolver;
 
+    // Modified by KHN
     @Override
+    @Transactional(readOnly = true) // Required: Position is LAZY - needs open session
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = userRepository.findByEmailAndActiveTrue(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Active user not found with email: " + username));
@@ -40,9 +43,11 @@ public class CustomUserDetailsService implements UserDetailsService {
         List<Integer> roleIds = userRoles.stream().map(UserRole::getRoleId).distinct().toList();
 
         List<Role> roles = roleIds.isEmpty() ? List.of() : roleRepository.findAllById(roleIds);
-        List<RolePermission> rolePermissions = roleIds.isEmpty() ? List.of() : rolePermissionRepository.findByRoleIdIn(roleIds);
+        List<RolePermission> rolePermissions = roleIds.isEmpty() ? List.of()
+                : rolePermissionRepository.findByRoleIdIn(roleIds);
         List<Integer> permissionIds = rolePermissions.stream().map(RolePermission::getPermissionId).distinct().toList();
-        List<Permission> permissions = permissionIds.isEmpty() ? List.of() : permissionRepository.findAllById(permissionIds);
+        List<Permission> permissions = permissionIds.isEmpty() ? List.of()
+                : permissionRepository.findAllById(permissionIds);
 
         Set<String> roleNames = new LinkedHashSet<>();
         roles.forEach(role -> roleNames.add(role.getName()));
@@ -52,7 +57,10 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         List<String> roleList = roleNames.stream().toList();
         List<String> permissionList = permissionNames.stream().toList();
-        String dashboard = dashboardResolver.resolveDashboard(roleList, user.getPosition());
+        // Modified by KHN
+        String dashboard = dashboardResolver.resolveDashboard(roleList,
+                user.getPosition() != null ? user.getPosition().getPositionTitle() : null);
+        // END HERE
 
         return new UserPrincipal(user, roleList, permissionList, dashboard);
     }

@@ -3,11 +3,8 @@ package com.epms.repository;
 import com.epms.entity.Position;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.List;
+import java.util.Optional;
 
 public interface PositionRepository extends JpaRepository<Position, Integer> {
-
-    List<Position> findByStatus(Boolean status);
-
-    boolean existsByPositionTitle(String positionTitle);
+    Optional<Position> findByPositionTitleIgnoreCase(String positionTitle);
 }

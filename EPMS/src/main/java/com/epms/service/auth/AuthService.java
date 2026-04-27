@@ -35,6 +35,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final CustomUserDetailsService customUserDetailsService;
+    private final AuthRateLimitService authRateLimitService;
 
     @Value("${app.jwt.refresh-token-expiration-ms:604800000}")
     private long refreshTokenExpirationMs;
@@ -44,6 +45,8 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
+        String key = request.getEmail() == null ? "anonymous" : request.getEmail().trim().toLowerCase();
+        authRateLimitService.check(key);
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -51,7 +54,9 @@ public class AuthService {
                             request.getPassword()
                     )
             );
+            authRateLimitService.success(key);
         } catch (BadCredentialsException ex) {
+            authRateLimitService.fail(key);
             throw new BadCredentialsException("Invalid email or password");
         }
 
@@ -62,22 +67,10 @@ public class AuthService {
                 (UserPrincipal) customUserDetailsService.loadUserByUsername(request.getEmail());
 
         refreshTokenRepository.deleteByUserId(user.getId());
+
         RefreshToken refreshToken = createRefreshToken(user.getId());
 
-        return AuthResponse.builder()
-                .accessToken(jwtService.generateAccessToken(principal))
-                .refreshToken(refreshToken.getToken())
-                .tokenType("Bearer")
-                .expiresIn(accessTokenExpirationMs / 1000)
-                .id(user.getId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .employeeCode(user.getEmployeeCode())
-                .position(user.getPosition())
-                .roles(principal.getRoles())
-                .permissions(principal.getPermissions())
-                .dashboard(principal.getDashboard())
-                .build();
+        return buildAuthResponse(user, principal, refreshToken.getToken());
     }
 
     @Transactional
@@ -97,20 +90,7 @@ public class AuthService {
         UserPrincipal principal =
                 (UserPrincipal) customUserDetailsService.loadUserByUsername(user.getEmail());
 
-        return AuthResponse.builder()
-                .accessToken(jwtService.generateAccessToken(principal))
-                .refreshToken(storedToken.getToken())
-                .tokenType("Bearer")
-                .expiresIn(accessTokenExpirationMs / 1000)
-                .id(user.getId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .employeeCode(user.getEmployeeCode())
-                .position(user.getPosition())
-                .roles(principal.getRoles())
-                .permissions(principal.getPermissions())
-                .dashboard(principal.getDashboard())
-                .build();
+        return buildAuthResponse(user, principal, storedToken.getToken());
     }
 
     @Transactional
@@ -125,6 +105,12 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        if (Boolean.TRUE.equals(user.getMustChangePassword())) {
+            if (request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
+                throw new BadRequestException("Current temporary password is required");
+            }
+        }
+
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
             throw new BadRequestException("Current password is incorrect");
         }
@@ -134,7 +120,11 @@ public class AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setMustChangePassword(false);
+        user.setPasswordChangedAt(new Date());
+        user.setAccountStatus("ACTIVE");
         user.setUpdatedAt(new Date());
+
         userRepository.save(user);
 
         refreshTokenRepository.deleteByUserId(userId);
@@ -142,9 +132,29 @@ public class AuthService {
 
     private RefreshToken createRefreshToken(Integer userId) {
         RefreshToken refreshToken = new RefreshToken();
+
         refreshToken.setUserId(userId);
         refreshToken.setToken(UUID.randomUUID().toString());
         refreshToken.setExpiryDate(new Date(System.currentTimeMillis() + refreshTokenExpirationMs));
+
         return refreshTokenRepository.save(refreshToken);
+    }
+
+    private AuthResponse buildAuthResponse(User user, UserPrincipal principal, String refreshToken) {
+        return AuthResponse.builder()
+                .accessToken(jwtService.generateAccessToken(principal))
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(accessTokenExpirationMs / 1000)
+                .id(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .employeeCode(user.getEmployeeCode())
+                .position(user.getPosition() != null ? user.getPosition().getPositionTitle() : null)
+                .roles(principal.getRoles())
+                .permissions(principal.getPermissions())
+                .dashboard(principal.getDashboard())
+                .mustChangePassword(Boolean.TRUE.equals(user.getMustChangePassword()))
+                .build();
     }
 }

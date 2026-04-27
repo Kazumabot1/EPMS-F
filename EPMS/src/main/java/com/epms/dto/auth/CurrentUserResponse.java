@@ -8,6 +8,7 @@ import java.util.List;
 @Data
 @Builder
 public class CurrentUserResponse {
+
     private Integer id;
     private String email;
     private String fullName;
@@ -16,4 +17,5 @@ public class CurrentUserResponse {
     private List<String> roles;
     private List<String> permissions;
     private String dashboard;
+    private Boolean mustChangePassword;
 }

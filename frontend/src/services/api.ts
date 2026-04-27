@@ -2,10 +2,7 @@ import axios from 'axios';
 import { authStorage } from './authStorage';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8081',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: '/api',
 });
 
 api.interceptors.request.use((config) => {

@@ -23,8 +23,8 @@ public class TeamMember {
     private Team team;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "employee_id", nullable = false)
-    private Employee employee;
+    @JoinColumn(name = "member_user_id", nullable = false)
+    private User memberUser;
 
     @Temporal(TemporalType.DATE)
     @Column(name = "started_date", nullable = false)

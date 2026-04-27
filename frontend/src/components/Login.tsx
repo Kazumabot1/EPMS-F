@@ -1,58 +1,62 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { authStorage } from '../services/authStorage';
+import api from '../services/api';
 import type { ApiEnvelope, AuthResponse } from '../types/auth';
 import './login.css';
+import { useAuth } from '../contexts/AuthContext';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const resolveRoute = (dashboard?: string) => {
     switch (dashboard) {
-      case 'HR_DASHBOARD':
-        return '/';
-      case 'ADMIN_DASHBOARD':
-        return '/';
-      case 'MANAGER_DASHBOARD':
-        return '/';
-      case 'DEPARTMENT_HEAD_DASHBOARD':
-        return '/';
-      case 'EXECUTIVE_DASHBOARD':
-        return '/';
       case 'EMPLOYEE_DASHBOARD':
-        return '/';
+        return '/employee/dashboard';
+      case 'MANAGER_DASHBOARD':
+        return '/manager/dashboard';
+      case 'DEPARTMENT_HEAD_DASHBOARD':
+        return '/department-head/dashboard';
+      case 'EXECUTIVE_DASHBOARD':
+        return '/executive/dashboard';
+      case 'ADMIN_DASHBOARD':
+      case 'HR_DASHBOARD':
       default:
-        return '/';
+        return '/dashboard';
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+
     setError('');
     setIsSubmitting(true);
 
     try {
-      const res = await axios.post<ApiEnvelope<AuthResponse>>(
-        'http://localhost:8081/api/auth/login',
-        {
-          email,
-          password,
-        }
-      );
+      const res = await api.post<ApiEnvelope<AuthResponse>>('/auth/login', {
+        email: email.trim(),
+        password,
+      });
 
       const payload = res.data.data;
-      authStorage.setSession(payload);
-      navigate(resolveRoute(payload.dashboard), { replace: true });
+
+      if (!payload?.accessToken || !payload?.refreshToken) {
+        throw new Error('Login response did not include tokens.');
+      }
+
+      login(payload);
+      navigate(payload.mustChangePassword ? '/change-password' : resolveRoute(payload.dashboard), { replace: true });
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        'Login failed'
+          err?.response?.data?.error ||
+          err?.message ||
+          'Login failed. Please check your email/password.'
       );
     } finally {
       setIsSubmitting(false);
@@ -69,25 +73,31 @@ function Login() {
         </div>
 
         <form onSubmit={handleLogin} className="login-form">
-          <label className="login-label" htmlFor="email">Email</label>
+          <label className="login-label" htmlFor="email">
+            Email
+          </label>
+
           <input
             id="email"
             className="login-input"
             type="email"
             placeholder="you@company.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(event) => setEmail(event.target.value)}
             required
           />
 
-          <label className="login-label" htmlFor="password">Password</label>
+          <label className="login-label" htmlFor="password">
+            Password
+          </label>
+
           <input
             id="password"
             className="login-input"
             type="password"
             placeholder="Enter your password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
             required
           />
 

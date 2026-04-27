@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class User {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -24,11 +26,30 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    private Integer employeeId;
+
+    private Boolean mustChangePassword = false;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date passwordChangedAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date lastTemporaryPasswordSentAt;
+
+    private String accountStatus;
+
     private String fullName;
+
     private String employeeCode;
-    private String position;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "position_id")
+    private Position position;
+
     private Integer managerId;
+
     private Integer departmentId;
+
     private Boolean active = true;
 
     @Temporal(TemporalType.DATE)
@@ -40,7 +61,6 @@ public class User {
     @Temporal(TemporalType.TIMESTAMP)
     private Date updatedAt;
 
-    // One-to-Many relationship with KPIs created by this user
     @OneToMany(mappedBy = "createdByUser", fetch = FetchType.LAZY)
     private List<Kpi> createdKpiForms = new ArrayList<>();
 

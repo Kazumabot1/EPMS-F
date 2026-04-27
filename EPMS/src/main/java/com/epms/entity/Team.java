@@ -47,4 +47,20 @@ public class Team {
 
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<TeamMember> teamMembers = new ArrayList<>();
+
+    public void addTeamMember(TeamMember member) {
+        teamMembers.add(member);
+        member.setTeam(this);
+    }
+
+    public void removeTeamMember(TeamMember member) {
+        teamMembers.remove(member);
+        member.setTeam(null);
+    }
+
+    public void clearTeamMembers() {
+        for (TeamMember member : new ArrayList<>(teamMembers)) {
+            removeTeamMember(member);
+        }
+    }
 }
