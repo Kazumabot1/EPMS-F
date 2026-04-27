@@ -165,10 +165,9 @@ public class UserAccountProvisioningService {
             }
         }
 
-        boolean emailOk = !sendTemporaryPasswordEmail || emailSent;
         return AccountProvisionResult.builder()
                 .userId(user.getId())
-                .success(emailOk)
+                .success(true)
                 .accountCreated(true)
                 .accountLinked(true)
                 .temporaryPasswordEmailSent(emailSent)
