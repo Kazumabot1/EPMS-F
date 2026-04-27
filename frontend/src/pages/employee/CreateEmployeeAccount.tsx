@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
+import { fetchDepartments } from "../../services/departmentService";
+import type { Department } from "../../services/departmentService";
+import { positionService } from "../../services/positionService";
+import type { PositionResponse } from "../../types/position";
 import "./employee-ui.css";
 
 const defaultPassword = "ChangeMe123!";
@@ -24,6 +28,8 @@ const CreateEmployeeAccount = () => {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [positions, setPositions] = useState<PositionResponse[]>([]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setMessage(null);
@@ -65,6 +71,29 @@ const CreateEmployeeAccount = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const deptData = await fetchDepartments();
+        setDepartments(deptData);
+      } catch (error) {
+        console.error("Error fetching departments:", error);
+      }
+    };
+
+    const loadPositions = async () => {
+      try {
+        const posData = await positionService.getPositions();
+        setPositions(posData);
+      } catch (error) {
+        console.error("Error fetching positions:", error);
+      }
+    };
+
+    loadDepartments();
+    loadPositions();
+  }, []);
 
   return (
     <div className="employee-page employee-form-create">
@@ -196,26 +225,38 @@ const CreateEmployeeAccount = () => {
               <div className="employee-form-grid">
                 <div className="employee-form-field">
                   <label htmlFor="departmentName">Department</label>
-                  <input
+                  <select
                     id="departmentName"
                     name="departmentName"
-                    className="employee-form-input"
+                    className="employee-form-select"
                     value={form.departmentName}
                     onChange={handleInputChange}
-                    placeholder="e.g. Engineering"
-                  />
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.departmentName}>
+                        {dept.departmentName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="employee-form-field">
                   <label htmlFor="positionName">Position</label>
-                  <input
+                  <select
                     id="positionName"
                     name="positionName"
-                    className="employee-form-input"
+                    className="employee-form-select"
                     value={form.positionName}
                     onChange={handleInputChange}
-                    placeholder="e.g. Software Engineer"
-                  />
+                  >
+                    <option value="">Select Position</option>
+                    {positions.map((pos) => (
+                      <option key={pos.id} value={pos.positionTitle}>
+                        {pos.positionTitle}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
