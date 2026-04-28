@@ -1,4 +1,12 @@
-import { formatDateForInput, isEmployeeActive, type EmployeeResponse } from '../../services/employeeService';
+import { useState } from 'react';
+import toast from 'react-hot-toast';
+import {
+  formatDateForInput,
+  isEmployeeActive,
+  parseApiError,
+  resendTemporaryPasswordEmail,
+  type EmployeeResponse,
+} from '../../services/employeeService';
 
 type Props = {
   open: boolean;
@@ -10,6 +18,8 @@ type Props = {
 const display = (v: string | null | undefined) => (v && v.trim() !== '' ? v : '—');
 
 const EmployeeViewModal = ({ open, employee, onClose, onEdit }: Props) => {
+  const [resendBusy, setResendBusy] = useState(false);
+
   if (!open || !employee) {
     return null;
   }
@@ -70,6 +80,10 @@ const EmployeeViewModal = ({ open, employee, onClose, onEdit }: Props) => {
               <dt>Staff NRC</dt>
               <dd>{display(employee.staffNrc)}</dd>
             </div>
+            <div className="sm:col-span-2">
+              <dt>Work email</dt>
+              <dd>{display(employee.email)}</dd>
+            </div>
             <div>
               <dt>Gender</dt>
               <dd>{display(employee.gender)}</dd>
@@ -107,6 +121,60 @@ const EmployeeViewModal = ({ open, employee, onClose, onEdit }: Props) => {
               <dd>{display(employee.currentDepartment ?? employee.parentDepartment)}</dd>
             </div>
           </dl>
+
+          {employee.userId != null && employee.userId !== undefined && employee.email?.trim() ? (
+            <div className="epms-emp-form-section">
+              <h3>
+                <i className="bi bi-envelope-check" aria-hidden />
+                Onboarding email
+              </h3>
+              <p className="text-sm text-slate-600">
+                Resend the temporary password message after fixing SMTP (use a Google App Password for the sender
+                account).
+              </p>
+              <button
+                type="button"
+                className="epms-emp-btn epms-emp-btn--import mt-2"
+                disabled={resendBusy}
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      setResendBusy(true);
+                      const r = await resendTemporaryPasswordEmail(employee.userId!);
+                      if (r.success) {
+                        toast.success(r.message || 'Onboarding email was accepted for delivery.');
+                      } else {
+                        const smtp = r.smtpErrorDetail?.trim();
+                        toast.error(
+                          [r.message, smtp].filter(Boolean).join(' ') ||
+                            'Email could not be sent. Check SMTP credentials.'
+                        );
+                      }
+                    } catch (e) {
+                      toast.error(parseApiError(e));
+                    } finally {
+                      setResendBusy(false);
+                    }
+                  })();
+                }}
+              >
+                {resendBusy ? (
+                  <>
+                    <span
+                      className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"
+                      aria-hidden
+                    />
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <i className="bi bi-send" aria-hidden />
+                    Resend onboarding email
+                  </>
+                )}
+              </button>
+            </div>
+          ) : null}
 
           <div className="epms-emp-form-section">
             <h3>

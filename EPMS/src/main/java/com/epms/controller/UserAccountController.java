@@ -26,7 +26,12 @@ public class UserAccountController {
     }
 
     @PostMapping("/{id}/resend-temporary-password")
-    public ResponseEntity<AccountProvisionResult> resendTemporaryPassword(@PathVariable Integer id) {
-        return ResponseEntity.ok(hrEmployeeAccountService.resendTemporaryPassword(id));
+    public ResponseEntity<GenericApiResponse<AccountProvisionResult>> resendTemporaryPassword(
+            @PathVariable Integer id) {
+        AccountProvisionResult result = hrEmployeeAccountService.resendTemporaryPassword(id);
+        String summary = result.isSuccess()
+                ? "Onboarding email was accepted for delivery"
+                : "Onboarding email could not be sent";
+        return ResponseEntity.ok(GenericApiResponse.success(summary, result));
     }
 }

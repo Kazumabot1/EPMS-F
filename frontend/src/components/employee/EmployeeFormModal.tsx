@@ -94,21 +94,44 @@ const EmployeeFormModal = ({ open, mode, employee, onClose, onSaved }: Props) =>
         const res = await createEmployee(payload);
         if (res.accountProvisioningMessage) {
           const smtp = res.accountProvisioningSmtpError?.trim();
-          const detail = `${res.accountProvisioningMessage}${smtp && !res.accountProvisioningMessage.includes(smtp) ? ` ${smtp}` : ''}`;
-          if (res.accountProvisioningSuccess === false) {
-            // DB save succeeded; only email failed — not a "hard" error, use warning
+          const detail = `${res.accountProvisioningMessage}${
+            smtp && !res.accountProvisioningMessage.includes(smtp) ? ` ${smtp}` : ''
+          }`;
+          const accountOkButEmailFailed =
+            res.accountProvisioningSuccess === true && Boolean(smtp);
+
+          if (accountOkButEmailFailed) {
             toast(
               <div className="text-left text-sm text-slate-800">
-                <p className="mb-1 font-semibold text-amber-900">Employee created — email not sent</p>
+                <p className="mb-1 font-semibold text-amber-900">Employee saved — email not delivered</p>
+                <p>
+                  Account was created, but email delivery failed. Please check SMTP credentials or resend later.
+                </p>
+                {smtp ? <p className="mt-1 text-slate-600">{smtp}</p> : null}
+                <p className="mt-2 text-xs text-slate-600">
+                  Fix <code className="rounded bg-slate-100 px-1">SMTP_USER</code> and{' '}
+                  <code className="rounded bg-slate-100 px-1">SMTP_PASS</code> (Google App Password), restart the API, then
+                  use <code className="rounded bg-slate-100 px-1">POST /api/mail/test</code> or resend from the employee
+                  view.
+                </p>
+              </div>,
+              { icon: '⚠️', duration: 14_000, id: 'provision-mail' }
+            );
+          } else if (res.accountProvisioningSuccess === false && smtp) {
+            toast(
+              <div className="text-left text-sm text-slate-800">
+                <p className="mb-1 font-semibold text-amber-900">Employee saved — email not sent</p>
                 <p>{detail}</p>
                 <p className="mt-2 text-xs text-slate-600">
-                  Set <code className="rounded bg-slate-100 px-1">SMTP_HOST</code>, <code className="rounded bg-slate-100 px-1">SMTP_USER</code>, <code className="rounded bg-slate-100 px-1">SMTP_PASS</code> (Gmail
-                  app password) in <code className="rounded bg-slate-100 px-1">.env</code>, restart the API, then use{' '}
-                  <code className="rounded bg-slate-100 px-1">POST /api/mail/test</code> to verify.
+                  Set <code className="rounded bg-slate-100 px-1">SMTP_USER</code> and{' '}
+                  <code className="rounded bg-slate-100 px-1">SMTP_PASS</code> (Google App Password), restart the API, then
+                  resend or use <code className="rounded bg-slate-100 px-1">POST /api/mail/test</code>.
                 </p>
               </div>,
               { icon: '⚠️', duration: 12_000, id: 'provision-mail' }
             );
+          } else if (res.accountProvisioningSuccess === false) {
+            toast.error(detail);
           } else {
             toast.success(`Employee created. ${detail}`);
           }
@@ -119,18 +142,42 @@ const EmployeeFormModal = ({ open, mode, employee, onClose, onSaved }: Props) =>
         const res = await updateEmployee(employee.id, payload);
         if (res.accountProvisioningMessage) {
           const smtp = res.accountProvisioningSmtpError?.trim();
-          const detail = `${res.accountProvisioningMessage}${smtp && !res.accountProvisioningMessage.includes(smtp) ? ` ${smtp}` : ''}`;
-          if (res.accountProvisioningSuccess === false) {
+          const detail = `${res.accountProvisioningMessage}${
+            smtp && !res.accountProvisioningMessage.includes(smtp) ? ` ${smtp}` : ''
+          }`;
+          const accountOkButEmailFailed =
+            res.accountProvisioningSuccess === true && Boolean(smtp);
+
+          if (accountOkButEmailFailed) {
+            toast(
+              <div className="text-left text-sm text-slate-800">
+                <p className="mb-1 font-semibold text-amber-900">Employee updated — email not delivered</p>
+                <p>
+                  Account was updated, but email delivery failed. Please check SMTP credentials or resend later.
+                </p>
+                {smtp ? <p className="mt-1 text-slate-600">{smtp}</p> : null}
+                <p className="mt-2 text-xs text-slate-600">
+                  Fix <code className="rounded bg-slate-100 px-1">SMTP_USER</code> and{' '}
+                  <code className="rounded bg-slate-100 px-1">SMTP_PASS</code>, restart the API, then use resend on the
+                  employee or <code className="rounded bg-slate-100 px-1">POST /api/mail/test</code>.
+                </p>
+              </div>,
+              { icon: '⚠️', duration: 14_000, id: 'provision-mail-update' }
+            );
+          } else if (res.accountProvisioningSuccess === false && smtp) {
             toast(
               <div className="text-left text-sm text-slate-800">
                 <p className="mb-1 font-semibold text-amber-900">Employee updated — email not sent</p>
                 <p>{detail}</p>
                 <p className="mt-2 text-xs text-slate-600">
-                  Check SMTP in <code className="rounded bg-slate-100 px-1">.env</code> and restart the backend.
+                  Check <code className="rounded bg-slate-100 px-1">SMTP_USER</code> /{' '}
+                  <code className="rounded bg-slate-100 px-1">SMTP_PASS</code> and restart the backend.
                 </p>
               </div>,
               { icon: '⚠️', duration: 12_000, id: 'provision-mail-update' }
             );
+          } else if (res.accountProvisioningSuccess === false) {
+            toast.error(detail);
           } else {
             toast.success(`Employee updated. ${detail}`);
           }
