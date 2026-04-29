@@ -28,7 +28,9 @@ import PositionLevelCreate from './pages/position-level/Create';
 import KpiUnitPage from './pages/hr/performance-kpi/unit/KpiUnitPage';
 import KpiCategoryPage from './pages/hr/performance-kpi/category/KpiCategoryPage';
 import KpiItemPage from './pages/hr/performance-kpi/item/KpiItemPage';
-import KpiFormPage from './pages/hr/performance-kpi/form/KpiFormPage';
+import KpiTemplateDetailPage from './pages/hr/kpi-template/KpiTemplateDetailPage';
+import KpiTemplateEditorPage from './pages/hr/kpi-template/KpiTemplateEditorPage';
+import KpiTemplateListPage from './pages/hr/kpi-template/KpiTemplateListPage';
 import ProfilePage from './pages/hr/ProfilePage';
 import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 import Notifications from "./pages/Notifications";
@@ -160,7 +162,11 @@ function App() {
               <Route path="/hr/performance-kpi/unit" element={<KpiUnitPage />} />
               <Route path="/hr/performance-kpi/category" element={<KpiCategoryPage />} />
               <Route path="/hr/performance-kpi/item" element={<KpiItemPage />} />
-              <Route path="/hr/performance-kpi/form" element={<KpiFormPage />} />
+
+              <Route path="/hr/kpi-template/new" element={<KpiTemplateEditorPage />} />
+              <Route path="/hr/kpi-template/:id/edit" element={<KpiTemplateEditorPage />} />
+              <Route path="/hr/kpi-template/:id" element={<KpiTemplateDetailPage />} />
+              <Route path="/hr/kpi-template" element={<KpiTemplateListPage />} />
             </Route>
           </Route>
         </Route>
