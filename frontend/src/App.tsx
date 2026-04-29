@@ -11,7 +11,6 @@ import NotificationTemplates from './components/NotificationTemplates';
 import OneOnOneMeetings from './components/OneOnOneMeetings';
 import OneOnOneActionItems from './components/OneOnOneActionItems';
 import ProtectedRoute from './routes/ProtectedRoute';
-import CreateEmployeeAccount from './pages/employee/CreateEmployeeAccount';
 import AppLayout from './layouts/AppLayout';
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 import EmployeeMyDashboard from './pages/employee/EmployeeMyDashboard';
@@ -37,6 +36,8 @@ import Notifications from "./pages/Notifications";
 /*
 <Route path="/notifications" element={<Notifications />} />
  */
+
+import DepartmentHeadDashboard from './pages/department-head/DepartmentHeadDashboard';
 
 function App() {
   return (
@@ -117,6 +118,15 @@ function App() {
             </Route>
           </Route>
 
+          <Route element={<ProtectedRoute allowedRoles={['DepartmentHead']} />}>
+            <Route element={<AppLayout />}>
+              <Route
+                path="/department-head/dashboard"
+                element={<DepartmentHeadDashboard />}
+              />
+            </Route>
+          </Route>
+
           <Route element={<ProtectedRoute allowedRoles={['HR']} />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -125,7 +135,6 @@ function App() {
 
               <Route path="/hr/employee" element={<EmployeeManagement />} />
               <Route path="/hr/employee/workforce" element={<EmployeeDashboard />} />
-              <Route path="/hr/employee/create" element={<CreateEmployeeAccount />} />
               <Route path="/hr/employee/import" element={<HrEmployeeAccountImport />} />
               <Route path="/hr/team" element={<TeamManagement />} />
               <Route path="/hr/team/create" element={<TeamCreate />} />
