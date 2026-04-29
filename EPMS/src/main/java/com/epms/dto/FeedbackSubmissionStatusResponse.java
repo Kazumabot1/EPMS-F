@@ -13,7 +13,7 @@ public class FeedbackSubmissionStatusResponse {
     private Long campaignId;
     private String campaignName;
     private Long targetEmployeeId;
-    private String evaluatorType;
+    private String relationshipType;
     private String status;
     private LocalDateTime dueAt;
 }

@@ -22,7 +22,11 @@ public interface FeedbackRequestRepository extends JpaRepository<FeedbackRequest
 
     List<FeedbackRequest> findByCampaignId(Long campaignId);
 
+    List<FeedbackRequest> findByCampaignIdOrderByTargetEmployeeIdAsc(Long campaignId);
+
     Page<FeedbackRequest> findByCampaignId(Long campaignId, Pageable pageable);
+
+    java.util.Optional<FeedbackRequest> findByCampaignIdAndTargetEmployeeId(Long campaignId, Long targetEmployeeId);
 
     List<FeedbackRequest> findByStatus(FeedbackRequestStatus status);
 

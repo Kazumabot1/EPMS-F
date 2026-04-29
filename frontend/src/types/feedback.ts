@@ -18,7 +18,7 @@ export interface FeedbackResponseSubmitPayload {
   comments?: string;
 }
 
-export type EvaluatorType = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF';
+export type EvaluatorType = 'MANAGER' | 'PEER' | 'SUBORDINATE';
 
 export interface FeedbackRequestCreatePayload {
   formId: number;

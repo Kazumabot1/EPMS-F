@@ -1,8 +1,8 @@
 package com.epms.entity;
 
 import com.epms.entity.enums.AssignmentStatus;
+import com.epms.entity.enums.FeedbackRelationshipType;
 import com.epms.entity.enums.EvaluatorSelectionMethod;
-import com.epms.entity.enums.EvaluatorSourceType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,7 +32,7 @@ public class FeedbackEvaluatorAssignment {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "source_type", nullable = false)
-    private EvaluatorSourceType sourceType;
+    private FeedbackRelationshipType relationshipType;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "selection_method", nullable = false)

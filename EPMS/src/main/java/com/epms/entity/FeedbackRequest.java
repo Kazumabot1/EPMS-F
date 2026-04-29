@@ -11,7 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "feedback_requests")
+@Table(name = "feedback_requests", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"campaign_id", "target_employee_id"})
+})
 @Getter
 @Setter
 @NoArgsConstructor

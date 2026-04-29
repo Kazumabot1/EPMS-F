@@ -120,7 +120,7 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                         .campaignId(assignment.getFeedbackRequest().getCampaign().getId())
                         .campaignName(assignment.getFeedbackRequest().getCampaign().getName())
                         .targetEmployeeId(assignment.getFeedbackRequest().getTargetEmployeeId())
-                        .evaluatorType(assignment.getSourceType().name())
+                        .relationshipType(assignment.getRelationshipType().name())
                         .status(assignment.getStatus().name())
                         .dueAt(resolveEffectiveDeadline(assignment))
                         .build())
@@ -143,7 +143,7 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                             .overallScore(response.getOverallScore())
                             .comments(response.getComments())
                             .submittedAt(response.getSubmittedAt())
-                            .sourceType(assignment.getSourceType().name())
+                            .relationshipType(assignment.getRelationshipType().name())
                             .anonymous(Boolean.TRUE.equals(assignment.getIsAnonymous()))
                             .evaluatorEmployeeId(hideIdentity ? null : assignment.getEvaluatorEmployeeId())
                             .build();

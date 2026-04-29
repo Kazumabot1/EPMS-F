@@ -1,0 +1,74 @@
+package com.epms.controller;
+
+import com.epms.dto.FeedbackCampaignSummaryResponse;
+import com.epms.dto.FeedbackMyResultResponse;
+import com.epms.dto.FeedbackTeamSummaryResponse;
+import com.epms.dto.GenericApiResponse;
+import com.epms.exception.UnauthorizedActionException;
+import com.epms.security.SecurityUtils;
+import com.epms.service.FeedbackSummaryService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/feedback")
+@RequiredArgsConstructor
+public class FeedbackSummaryController {
+
+    private final FeedbackSummaryService feedbackSummaryService;
+
+    @GetMapping("/campaigns/{campaignId}/summary")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignSummaryResponse>> getCampaignSummary(
+            @PathVariable Long campaignId
+    ) {
+        ensureHrOrAdmin();
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Feedback campaign summary retrieved successfully",
+                feedbackSummaryService.getCampaignSummary(campaignId)
+        ));
+    }
+
+    @GetMapping("/my-result")
+    public ResponseEntity<GenericApiResponse<FeedbackMyResultResponse>> getMyResult() {
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Feedback results retrieved successfully",
+                feedbackSummaryService.getMyResult(SecurityUtils.currentUserId().longValue())
+        ));
+    }
+
+    @GetMapping("/team-summary")
+    public ResponseEntity<GenericApiResponse<FeedbackTeamSummaryResponse>> getTeamSummary() {
+        ensureManagerOrAbove();
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Team feedback summary retrieved successfully",
+                feedbackSummaryService.getTeamSummary(SecurityUtils.currentUserId().longValue())
+        ));
+    }
+
+    private void ensureManagerOrAbove() {
+        List<String> roles = SecurityUtils.currentUser().getRoles();
+        boolean authorized = roles != null && roles.stream()
+                .map(String::toUpperCase)
+                .anyMatch(role -> role.equals("MANAGER") || role.equals("HR") || role.equals("ADMIN")
+                        || role.equals("ROLE_MANAGER") || role.equals("ROLE_HR") || role.equals("ROLE_ADMIN"));
+        if (!authorized) {
+            throw new UnauthorizedActionException("Only Manager/HR/Admin can access team feedback summaries.");
+        }
+    }
+
+    private void ensureHrOrAdmin() {
+        List<String> roles = SecurityUtils.currentUser().getRoles();
+        boolean authorized = roles != null && roles.stream()
+                .map(String::toUpperCase)
+                .anyMatch(role -> role.equals("HR") || role.equals("ADMIN") || role.equals("ROLE_HR") || role.equals("ROLE_ADMIN"));
+        if (!authorized) {
+            throw new UnauthorizedActionException("Only HR/Admin can access campaign summaries.");
+        }
+    }
+}

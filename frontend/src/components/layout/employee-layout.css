@@ -38,6 +38,35 @@
   color: #64748b;
 }
 
+.employee-layout-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.employee-layout-nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.employee-layout-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  text-decoration: none;
+  background: #eef4ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.employee-layout-nav-link.active {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
 .employee-layout-logout {
   border: none;
   border-radius: 10px;
@@ -57,6 +86,12 @@
     flex-direction: column;
     align-items: flex-start;
     padding: 20px;
+  }
+
+  .employee-layout-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .employee-layout-main {

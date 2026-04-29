@@ -1,10 +1,12 @@
 package com.epms.controller;
 
 import com.epms.dto.FeedbackFormCreateRequest;
+import com.epms.dto.FeedbackFormOptionResponse;
 import com.epms.dto.FeedbackQuestionRequest;
 import com.epms.dto.FeedbackSectionRequest;
 import com.epms.dto.GenericApiResponse;
 import com.epms.exception.UnauthorizedActionException;
+import com.epms.dto.FeedbackFormDetailResponse;
 import com.epms.security.SecurityUtils;
 import com.epms.entity.FeedbackForm;
 import com.epms.entity.FeedbackQuestion;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -75,6 +78,77 @@ public class FeedbackFormController {
                 .map(FeedbackForm::getId)
                 .toList();
         return ResponseEntity.ok(GenericApiResponse.success("Feedback form versions retrieved successfully", versions));
+    }
+
+    @PutMapping("/{formId}/status")
+    public ResponseEntity<GenericApiResponse<String>> changeFeedbackFormStatus(
+            @PathVariable Long formId,
+            @RequestParam FeedbackFormStatus status) {
+        ensureHrOrAdmin();
+        feedbackFormService.changeFormStatus(formId, status);
+        return ResponseEntity.ok(GenericApiResponse.success("Feedback form status updated successfully", status.name()));
+    }
+
+    @GetMapping
+    public ResponseEntity<GenericApiResponse<List<FeedbackFormOptionResponse>>> getAllFeedbackForms() {
+        ensureHrOrAdmin();
+        List<FeedbackFormOptionResponse> response = feedbackFormService.getAllForms().stream()
+                .map(form -> FeedbackFormOptionResponse.builder()
+                        .id(form.getId())
+                        .formName(form.getFormName())
+                        .anonymousAllowed(form.getAnonymousAllowed())
+                        .versionNumber(form.getVersionNumber())
+                        .status(form.getStatus().name())
+                        .build())
+                .toList();
+        return ResponseEntity.ok(GenericApiResponse.success("Feedback forms retrieved successfully", response));
+    }
+
+    @GetMapping("/active")
+    public ResponseEntity<GenericApiResponse<List<FeedbackFormOptionResponse>>> getActiveFeedbackForms() {
+        ensureHrOrAdmin();
+        List<FeedbackFormOptionResponse> response = feedbackFormService.getAllActiveForms().stream()
+                .map(form -> FeedbackFormOptionResponse.builder()
+                        .id(form.getId())
+                        .formName(form.getFormName())
+                        .anonymousAllowed(form.getAnonymousAllowed())
+                        .versionNumber(form.getVersionNumber())
+                        .status(form.getStatus().name())
+                        .build())
+                .toList();
+        return ResponseEntity.ok(GenericApiResponse.success("Active feedback forms retrieved successfully", response));
+    }
+
+    @GetMapping("/{formId}")
+    public ResponseEntity<GenericApiResponse<FeedbackFormDetailResponse>> getFeedbackFormDetail(@PathVariable Long formId) {
+        ensureHrOrAdmin();
+        FeedbackForm form = feedbackFormService.getFormById(formId);
+        FeedbackFormDetailResponse detail = FeedbackFormDetailResponse.builder()
+                .id(form.getId())
+                .formName(form.getFormName())
+                .anonymousAllowed(form.getAnonymousAllowed())
+                .versionNumber(form.getVersionNumber())
+                .status(form.getStatus().name())
+                .sections(form.getSections().stream().map(sec -> {
+                    List<FeedbackFormDetailResponse.QuestionDetail> questions = sec.getQuestions().stream().map(q ->
+                            FeedbackFormDetailResponse.QuestionDetail.builder()
+                                    .id(q.getId())
+                                    .questionText(q.getQuestionText())
+                                    .questionOrder(q.getQuestionOrder())
+                                    .ratingScaleId(q.getRatingScaleId().longValue())
+                                    .weight(q.getWeight())
+                                    .isRequired(q.getIsRequired())
+                                    .build()
+                    ).collect(Collectors.toList());
+                    return FeedbackFormDetailResponse.SectionDetail.builder()
+                            .id(sec.getId())
+                            .title(sec.getTitle())
+                            .orderNo(sec.getOrderNo())
+                            .questions(questions)
+                            .build();
+                }).collect(Collectors.toList()))
+                .build();
+        return ResponseEntity.ok(GenericApiResponse.success("Feedback form detail retrieved successfully", detail));
     }
 
     private FeedbackForm mapRequestToForm(FeedbackFormCreateRequest request) {

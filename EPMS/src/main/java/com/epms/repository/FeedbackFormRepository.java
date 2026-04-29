@@ -1,6 +1,7 @@
 package com.epms.repository;
 
 import com.epms.entity.FeedbackForm;
+import com.epms.entity.FeedbackSection;
 import com.epms.entity.enums.FeedbackFormStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,18 +26,24 @@ public interface FeedbackFormRepository extends JpaRepository<FeedbackForm, Long
 
     Page<FeedbackForm> findByCreatedByUserId(Long createdByUserId, Pageable pageable);
 
-    /**
-     * Fetch full feedback form structure (form -> section -> question).
-     * Uses JOIN FETCH to avoid N+1 query problem when rendering a form.
-     */
-    @Query("SELECT DISTINCT f FROM FeedbackForm f " +
-           "LEFT JOIN FETCH f.sections s " +
-           "LEFT JOIN FETCH s.questions " +
-           "WHERE f.id = :formId")
-    Optional<FeedbackForm> findByIdWithSectionsAndQuestions(@Param("formId") Long formId);
+    @Query("""
+        SELECT DISTINCT f
+        FROM FeedbackForm f
+        LEFT JOIN FETCH f.sections s
+        WHERE f.id = :formId
+    """)
+    Optional<FeedbackForm> findByIdWithSections(@Param("formId") Long formId);
+
+    @Query("""
+        SELECT DISTINCT s
+        FROM FeedbackSection s
+        LEFT JOIN FETCH s.questions q
+        WHERE s.form.id = :formId
+        ORDER BY s.orderNo ASC, q.questionOrder ASC
+    """)
+    List<FeedbackSection> findSectionsWithQuestionsByFormId(@Param("formId") Long formId);
 
     List<FeedbackForm> findByRootFormIdOrderByVersionNumberAsc(Long rootFormId);
 
     Optional<FeedbackForm> findTopByRootFormIdOrderByVersionNumberDesc(Long rootFormId);
-
 }

@@ -118,6 +118,8 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               { to: '/hr/performance-kpi/form', label: 'KPI Forms', icon: 'bi bi-ui-checks-grid' },
             ],
           },
+
+          { to: '/hr/feedback/dashboard', label: '360 Feedback', icon: 'bi bi-chat-dots' },
         ];
 
   const hasActiveChild = (item: NavItem) =>
@@ -153,8 +155,9 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
 
   return (
     <aside className={`hr-sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="hr-sidebar-brand">
-        <div className="hr-sidebar-logo">E</div>
+      <div className="hr-sidebar-top">
+        <div className="hr-brand">
+          <div className="hr-brand-mark">E</div>
 
           {!collapsed && (
             <div className="hr-brand-copy">

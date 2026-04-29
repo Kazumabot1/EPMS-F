@@ -29,6 +29,7 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
     { label: 'Employees', path: '/hr/employee', icon: 'bi-people' },
     { label: 'Teams', path: '/hr/team', icon: 'bi-people-fill' },
     { label: 'Departments', path: '/hr/department', icon: 'bi-building' },
+    { label: '360 Feedback', path: '/hr/feedback/dashboard', icon: 'bi-chat-dots' },
   ],
 };
 

@@ -1,19 +1,24 @@
 package com.epms.dto;
 
 import lombok.Builder;
-import lombok.Data;
+import lombok.Value;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
-@Data
+@Value
 @Builder
 public class FeedbackCampaignResponse {
-    private Long id;
-    private String name;
-    private LocalDate startDate;
-    private LocalDate endDate;
-    private String status;
-    private Long createdBy;
-    private LocalDateTime createdAt;
+    Long id;
+    String name;
+    LocalDate startDate;
+    LocalDate endDate;
+    String status;
+    Long formId;
+    Long createdBy;
+    LocalDateTime createdAt;
+    int targetCount;
+    int assignmentCount;
+    List<Long> targetEmployeeIds;
 }

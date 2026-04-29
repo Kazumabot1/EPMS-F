@@ -16,7 +16,7 @@ public class FeedbackReceivedItemResponse {
     private Double overallScore;
     private String comments;
     private LocalDateTime submittedAt;
-    private String sourceType;
+    private String relationshipType;
     private Boolean anonymous;
     private Long evaluatorEmployeeId;
 }

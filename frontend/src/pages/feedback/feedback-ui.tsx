@@ -1,13 +1,12 @@
 import type { Employee } from '../../services/employeeService';
 import type { EvaluatorType } from '../../types/feedback';
 
-export const evaluatorTypeOptions: EvaluatorType[] = ['MANAGER', 'PEER', 'SUBORDINATE', 'SELF'];
+export const evaluatorTypeOptions: EvaluatorType[] = ['MANAGER', 'PEER', 'SUBORDINATE'];
 
 export const evaluatorTypeLabels: Record<EvaluatorType, string> = {
   MANAGER: 'Manager',
   PEER: 'Peer',
   SUBORDINATE: 'Direct report',
-  SELF: 'Self review',
 };
 
 export const auditEntityOptions = ['CAMPAIGN', 'FORM', 'REQUEST', 'RESPONSE', 'AUDIT'];

@@ -17,6 +17,8 @@ public interface FeedbackEvaluatorAssignmentRepository extends JpaRepository<Fee
 
     List<FeedbackEvaluatorAssignment> findByFeedbackRequestId(Long feedbackRequestId);
 
+    void deleteByFeedbackRequestCampaignId(Long campaignId);
+
     List<FeedbackEvaluatorAssignment> findByEvaluatorEmployeeId(Long evaluatorEmployeeId);
 
     Page<FeedbackEvaluatorAssignment> findByEvaluatorEmployeeId(Long evaluatorEmployeeId, Pageable pageable);

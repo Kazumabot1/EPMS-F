@@ -31,6 +31,9 @@ public class FeedbackCampaign {
     @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
 
+    @Column(name = "form_id", nullable = false)
+    private Long formId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private FeedbackCampaignStatus status;
