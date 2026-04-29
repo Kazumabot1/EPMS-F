@@ -234,7 +234,7 @@ const KpiTemplateEditorPage = () => {
           </Link>
         </div>
 
-        <form onSubmit={(e) => void onSubmit(e)} className="space-y-8">
+        <form noValidate onSubmit={onSubmit} className="space-y-8">
           <section className="kpi-tpl-card p-6 sm:p-8">
             <div className="mb-8 flex flex-wrap items-center gap-4 border-b border-gray-100 pb-6">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-700 ring-1 ring-violet-100">
