@@ -249,11 +249,14 @@ export interface CandidateUser {
   id: number;
   name: string;
   type?: string;
+  sourceType?: string;
   departmentId?: number;
   departmentName?: string;
+  employeeId?: number | null;
+  available?: boolean;
   isAvailable?: boolean;
-  currentTeamId?: number;
-  currentTeamName?: string;
+  currentTeamId?: number | null;
+  currentTeamName?: string | null;
 }
 
 export interface TeamMemberResponse {
@@ -291,8 +294,21 @@ export interface TeamResponse {
 }
 
 const unwrap = <T>(response: any): T => {
-  if (response.data?.data !== undefined) return response.data.data;
+  if (response.data?.data !== undefined) {
+    return response.data.data;
+  }
+
   return response.data;
+};
+
+const normalizeCandidate = (candidate: CandidateUser): CandidateUser => {
+  const available = candidate.available ?? candidate.isAvailable ?? true;
+
+  return {
+    ...candidate,
+    available,
+    isAvailable: available,
+  };
 };
 
 export const fetchDepartments = async (): Promise<Department[]> => {
@@ -309,14 +325,14 @@ export const fetchCandidateUsers = async (
   departmentId: number
 ): Promise<CandidateUser[]> => {
   const response = await api.get(`/teams/candidates/users/${departmentId}`);
-  return unwrap<CandidateUser[]>(response);
+  return unwrap<CandidateUser[]>(response).map(normalizeCandidate);
 };
 
 export const fetchCandidateMembers = async (
   departmentId: number
 ): Promise<CandidateUser[]> => {
   const response = await api.get(`/teams/candidates/members/${departmentId}`);
-  return unwrap<CandidateUser[]>(response);
+  return unwrap<CandidateUser[]>(response).map(normalizeCandidate);
 };
 
 export const createTeam = async (
