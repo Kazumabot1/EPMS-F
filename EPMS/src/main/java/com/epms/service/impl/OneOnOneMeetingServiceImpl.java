@@ -4,9 +4,9 @@ import com.epms.dto.FollowUpRequestDto;
 import com.epms.dto.OneOnOneActionItemResponseDto;
 import com.epms.dto.OneOnOneMeetingRequestDto;
 import com.epms.dto.OneOnOneMeetingResponseDto;
-import com.epms.entity.Employee;
 import com.epms.entity.OneOnOneMeeting;
 import com.epms.entity.User;
+import com.epms.entity.Employee;
 import com.epms.repository.EmployeeRepository;
 import com.epms.repository.OneOnOneMeetingRepository;
 import com.epms.repository.UserRepository;
@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,40 +38,15 @@ public class OneOnOneMeetingServiceImpl implements OneOnOneMeetingService {
     @Override
     @Transactional
     public OneOnOneMeetingResponseDto createMeeting(OneOnOneMeetingRequestDto request) {
-        Integer currentUserId = SecurityUtils.currentUserId();
+        User currentUser = getCurrentUser();
 
-        User currentUser = userRepo.findById(currentUserId)
-                .orElseThrow(() -> new RuntimeException("Current user not found"));
-
-        if (currentUser.getEmployeeId() == null) {
-            throw new RuntimeException("Current logged-in user is not linked to an employee record.");
-        }
-
-        if (request.getEmployeeId() == null) {
-            throw new RuntimeException("Employee is required.");
-        }
-
-        if (request.getScheduledDate() == null) {
-            throw new RuntimeException("Scheduled date is required.");
-        }
-
-        if (request.getScheduledDate().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Cannot create a meeting for a past time.");
-        }
-
-        if (request.getNotes() != null && request.getNotes().length() > 1000) {
-            throw new RuntimeException("Notes cannot exceed 1000 characters.");
-        }
-
-        if (request.getFollowUpNotes() != null && request.getFollowUpNotes().length() > 1000) {
-            throw new RuntimeException("Follow-up notes cannot exceed 1000 characters.");
-        }
+        validateCreateRequest(request);
 
         Employee manager = employeeRepo.findById(currentUser.getEmployeeId())
-                .orElseThrow(() -> new RuntimeException("Manager employee record not found"));
+                .orElseThrow(() -> new RuntimeException("Manager employee record not found."));
 
         Employee employee = employeeRepo.findById(request.getEmployeeId())
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+                .orElseThrow(() -> new RuntimeException("Employee not found."));
 
         OneOnOneMeeting meeting = new OneOnOneMeeting();
 
@@ -113,7 +89,9 @@ public class OneOnOneMeetingServiceImpl implements OneOnOneMeetingService {
             throw new RuntimeException("Scheduled date is required.");
         }
 
-        if (request.getScheduledDate().isBefore(LocalDateTime.now())) {
+        boolean scheduledDateChanged = !Objects.equals(meeting.getScheduledDate(), request.getScheduledDate());
+
+        if (scheduledDateChanged && request.getScheduledDate().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Cannot update a meeting to a past time.");
         }
 
@@ -132,16 +110,18 @@ public class OneOnOneMeetingServiceImpl implements OneOnOneMeetingService {
 
         OneOnOneMeeting saved = meetingRepo.save(meeting);
 
-        userRepo.findByEmployeeId(saved.getEmployee().getId()).ifPresent(employeeUser ->
-                notificationService.send(
-                        employeeUser.getId(),
-                        "One-on-One Meeting Updated",
-                        "Your one-on-one meeting was updated to "
-                                + formatDateTime(saved.getScheduledDate())
-                                + buildNotesPreview(saved.getNotes()),
-                        "MEETING"
-                )
-        );
+        if (scheduledDateChanged) {
+            userRepo.findByEmployeeId(saved.getEmployee().getId()).ifPresent(employeeUser ->
+                    notificationService.send(
+                            employeeUser.getId(),
+                            "One-on-One Meeting Updated",
+                            "Your one-on-one meeting was updated to "
+                                    + formatDateTime(saved.getScheduledDate())
+                                    + buildNotesPreview(saved.getNotes()),
+                            "MEETING"
+                    )
+            );
+        }
 
         return toDto(saved);
     }
@@ -247,43 +227,84 @@ public class OneOnOneMeetingServiceImpl implements OneOnOneMeetingService {
         parentMeeting.setIsFinalized(LocalDateTime.now());
         parentMeeting.setUpdatedAt(LocalDateTime.now());
 
-        OneOnOneMeeting followUpMeeting = new OneOnOneMeeting();
+        OneOnOneMeeting followUpMeeting = meetingRepo
+                .findFollowUpByParentMeetingId(parentMeeting.getId())
+                .orElse(new OneOnOneMeeting());
+
+        if (followUpMeeting.getId() == null) {
+            followUpMeeting.setCreatedAt(LocalDateTime.now());
+        }
+
         followUpMeeting.setEmployee(parentMeeting.getEmployee());
         followUpMeeting.setManager(parentMeeting.getManager());
         followUpMeeting.setScheduledDate(request.getFollowUpDate());
-        followUpMeeting.setNotes(parentMeeting.getNotes());
+        followUpMeeting.setNotes(null);
         followUpMeeting.setFollowUpNotes(null);
         followUpMeeting.setStatus(false);
         followUpMeeting.setIsFinalized(null);
-        followUpMeeting.setCreatedAt(LocalDateTime.now());
         followUpMeeting.setUpdatedAt(null);
         followUpMeeting.setParentMeetingId(parentMeeting.getId());
         followUpMeeting.setReminder24hSent(false);
 
         meetingRepo.save(parentMeeting);
-        OneOnOneMeeting savedFollowUp = meetingRepo.save(followUpMeeting);
+        meetingRepo.save(followUpMeeting);
 
-        return toDto(savedFollowUp);
+        return toDto(parentMeeting);
     }
 
     @Override
     @Transactional
     public void autoActivateDueMeetings() {
-        List<OneOnOneMeeting> due = meetingRepo.findMeetingsToActivate(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+
+        List<OneOnOneMeeting> due = meetingRepo.findMeetingsToActivate(now);
 
         for (OneOnOneMeeting meeting : due) {
             meeting.setStatus(true);
-            meeting.setUpdatedAt(LocalDateTime.now());
+            meeting.setUpdatedAt(now);
         }
 
         meetingRepo.saveAll(due);
+
+        LocalDateTime eightHoursAgo = now.minusHours(8);
+
+        List<OneOnOneMeeting> oldOngoing = meetingRepo.findOngoingMeetingsToAutoClose(eightHoursAgo);
+
+        for (OneOnOneMeeting meeting : oldOngoing) {
+            meeting.setIsFinalized(now);
+            meeting.setUpdatedAt(now);
+        }
+
+        meetingRepo.saveAll(oldOngoing);
+    }
+
+    private void validateCreateRequest(OneOnOneMeetingRequestDto request) {
+        if (request.getEmployeeId() == null) {
+            throw new RuntimeException("Employee is required.");
+        }
+
+        if (request.getScheduledDate() == null) {
+            throw new RuntimeException("Scheduled date is required.");
+        }
+
+        if (request.getScheduledDate().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Cannot create a meeting for a past time.");
+        }
+
+        if (request.getNotes() != null && request.getNotes().length() > 1000) {
+            throw new RuntimeException("Notes cannot exceed 1000 characters.");
+        }
+
+        if (request.getFollowUpNotes() != null && request.getFollowUpNotes().length() > 1000) {
+            throw new RuntimeException("Follow-up notes cannot exceed 1000 characters.");
+        }
     }
 
     private User getCurrentUser() {
         Integer currentUserId = SecurityUtils.currentUserId();
 
         User user = userRepo.findById(currentUserId)
-                .orElseThrow(() -> new RuntimeException("Current user not found"));
+                .orElseThrow(() -> new RuntimeException("Current user not found."));
 
         if (user.getEmployeeId() == null) {
             throw new RuntimeException("Current logged-in user is not linked to an employee record.");
@@ -321,13 +342,32 @@ public class OneOnOneMeetingServiceImpl implements OneOnOneMeetingService {
         dto.setFollowUp(m.getParentMeetingId() != null);
 
         if (m.getActionItem() != null) {
-            OneOnOneActionItemResponseDto ai = new OneOnOneActionItemResponseDto();
-            ai.setId(m.getActionItem().getId());
-            ai.setMeetingId(m.getId());
-            ai.setDescription(m.getActionItem().getDescription());
-            ai.setUpdatedAt(m.getActionItem().getUpdatedAt());
-            dto.setActionItem(ai);
+            dto.setActionItem(toActionItemDto(m.getActionItem()));
         }
+
+        if (m.getParentMeetingId() == null) {
+            meetingRepo.findFollowUpByParentMeetingId(m.getId()).ifPresent(followUp -> {
+                dto.setFollowUpMeetingId(followUp.getId());
+                dto.setFollowUpStartDate(followUp.getScheduledDate());
+                dto.setFollowUpEndDate(followUp.getIsFinalized());
+                dto.setFollowUpMeetingNotes(followUp.getFollowUpNotes());
+            });
+        }
+
+        return dto;
+    }
+
+    private OneOnOneActionItemResponseDto toActionItemDto(com.epms.entity.OneOnOneActionItem item) {
+        OneOnOneActionItemResponseDto dto = new OneOnOneActionItemResponseDto();
+
+        dto.setId(item.getId());
+        dto.setMeetingId(item.getMeeting() != null ? item.getMeeting().getId() : null);
+        dto.setDescription(item.getDescription());
+        dto.setCreatedAt(item.getCreatedAt());
+        dto.setUpdatedAt(item.getUpdatedAt());
+        dto.setDueDate(item.getDueDate());
+        dto.setOwner(item.getOwner());
+        dto.setStatus(item.getStatus());
 
         return dto;
     }

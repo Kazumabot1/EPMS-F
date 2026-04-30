@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -18,16 +19,23 @@ public class OneOnOneActionItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    // One action item belongs to exactly one meeting
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "meeting_id", nullable = false)
     private OneOnOneMeeting meeting;
 
-    // Description / notes written during the meeting
-    @Column(columnDefinition = "TEXT")
+    @Column(length = 1000)
     private String description;
 
-    // Updated whenever description is edited
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "due_date")
+    private LocalDate dueDate;
+
+    private String owner;
+
+    private String status;
 }
