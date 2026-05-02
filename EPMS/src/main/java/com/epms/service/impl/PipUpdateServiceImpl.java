@@ -9,9 +9,15 @@ import com.epms.service.PipUpdateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Why this file exists:
+ * - Keeps the old PipUpdateController/PipUpdateService working.
+ * - New automatic PIP history is mainly written by PipServiceImpl.
+ * - This service still allows basic CRUD for pip_updates if existing screens use it.
+ */
 @Service
 @RequiredArgsConstructor
 public class PipUpdateServiceImpl implements PipUpdateService {
@@ -25,7 +31,7 @@ public class PipUpdateServiceImpl implements PipUpdateService {
         pipUpdate.setComments(requestDto.getComments() != null ? requestDto.getComments().trim() : null);
         pipUpdate.setStatus(requestDto.getStatus());
         pipUpdate.setUpdatedBy(requestDto.getUpdatedBy());
-        pipUpdate.setUpdatedAt(new Date());
+        pipUpdate.setUpdatedAt(LocalDateTime.now());
 
         PipUpdate savedPipUpdate = pipUpdateRepository.save(pipUpdate);
         return mapToResponseDto(savedPipUpdate);
@@ -48,11 +54,12 @@ public class PipUpdateServiceImpl implements PipUpdateService {
     @Override
     public PipUpdateResponseDto updatePipUpdate(Integer id, PipUpdateRequestDto requestDto) {
         PipUpdate existingPipUpdate = getPipUpdateEntityById(id);
+
         existingPipUpdate.setPipId(requestDto.getPipId());
         existingPipUpdate.setComments(requestDto.getComments() != null ? requestDto.getComments().trim() : null);
         existingPipUpdate.setStatus(requestDto.getStatus());
         existingPipUpdate.setUpdatedBy(requestDto.getUpdatedBy());
-        existingPipUpdate.setUpdatedAt(new Date());
+        existingPipUpdate.setUpdatedAt(LocalDateTime.now());
 
         PipUpdate updatedPipUpdate = pipUpdateRepository.save(existingPipUpdate);
         return mapToResponseDto(updatedPipUpdate);
