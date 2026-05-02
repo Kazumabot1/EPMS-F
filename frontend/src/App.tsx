@@ -40,6 +40,7 @@ import AssessmentScoreTablePage from './pages/hr/AssessmentScoreTablePage';
 import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 import Notifications from './pages/Notifications';
 import DepartmentHeadDashboard from './pages/department-head/DepartmentHeadDashboard';
+import ProjectManagerDashboard from './pages/project-manager/ProjectManagerDashboard';
 
 function App() {
   return (
@@ -150,6 +151,39 @@ function App() {
                 element={<DepartmentHeadDashboard />}
               />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={['ProjectManager']} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/project-manager/dashboard" element={<ProjectManagerDashboard />} />
+              <Route
+                path="/project-manager/performance"
+                element={
+                  <EmployeeRoutePlaceholder
+                    title="Project Performance"
+                    description="Track KPI metrics and performance data across your projects."
+                  />
+                }
+              />
+              <Route
+                path="/project-manager/feedback"
+                element={
+                  <EmployeeRoutePlaceholder
+                    title="Stakeholder Feedback"
+                    description="Collect and review stakeholder feedback for your projects."
+                  />
+                }
+              />
+              <Route
+                path="/project-manager/reports"
+                element={
+                  <EmployeeRoutePlaceholder
+                    title="Project Reports"
+                    description="Generate and export project performance reports."
+                  />
+                }
+              />
             </Route>
           </Route>
 

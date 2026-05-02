@@ -7,6 +7,7 @@ import com.epms.dto.TeamResponseDto;
 import com.epms.service.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,6 +48,14 @@ public class TeamController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize(
+            "hasRole('HR') or hasRole('ADMIN') " +
+            "or hasRole('DEPARTMENT_HEAD') or hasRole('DEPARTMENTHEAD') " +
+            "or hasAuthority('ROLE_DEPARTMENT_HEAD') or hasAuthority('ROLE_DEPARTMENTHEAD') " +
+            "or authentication.principal.dashboard == 'DEPARTMENT_HEAD_DASHBOARD' " +
+            "or hasRole('PROJECT_MANAGER') or hasRole('PROJECTMANAGER') " +
+            "or authentication.principal.dashboard == 'PROJECT_MANAGER_DASHBOARD'"
+    )
     public ResponseEntity<GenericApiResponse<TeamResponseDto>> updateTeam(@PathVariable Integer id,
                                                                            @RequestBody TeamRequestDto requestDto) {
         return ResponseEntity.ok(GenericApiResponse.success("Team updated successfully", teamService.updateTeam(id, requestDto)));

@@ -12,6 +12,7 @@ const fallbackByRole: Record<UserRole, string> = {
   HR: '/dashboard',
   DepartmentHead: '/department-head/dashboard',
   Manager: '/manager/dashboard',
+  ProjectManager: '/project-manager/dashboard',
   Executive: '/executive/dashboard',
 };
 

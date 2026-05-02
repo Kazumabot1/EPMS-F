@@ -30,6 +30,10 @@ public class DashboardResolver {
             return "DEPARTMENT_HEAD_DASHBOARD";
         }
 
+        if (hasRole(normalizedRoles, "PROJECT_MANAGER") || hasRole(normalizedRoles, "PROJECTMANAGER")) {
+            return "PROJECT_MANAGER_DASHBOARD";
+        }
+
         if (hasRole(normalizedRoles, "MANAGER")) {
             return "MANAGER_DASHBOARD";
         }
@@ -46,6 +50,9 @@ public class DashboardResolver {
         }
         if (normalizedPosition.contains("DEPARTMENT_HEAD") || normalizedPosition.contains("DEPARTMENTHEAD") || normalizedPosition.contains("HEAD")) {
             return "DEPARTMENT_HEAD_DASHBOARD";
+        }
+        if (normalizedPosition.contains("PROJECT_MANAGER") || normalizedPosition.contains("PROJECTMANAGER")) {
+            return "PROJECT_MANAGER_DASHBOARD";
         }
         if (normalizedPosition.contains("MANAGER")) {
             return "MANAGER_DASHBOARD";

@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import DepartmentForm from './DepartmentForm';
-import type { DepartmentFormValues } from './DepartmentForm';
 import {
   createDepartment,
   deleteDepartment,
@@ -10,139 +8,208 @@ import {
 import type { Department } from '../../services/departmentService';
 import './department-ui.css';
 
-const emptyFormValues: DepartmentFormValues = {
-  departmentName: '',
-  departmentCode: '',
-  headEmployee: '',
-};
-
+/* ─── helpers ─────────────────────────────────────────── */
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string; error?: string } } }).response;
-    return response?.data?.message || response?.data?.error || fallback;
+    const r = (error as { response?: { data?: { message?: string; error?: string } } }).response;
+    return r?.data?.message || r?.data?.error || fallback;
   }
   return fallback;
 };
 
+interface FormValues {
+  departmentName: string;
+  departmentCode: string;
+  headEmployee: string;
+  status: boolean;
+}
+
+const emptyForm: FormValues = {
+  departmentName: '',
+  departmentCode: '',
+  headEmployee: '',
+  status: true,
+};
+
+/* ─── component ───────────────────────────────────────── */
 const DepartmentManagement = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [query, setQuery] = useState('');
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+  const [message, setMessage]         = useState('');
+  const [isError, setIsError]         = useState(false);
+  const [query, setQuery]             = useState('');
 
+  /* modal state */
+  const [showModal, setShowModal]               = useState(false);
+  const [editing, setEditing]                   = useState<Department | null>(null);
+  const [form, setForm]                         = useState<FormValues>(emptyForm);
+  const [showConfirm, setShowConfirm]           = useState(false);
+  const [confirmMessages, setConfirmMessages]   = useState<string[]>([]);
+
+  /* ── data loading ─────────────────────────────────── */
   const loadDepartments = async () => {
     try {
       setLoading(true);
       setMessage('');
       setDepartments(await fetchDepartments());
-    } catch (error) {
+    } catch (err) {
       setDepartments([]);
-      setMessage(getErrorMessage(error, 'Unable to load departments.'));
+      setMessage(getErrorMessage(err, 'Unable to load departments.'));
+      setIsError(true);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadDepartments();
-  }, []);
+  useEffect(() => { loadDepartments(); }, []);
 
   const filteredDepartments = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return departments;
-    return departments.filter((department) =>
-      [department.departmentName, department.departmentCode, department.headEmployee, department.createdBy]
+    return departments.filter((d) =>
+      [d.departmentName, d.departmentCode, d.headEmployee, d.createdBy]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q)),
+        .some((v) => String(v).toLowerCase().includes(q)),
     );
   }, [departments, query]);
 
-  const handleCreate = async (values: DepartmentFormValues) => {
+  /* ── open / close modal ───────────────────────────── */
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setMessage('');
+    setShowModal(true);
+  };
+
+  const openEdit = (dept: Department) => {
+    setEditing(dept);
+    setForm({
+      departmentName: dept.departmentName || '',
+      departmentCode: dept.departmentCode || '',
+      headEmployee:   dept.headEmployee   || '',
+      status:         dept.status !== false,
+    });
+    setMessage('');
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditing(null);
+    setShowConfirm(false);
+    setConfirmMessages([]);
+  };
+
+  /* ── form field helper ────────────────────────────── */
+  const setField = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  /* ── build change summary for confirm dialog ──────── */
+  const buildChanges = (): string[] => {
+    if (!editing) return [];
+    const changes: string[] = [];
+
+    if (form.departmentName.trim() !== (editing.departmentName || ''))
+      changes.push(`Name: "${editing.departmentName}" → "${form.departmentName.trim()}"`);
+
+    if ((form.departmentCode.trim() || '') !== (editing.departmentCode || ''))
+      changes.push(`Code: "${editing.departmentCode || '(none)'}" → "${form.departmentCode.trim() || '(none)'}"`);
+
+    if ((form.headEmployee.trim() || '') !== (editing.headEmployee || ''))
+      changes.push(`Head Employee: "${editing.headEmployee || '(none)'}" → "${form.headEmployee.trim() || '(none)'}"`);
+
+    const currentStatus = editing.status !== false;
+    if (form.status !== currentStatus)
+      changes.push(`Status: ${currentStatus ? 'Active' : 'Inactive'} → ${form.status ? 'Active' : 'Inactive'}`);
+
+    return changes;
+  };
+
+  /* ── submit ───────────────────────────────────────── */
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.departmentName.trim()) return;
+
+    if (editing) {
+      const changes = buildChanges();
+      if (changes.length === 0) {
+        setMessage('No changes detected.');
+        setIsError(false);
+        return;
+      }
+      setConfirmMessages(changes);
+      setShowConfirm(true);
+    } else {
+      doCreate();
+    }
+  };
+
+  const doCreate = async () => {
     try {
       setSaving(true);
       setMessage('');
       await createDepartment({
-        departmentName: values.departmentName,
-        departmentCode: values.departmentCode || null,
-        headEmployee: values.headEmployee || null,
+        departmentName: form.departmentName.trim(),
+        departmentCode: form.departmentCode.trim() || null,
+        headEmployee:   form.headEmployee.trim()   || null,
       });
       await loadDepartments();
-      setShowForm(false);
+      closeModal();
       setMessage('Department created successfully.');
-    } catch (error) {
-      setMessage(getErrorMessage(error, 'Unable to create department. Please check your input and try again.'));
+      setIsError(false);
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'Unable to create department.'));
+      setIsError(true);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUpdate = async (values: DepartmentFormValues) => {
-    if (!editingDepartment) return;
-
+  const doUpdate = async () => {
+    if (!editing) return;
     try {
       setSaving(true);
       setMessage('');
-      await updateDepartment(editingDepartment.id, {
-        departmentName: values.departmentName,
-        departmentCode: values.departmentCode || null,
-        headEmployee: values.headEmployee || null,
-        status: editingDepartment.status ?? true,
+      await updateDepartment(editing.id, {
+        departmentName: form.departmentName.trim(),
+        departmentCode: form.departmentCode.trim() || null,
+        headEmployee:   form.headEmployee.trim()   || null,
+        status:         form.status,
       });
       await loadDepartments();
-      setEditingDepartment(null);
-      setShowForm(false);
+      closeModal();
       setMessage('Department updated successfully.');
-    } catch (error) {
-      setMessage(getErrorMessage(error, 'Unable to update department.'));
+      setIsError(false);
+    } catch (err) {
+      setShowConfirm(false);
+      setMessage(getErrorMessage(err, 'Unable to update department.'));
+      setIsError(true);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (department: Department) => {
-    if (!window.confirm(`Deactivate ${department.departmentName}?`)) return;
-
+  /* ── delete / deactivate ──────────────────────────── */
+  const handleDelete = async (dept: Department) => {
+    if (!window.confirm(`Deactivate "${dept.departmentName}"?`)) return;
     try {
       setMessage('');
-      await deleteDepartment(department.id);
+      await deleteDepartment(dept.id);
       await loadDepartments();
       setMessage('Department deactivated successfully.');
-    } catch (error) {
-      setMessage(getErrorMessage(error, 'Unable to deactivate department.'));
+      setIsError(false);
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'Unable to deactivate department.'));
+      setIsError(true);
     }
   };
 
-  const openCreate = () => {
-    setEditingDepartment(null);
-    setShowForm(true);
-    setMessage('');
-  };
-
-  const openEdit = (department: Department) => {
-    setEditingDepartment(department);
-    setShowForm(true);
-    setMessage('');
-  };
-
-  const closeForm = () => {
-    setEditingDepartment(null);
-    setShowForm(false);
-    setMessage('');
-  };
-
-  const initialValues: DepartmentFormValues = editingDepartment
-    ? {
-        departmentName: editingDepartment.departmentName || '',
-        departmentCode: editingDepartment.departmentCode || '',
-        headEmployee: editingDepartment.headEmployee || '',
-      }
-    : emptyFormValues;
-
+  /* ── render ───────────────────────────────────────── */
   return (
     <div className="team-page">
+
+      {/* Hero */}
       <div className="team-hero">
         <span className="team-hero-badge">
           <i className="bi bi-building" />
@@ -152,50 +219,51 @@ const DepartmentManagement = () => {
         <p>Create, update, and deactivate departments for your organization.</p>
       </div>
 
-      {message && (
-        <div className={`team-alert ${message.toLowerCase().includes('success') ? 'success' : 'error'}`}>
+      {/* Global feedback */}
+      {message && !showModal && (
+        <div className={`team-alert ${isError ? 'error' : 'success'}`}>
+          <i className={`bi ${isError ? 'bi-exclamation-triangle' : 'bi-check-circle'} me-2`} />
           {message}
         </div>
       )}
 
+      {/* Table card */}
       <div className="team-surface">
         <div className="team-surface-inner">
+
+          {/* Toolbar */}
           <div className="team-table-toolbar">
             <div>
               <h2>Department List</h2>
-              <p className="text-muted">Total departments: {departments.length}</p>
+              <p className="text-muted">Total: {departments.length}</p>
             </div>
-
             <button className="team-btn primary" onClick={openCreate}>
+              <i className="bi bi-plus-lg" />
               Create Department
             </button>
           </div>
 
-          <div className="team-table-toolbar" style={{ paddingTop: 0 }}>
+          {/* Search */}
+          <div style={{ marginBottom: 16 }}>
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search departments..."
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search departments…"
               className="team-search-input"
-              style={{ maxWidth: 420 }}
+              style={{ maxWidth: 380 }}
             />
           </div>
 
-          {showForm && (
-            <DepartmentForm
-              initialValues={initialValues}
-              submitLabel={editingDepartment ? 'Update Department' : 'Create Department'}
-              loading={saving}
-              onSubmit={editingDepartment ? handleUpdate : handleCreate}
-              onCancel={closeForm}
-            />
-          )}
-
+          {/* Content */}
           {loading ? (
-            <div className="team-state">Loading departments...</div>
+            <div className="team-state">
+              <i className="bi bi-hourglass-split" />
+              Loading departments…
+            </div>
           ) : filteredDepartments.length === 0 ? (
             <div className="team-state">
-              No departments found. Click Create Department to add one.
+              <i className="bi bi-building" />
+              <p>No departments found. Click <strong>Create Department</strong> to add one.</p>
             </div>
           ) : (
             <div className="team-table-wrap">
@@ -211,28 +279,37 @@ const DepartmentManagement = () => {
                     <th>Actions</th>
                   </tr>
                 </thead>
-
                 <tbody>
-                  {filteredDepartments.map((department) => (
-                    <tr key={department.id}>
-                      <td>{department.id}</td>
-                      <td>{department.departmentName || '-'}</td>
-                      <td>{department.departmentCode || '-'}</td>
-                      <td>{department.headEmployee || '-'}</td>
-                      <td>{department.status === false ? 'Inactive' : 'Active'}</td>
-                      <td>{department.createdBy || '-'}</td>
+                  {filteredDepartments.map((dept) => (
+                    <tr key={dept.id}>
+                      <td>{dept.id}</td>
+                      <td><strong>{dept.departmentName || '-'}</strong></td>
+                      <td>{dept.departmentCode || '-'}</td>
+                      <td>{dept.headEmployee || '-'}</td>
                       <td>
-                        <button className="team-btn ghost" onClick={() => openEdit(department)}>
-                          Edit
-                        </button>
-
-                        <button
-                          className="team-btn ghost danger"
-                          onClick={() => handleDelete(department)}
-                          style={{ marginLeft: 8 }}
-                        >
-                          Deactivate
-                        </button>
+                        <span className={`team-pill ${dept.status === false ? 'inactive' : 'active'}`}>
+                          {dept.status === false ? 'Inactive' : 'Active'}
+                        </span>
+                      </td>
+                      <td>{dept.createdBy || '-'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            className="team-btn ghost"
+                            onClick={() => openEdit(dept)}
+                          >
+                            <i className="bi bi-pencil-square" />
+                            Edit
+                          </button>
+                          <button
+                            className="team-btn ghost"
+                            onClick={() => handleDelete(dept)}
+                            style={{ color: '#dc2626' }}
+                          >
+                            <i className="bi bi-slash-circle" />
+                            Deactivate
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -242,6 +319,161 @@ const DepartmentManagement = () => {
           )}
         </div>
       </div>
+
+      {/* ── Edit / Create Modal ─────────────────────── */}
+      {showModal && (
+        <div className="team-modal-overlay">
+          <div className="team-modal-content">
+
+            <div className="team-modal-header">
+              <h2>
+                <i className={`bi ${editing ? 'bi-pencil-square' : 'bi-plus-circle'} me-2`} />
+                {editing ? `Edit: ${editing.departmentName}` : 'Create Department'}
+              </h2>
+              <button type="button" className="team-btn ghost" onClick={closeModal}>
+                <i className="bi bi-x-lg" />
+              </button>
+            </div>
+
+            <div className="team-modal-body">
+              {/* Inline error inside modal */}
+              {message && showModal && (
+                <div className={`team-alert ${isError ? 'error' : 'success'}`} style={{ marginBottom: 12 }}>
+                  {message}
+                </div>
+              )}
+
+              <form id="dept-form" onSubmit={handleSubmit} className="team-form">
+
+                <div className="team-field">
+                  <label>
+                    Department Name <span className="team-required">*</span>
+                  </label>
+                  <input
+                    className="team-input"
+                    value={form.departmentName}
+                    onChange={(e) => setField('departmentName', e.target.value)}
+                    placeholder="e.g. Human Resources"
+                    required
+                  />
+                </div>
+
+                <div className="team-field">
+                  <label>
+                    Department Code{' '}
+                    <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input
+                    className="team-input"
+                    value={form.departmentCode}
+                    onChange={(e) => setField('departmentCode', e.target.value)}
+                    placeholder="e.g. HR, FIN, ENG"
+                  />
+                </div>
+
+                <div className="team-field">
+                  <label>
+                    Head Employee{' '}
+                    <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input
+                    className="team-input"
+                    value={form.headEmployee}
+                    onChange={(e) => setField('headEmployee', e.target.value)}
+                    placeholder="Name or employee code of the department head"
+                  />
+                </div>
+
+                {/* Status — edit only */}
+                {editing && (
+                  <div className="team-field">
+                    <label>Status</label>
+                    <select
+                      className="team-select"
+                      value={form.status ? 'active' : 'inactive'}
+                      onChange={(e) => setField('status', e.target.value === 'active')}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                )}
+              </form>
+            </div>
+
+            <div className="team-modal-footer">
+              <button
+                type="button"
+                className="team-btn secondary"
+                onClick={closeModal}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="dept-form"
+                className="team-btn primary"
+                disabled={saving}
+              >
+                <i className={`bi ${saving ? 'bi-arrow-repeat animate-spin' : editing ? 'bi-check-lg' : 'bi-plus-lg'}`} />
+                {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Department'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm Changes Modal ────────────────────── */}
+      {showConfirm && (
+        <div className="team-modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="team-modal-content">
+
+            <div className="team-modal-header">
+              <h2>Confirm Changes</h2>
+              <button
+                type="button"
+                className="team-btn ghost"
+                onClick={() => setShowConfirm(false)}
+              >
+                <i className="bi bi-x-lg" />
+              </button>
+            </div>
+
+            <div className="team-modal-body">
+              <p>
+                The following changes will be applied to{' '}
+                <strong>{editing?.departmentName}</strong>:
+              </p>
+              <ul style={{ paddingLeft: 20, lineHeight: 1.9, marginTop: 10 }}>
+                {confirmMessages.map((msg, i) => (
+                  <li key={i}>{msg}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="team-modal-footer">
+              <button
+                type="button"
+                className="team-btn secondary"
+                onClick={() => setShowConfirm(false)}
+                disabled={saving}
+              >
+                No, Go Back
+              </button>
+              <button
+                type="button"
+                className="team-btn primary"
+                onClick={doUpdate}
+                disabled={saving}
+              >
+                <i className={`bi ${saving ? 'bi-arrow-repeat animate-spin' : 'bi-check-lg'}`} />
+                {saving ? 'Saving…' : 'Yes, Apply Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
