@@ -24,7 +24,15 @@ import java.util.List;
 @RequestMapping("/api/department-head")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
-@PreAuthorize("hasRole('DEPARTMENT_HEAD')")
+@PreAuthorize(
+        "hasRole('DEPARTMENT_HEAD') " +
+                "or hasRole('DEPARTMENTHEAD') " +
+                "or hasAuthority('ROLE_DEPARTMENT_HEAD') " +
+                "or hasAuthority('ROLE_DEPARTMENTHEAD') " +
+                "or authentication.principal.dashboard == 'DEPARTMENT_HEAD_DASHBOARD' " +
+                "or hasRole('HR') " +
+                "or hasRole('ADMIN')"
+)
 public class DepartmentHeadDashboardController {
 
     private final EmployeeService employeeService;
@@ -52,49 +60,61 @@ public class DepartmentHeadDashboardController {
                 teams
         );
 
-        return ResponseEntity.ok(GenericApiResponse.success("Department head dashboard fetched", dto));
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Department head dashboard fetched", dto)
+        );
     }
 
     @GetMapping("/employees")
     public ResponseEntity<GenericApiResponse<List<EmployeeResponseDto>>> employees(
             @RequestParam(defaultValue = "false") boolean includeInactive
     ) {
-        return ResponseEntity.ok(GenericApiResponse.success(
-                "Department employees fetched",
-                employeeService.getMyDepartmentEmployees(includeInactive)
-        ));
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Department employees fetched",
+                        employeeService.getMyDepartmentEmployees(includeInactive)
+                )
+        );
     }
 
     @GetMapping("/employees/{id}")
     public ResponseEntity<GenericApiResponse<EmployeeResponseDto>> employeeById(@PathVariable Integer id) {
-        return ResponseEntity.ok(GenericApiResponse.success(
-                "Department employee fetched",
-                employeeService.getMyDepartmentEmployeeById(id)
-        ));
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Department employee fetched",
+                        employeeService.getMyDepartmentEmployeeById(id)
+                )
+        );
     }
 
     @GetMapping("/teams")
     public ResponseEntity<GenericApiResponse<List<TeamResponseDto>>> teams() {
-        return ResponseEntity.ok(GenericApiResponse.success(
-                "Department teams fetched",
-                teamService.getMyDepartmentTeams()
-        ));
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Department teams fetched",
+                        teamService.getMyDepartmentTeams()
+                )
+        );
     }
 
     @GetMapping("/teams/{id}")
     public ResponseEntity<GenericApiResponse<TeamResponseDto>> teamById(@PathVariable Integer id) {
-        return ResponseEntity.ok(GenericApiResponse.success(
-                "Department team fetched",
-                teamService.getMyDepartmentTeamById(id)
-        ));
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Department team fetched",
+                        teamService.getMyDepartmentTeamById(id)
+                )
+        );
     }
 
     @PostMapping("/teams")
     public ResponseEntity<GenericApiResponse<TeamResponseDto>> createTeam(@RequestBody TeamRequestDto requestDto) {
-        return ResponseEntity.ok(GenericApiResponse.success(
-                "Department team created",
-                teamService.createMyDepartmentTeam(requestDto)
-        ));
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Department team created",
+                        teamService.createMyDepartmentTeam(requestDto)
+                )
+        );
     }
 
     @PutMapping("/teams/{id}")
@@ -102,26 +122,32 @@ public class DepartmentHeadDashboardController {
             @PathVariable Integer id,
             @RequestBody TeamRequestDto requestDto
     ) {
-        return ResponseEntity.ok(GenericApiResponse.success(
-                "Department team updated",
-                teamService.updateMyDepartmentTeam(id, requestDto)
-        ));
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Department team updated",
+                        teamService.updateMyDepartmentTeam(id, requestDto)
+                )
+        );
     }
 
     @GetMapping("/teams/candidates/users")
     public ResponseEntity<GenericApiResponse<List<CandidateResponseDto>>> candidateUsers() {
-        return ResponseEntity.ok(GenericApiResponse.success(
-                "Candidate users fetched",
-                teamService.getMyDepartmentCandidateUsers()
-        ));
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Candidate users fetched",
+                        teamService.getMyDepartmentCandidateUsers()
+                )
+        );
     }
 
     @GetMapping("/teams/candidates/members")
     public ResponseEntity<GenericApiResponse<List<CandidateResponseDto>>> candidateMembers() {
-        return ResponseEntity.ok(GenericApiResponse.success(
-                "Candidate members fetched",
-                teamService.getMyDepartmentCandidateMembers()
-        ));
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Candidate members fetched",
+                        teamService.getMyDepartmentCandidateMembers()
+                )
+        );
     }
 
     private Integer requireCurrentDepartmentId() {
