@@ -3,6 +3,7 @@ package com.epms.dto;
 import lombok.Builder;
 import lombok.Value;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Value
@@ -11,8 +12,11 @@ public class FeedbackFormDetailResponse {
     Long id;
     String formName;
     Boolean anonymousAllowed;
+    Long rootFormId;
     Integer versionNumber;
     String status;
+    Long createdByUserId;
+    LocalDateTime createdAt;
     List<SectionDetail> sections;
 
     @Value

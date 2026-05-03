@@ -20,6 +20,7 @@ import com.epms.repository.FeedbackResponseRepository;
 import com.epms.repository.FeedbackSummaryRepository;
 import com.epms.repository.UserRepository;
 import com.epms.service.FeedbackSummaryService;
+import com.epms.util.FeedbackScoreUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +69,7 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
                 .campaignName(campaign.getName())
                 .status(campaign.getStatus().name())
                 .overallAverageScore(overallAverage)
+                .overallScoreCategory(FeedbackScoreUtil.category(overallAverage))
                 .totalEmployees((long) items.size())
                 .totalResponses(totalResponses)
                 .summarizedAt(summarizedAt)
@@ -220,6 +222,7 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
                                 "Employee #" + summary.getTargetEmployeeId()
                         ))
                         .averageScore(summary.getAverageScore())
+                        .scoreCategory(FeedbackScoreUtil.category(summary.getAverageScore()))
                         .totalResponses(summary.getTotalResponses())
                         .managerResponses(summary.getManagerResponses())
                         .peerResponses(summary.getPeerResponses())

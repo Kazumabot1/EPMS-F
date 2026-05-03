@@ -35,8 +35,8 @@ public interface FeedbackEvaluatorAssignmentRepository extends JpaRepository<Fee
      * Get all evaluator assignments for a target employee in a specific campaign.
      */
     @Query("SELECT a FROM FeedbackEvaluatorAssignment a " +
-           "JOIN a.feedbackRequest r " +
-           "WHERE r.targetEmployeeId = :targetEmployeeId AND r.campaign.id = :campaignId")
+            "JOIN a.feedbackRequest r " +
+            "WHERE r.targetEmployeeId = :targetEmployeeId AND r.campaign.id = :campaignId")
     List<FeedbackEvaluatorAssignment> findAssignmentsByTargetAndCampaign(@Param("targetEmployeeId") Long targetEmployeeId, @Param("campaignId") Long campaignId);
 
     /**
@@ -44,10 +44,17 @@ public interface FeedbackEvaluatorAssignmentRepository extends JpaRepository<Fee
      * Uses projection for data optimization.
      */
     @Query("SELECT a.evaluatorEmployeeId as evaluatorId, a.feedbackRequest.id as requestId " +
-           "FROM FeedbackEvaluatorAssignment a " +
-           "WHERE a.feedbackRequest.id = :requestId " +
-           "AND a.status NOT IN (com.epms.entity.enums.AssignmentStatus.SUBMITTED, com.epms.entity.enums.AssignmentStatus.DECLINED)")
+            "FROM FeedbackEvaluatorAssignment a " +
+            "WHERE a.feedbackRequest.id = :requestId " +
+            "AND a.status NOT IN (com.epms.entity.enums.AssignmentStatus.SUBMITTED, com.epms.entity.enums.AssignmentStatus.DECLINED, com.epms.entity.enums.AssignmentStatus.CANCELLED)")
     List<PendingEvaluatorProjection> findPendingEvaluatorsByRequestId(@Param("requestId") Long requestId);
+
+    @Query("SELECT a FROM FeedbackEvaluatorAssignment a " +
+            "JOIN FETCH a.feedbackRequest r " +
+            "JOIN FETCH r.campaign c " +
+            "WHERE c.id = :campaignId " +
+            "ORDER BY r.targetEmployeeId ASC, a.relationshipType ASC, a.evaluatorEmployeeId ASC")
+    List<FeedbackEvaluatorAssignment> findByCampaignIdWithRequest(@Param("campaignId") Long campaignId);
 
     long countByFeedbackRequestId(Long feedbackRequestId);
 

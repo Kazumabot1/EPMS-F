@@ -1,5 +1,6 @@
 package com.epms.dto;
 
+import com.epms.entity.enums.FeedbackCampaignRound;
 import lombok.Builder;
 import lombok.Value;
 
@@ -12,8 +13,14 @@ import java.util.List;
 public class FeedbackCampaignResponse {
     Long id;
     String name;
+    Integer reviewYear;
+    FeedbackCampaignRound reviewRound;
     LocalDate startDate;
     LocalDate endDate;
+    LocalDateTime startAt;
+    LocalDateTime endAt;
+    String description;
+    String instructions;
     String status;
     Long formId;
     Long createdBy;

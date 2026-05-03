@@ -33,10 +33,11 @@ public class FeedbackAnalyticsController {
 
     @GetMapping("/requests/{requestId}/summary")
     public ResponseEntity<GenericApiResponse<FeedbackSummaryResponse>> getFeedbackSummary(@PathVariable Long requestId) {
+        ensureHrOrAdmin();
         log.info("Fetching feedback summary for Request ID: {}", requestId);
 
         FeedbackSummaryProjection projection = feedbackRequestService.getFeedbackSummary(requestId);
-        
+
         if (projection == null) {
             // Safe fallback if aggregation returns null
             return ResponseEntity.ok(GenericApiResponse.success("No summary data found", new FeedbackSummaryResponse(requestId, 0.0, 0L)));
@@ -53,6 +54,7 @@ public class FeedbackAnalyticsController {
 
     @GetMapping("/requests/{requestId}/pending")
     public ResponseEntity<GenericApiResponse<List<PendingEvaluatorResponse>>> getPendingEvaluators(@PathVariable Long requestId) {
+        ensureHrOrAdmin();
         log.info("Fetching pending evaluators for Request ID: {}", requestId);
 
         List<PendingEvaluatorProjection> projections = feedbackEvaluationService.getPendingEvaluators(requestId);

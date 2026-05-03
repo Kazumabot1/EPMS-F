@@ -12,7 +12,9 @@ public class FeedbackResultItemResponse {
     String campaignName;
     Long targetEmployeeId;
     String targetEmployeeName;
+    /** Normalized 0-100 percentage score. */
     Double averageScore;
+    String scoreCategory;
     Long totalResponses;
     Long managerResponses;
     Long peerResponses;

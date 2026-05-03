@@ -11,6 +11,7 @@ export interface FeedbackResultItem {
   targetEmployeeId: number;
   targetEmployeeName: string;
   averageScore: number;
+  scoreCategory?: string;
   totalResponses: number;
   managerResponses: number;
   peerResponses: number;
@@ -23,6 +24,7 @@ export interface FeedbackCampaignSummary {
   campaignName: string;
   status: string;
   overallAverageScore: number;
+  overallScoreCategory?: string;
   totalEmployees: number;
   totalResponses: number;
   summarizedAt: string;

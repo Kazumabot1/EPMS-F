@@ -7,7 +7,7 @@ import type {
   SubmitFeedbackResponsePayload,
 } from '../types/feedbackEvaluator';
 
-const FEEDBACK_BASE = '/api/v1/feedback';
+const FEEDBACK_BASE = '/v1/feedback';
 
 const unwrap = <T>(response: { data: ApiEnvelope<T> }): T => response.data.data;
 
@@ -24,7 +24,7 @@ export const feedbackEvaluatorApi = {
   async getAssignmentDetail(assignmentId: number): Promise<FeedbackAssignmentDetail> {
     try {
       const response = await api.get<ApiEnvelope<FeedbackAssignmentDetail>>(
-        `${FEEDBACK_BASE}/assignments/${assignmentId}`,
+          `${FEEDBACK_BASE}/assignments/${assignmentId}`,
       );
       return unwrap(response);
     } catch (error) {

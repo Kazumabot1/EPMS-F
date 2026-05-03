@@ -12,6 +12,9 @@ import com.epms.entity.FeedbackResponse;
 import com.epms.entity.FeedbackResponseItem;
 import com.epms.entity.FeedbackSection;
 import com.epms.entity.User;
+import com.epms.entity.enums.AssignmentStatus;
+import com.epms.entity.enums.FeedbackCampaignStatus;
+import com.epms.entity.enums.FeedbackRequestStatus;
 import com.epms.exception.BusinessValidationException;
 import com.epms.exception.ResourceNotFoundException;
 import com.epms.exception.UnauthorizedActionException;
@@ -26,7 +29,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +59,8 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
         );
 
         return assignments.stream()
+                .filter(assignment -> assignment.getStatus() != AssignmentStatus.CANCELLED)
+                .filter(assignment -> assignment.getFeedbackRequest().getCampaign().getStatus() != FeedbackCampaignStatus.CANCELLED)
                 .sorted(Comparator
                         .comparing(this::resolveEffectiveDeadline, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(FeedbackEvaluatorAssignment::getId))
@@ -109,7 +113,7 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
         Map<Long, FeedbackResponseItem> existingItems = response == null
                 ? Map.of()
                 : response.getItems().stream()
-                .collect(Collectors.toMap(item -> item.getQuestion().getId(), Function.identity()));
+                  .collect(Collectors.toMap(item -> item.getQuestion().getId(), Function.identity()));
 
         Long targetEmployeeId = assignment.getFeedbackRequest().getTargetEmployeeId();
         return FeedbackAssignmentDetailResponse.builder()
@@ -164,8 +168,22 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
         if (response != null && response.getSubmittedAt() != null) {
             return false;
         }
+        if (assignment.getStatus() == AssignmentStatus.CANCELLED) {
+            return false;
+        }
+        if (assignment.getFeedbackRequest().getStatus() == FeedbackRequestStatus.CANCELLED) {
+            return false;
+        }
+        if (assignment.getFeedbackRequest().getCampaign().getStatus() != FeedbackCampaignStatus.ACTIVE) {
+            return false;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startAt = assignment.getFeedbackRequest().getCampaign().getStartAt();
+        if (startAt != null && now.isBefore(startAt)) {
+            return false;
+        }
         LocalDateTime dueAt = resolveEffectiveDeadline(assignment);
-        return dueAt == null || !LocalDateTime.now().isAfter(dueAt);
+        return dueAt == null || !now.isAfter(dueAt);
     }
 
     private Map<Long, String> loadEmployeeNames(List<Long> employeeIds) {
@@ -211,8 +229,6 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
     }
 
     private LocalDateTime resolveEffectiveDeadline(FeedbackEvaluatorAssignment assignment) {
-        return assignment.getFeedbackRequest().getCampaign().getEndDate() != null
-                ? assignment.getFeedbackRequest().getCampaign().getEndDate().atTime(LocalTime.MAX)
-                : null;
+        return assignment.getFeedbackRequest().getCampaign().getEndAt();
     }
 }

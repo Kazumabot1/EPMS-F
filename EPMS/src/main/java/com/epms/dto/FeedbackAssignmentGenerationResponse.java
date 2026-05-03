@@ -13,5 +13,6 @@ public class FeedbackAssignmentGenerationResponse {
     int totalEvaluatorsGenerated;
     EvaluatorConfigDTO evaluatorConfig;
     List<FeedbackAssignmentPreviewItemResponse> requests;
+    List<FeedbackAssignmentDetailItemResponse> assignmentDetails;
     List<String> warnings;
 }

@@ -4,5 +4,6 @@ public enum AssignmentStatus {
     PENDING,
     IN_PROGRESS,
     SUBMITTED,
-    DECLINED
+    DECLINED,
+    CANCELLED
 }

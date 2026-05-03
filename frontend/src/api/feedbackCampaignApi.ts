@@ -20,7 +20,9 @@ import type {
   FeedbackFormOption,
   FeedbackTargetEmployee,
   FeedbackTeamOption,
+  FeedbackReminderResponse,
   EvaluatorConfigInput,
+  ManualAssignmentInput,
 } from '../types/feedbackCampaign';
 
 const FEEDBACK_BASE = '/v1/feedback';
@@ -112,6 +114,34 @@ export const feedbackCampaignApi = {
     }
   },
 
+
+  async activateCampaign(campaignId: number): Promise<FeedbackCampaign> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns/${campaignId}/activate`);
+      return unwrapEnvelope(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to activate feedback campaign.'));
+    }
+  },
+
+  async closeCampaign(campaignId: number): Promise<FeedbackCampaign> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns/${campaignId}/close`);
+      return unwrapEnvelope(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to close feedback campaign.'));
+    }
+  },
+
+  async cancelCampaign(campaignId: number): Promise<FeedbackCampaign> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns/${campaignId}/cancel`);
+      return unwrapEnvelope(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to cancel feedback campaign.'));
+    }
+  },
+
   async generateAssignments(
       campaignId: number,
       payload: EvaluatorConfigInput,
@@ -124,6 +154,57 @@ export const feedbackCampaignApi = {
       return unwrapEnvelope(response);
     } catch (error) {
       throw new Error(extractApiErrorMessage(error, 'Failed to generate evaluator assignments.'));
+    }
+  },
+
+  async getAssignmentPreview(campaignId: number): Promise<FeedbackAssignmentGenerationResponse> {
+    try {
+      const response = await api.get<ApiEnvelope<FeedbackAssignmentGenerationResponse>>(
+          `${FEEDBACK_BASE}/campaigns/${campaignId}/assignments/preview`,
+      );
+      return unwrapEnvelope(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to load evaluator assignment preview.'));
+    }
+  },
+
+  async addManualAssignment(
+      campaignId: number,
+      payload: ManualAssignmentInput,
+  ): Promise<FeedbackAssignmentGenerationResponse> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackAssignmentGenerationResponse>>(
+          `${FEEDBACK_BASE}/campaigns/${campaignId}/assignments/manual`,
+          payload,
+      );
+      return unwrapEnvelope(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to add manual evaluator assignment.'));
+    }
+  },
+
+  async removeAssignment(
+      campaignId: number,
+      assignmentId: number,
+  ): Promise<FeedbackAssignmentGenerationResponse> {
+    try {
+      const response = await api.delete<ApiEnvelope<FeedbackAssignmentGenerationResponse>>(
+          `${FEEDBACK_BASE}/campaigns/${campaignId}/assignments/${assignmentId}`,
+      );
+      return unwrapEnvelope(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to remove evaluator assignment.'));
+    }
+  },
+
+  async sendPendingReminders(campaignId: number): Promise<FeedbackReminderResponse> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackReminderResponse>>(
+          `${FEEDBACK_BASE}/campaigns/${campaignId}/reminders`,
+      );
+      return unwrapEnvelope(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to send pending evaluator reminders.'));
     }
   },
 };

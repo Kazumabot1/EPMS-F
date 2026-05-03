@@ -46,4 +46,13 @@ public interface FeedbackFormRepository extends JpaRepository<FeedbackForm, Long
     List<FeedbackForm> findByRootFormIdOrderByVersionNumberAsc(Long rootFormId);
 
     Optional<FeedbackForm> findTopByRootFormIdOrderByVersionNumberDesc(Long rootFormId);
+
+    @Query("""
+        SELECT DISTINCT f
+        FROM FeedbackForm f
+        LEFT JOIN FETCH f.sections s
+        LEFT JOIN FETCH s.questions q
+        WHERE f.id = :formId
+    """)
+    Optional<FeedbackForm> findByIdWithSectionsAndQuestions(@Param("formId") Long formId);
 }

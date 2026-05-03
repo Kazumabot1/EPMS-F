@@ -1,4 +1,3 @@
-/* Sidebar.tsx file: */
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { authStorage } from '../../services/authStorage';
@@ -61,13 +60,14 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
             icon: 'bi bi-building',
             children: [
               { to: '/hr/department', label: 'Departments', icon: 'bi bi-building' },
-              { to: '/hr/employee', label: 'Employee', icon: 'bi bi-people', end: true },
+              { to: '/hr/employee', label: 'Employee list', icon: 'bi bi-people', end: true },
               {
                 to: '/hr/employee/workforce',
                 label: 'Workforce overview',
                 icon: 'bi bi-person-badge',
                 end: true,
               },
+              { to: '/hr/employee/create', label: 'Create Employee', icon: 'bi bi-person-plus' },
               { to: '/hr/employee/import', label: 'Import Employees', icon: 'bi bi-upload' },
             ],
           },
@@ -115,7 +115,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               { to: '/hr/performance-kpi/unit', label: 'KPI Units', icon: 'bi bi-speedometer2' },
               { to: '/hr/performance-kpi/category', label: 'KPI Categories', icon: 'bi bi-tags' },
               { to: '/hr/performance-kpi/item', label: 'KPI Items', icon: 'bi bi-card-checklist' },
-              { to: '/hr/kpi-template', label: 'KPI Templates', icon: 'bi bi-ui-checks-grid' },
+              { to: '/hr/performance-kpi/form', label: 'KPI Forms', icon: 'bi bi-ui-checks-grid' },
             ],
           },
 

@@ -3,6 +3,10 @@ package com.epms.controller;
 import com.epms.dto.FeedbackRequestListResponse;
 import com.epms.dto.GenericApiResponse;
 import com.epms.entity.FeedbackRequest;
+import com.epms.entity.User;
+import com.epms.exception.UnauthorizedActionException;
+import com.epms.repository.UserRepository;
+import com.epms.security.SecurityUtils;
 import com.epms.service.FeedbackRequestService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/v1/feedback/requests")
@@ -22,12 +27,14 @@ import java.util.List;
 public class FeedbackRequestController {
 
     private final FeedbackRequestService feedbackRequestService;
+    private final UserRepository userRepository;
 
     @GetMapping("/{employeeId}")
     public ResponseEntity<GenericApiResponse<Page<FeedbackRequestListResponse>>> getRequestsForEmployee(
             @PathVariable Long employeeId,
             Pageable pageable
     ) {
+        ensureCanViewEmployeeRequests(employeeId);
         List<FeedbackRequest> requests = feedbackRequestService.getRequestsForEmployee(employeeId);
         List<FeedbackRequestListResponse> dtoList = requests.stream()
                 .map(req -> FeedbackRequestListResponse.builder()
@@ -55,4 +62,41 @@ public class FeedbackRequestController {
                 new PageImpl<>(content, pageable, dtoList.size())
         ));
     }
+
+    private void ensureCanViewEmployeeRequests(Long employeeId) {
+        if (hasRole("HR") || hasRole("ADMIN")) {
+            return;
+        }
+
+        Integer currentUserId = SecurityUtils.currentUserId();
+        Long currentEmployeeId = userRepository.findById(currentUserId)
+                .map(User::getEmployeeId)
+                .filter(Objects::nonNull)
+                .map(Integer::longValue)
+                .orElse(null);
+
+        if (Objects.equals(currentEmployeeId, employeeId)) {
+            return;
+        }
+
+        boolean managesTarget = userRepository.findByEmployeeId(employeeId.intValue())
+                .map(targetUser -> Objects.equals(targetUser.getManagerId(), currentUserId))
+                .orElse(false);
+
+        if (!managesTarget) {
+            throw new UnauthorizedActionException("You are not authorized to view feedback requests for this employee.");
+        }
+    }
+
+    private boolean hasRole(String roleName) {
+        List<String> roles = SecurityUtils.currentUser().getRoles();
+        if (roles == null) {
+            return false;
+        }
+        String normalized = roleName.toUpperCase();
+        return roles.stream()
+                .map(String::toUpperCase)
+                .anyMatch(role -> role.equals(normalized) || role.equals("ROLE_" + normalized));
+    }
+
 }

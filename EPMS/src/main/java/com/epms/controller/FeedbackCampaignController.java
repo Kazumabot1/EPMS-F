@@ -5,6 +5,8 @@ import com.epms.dto.FeedbackAssignmentGenerationResponse;
 import com.epms.dto.FeedbackCampaignCreateRequest;
 import com.epms.dto.FeedbackCampaignResponse;
 import com.epms.dto.FeedbackCampaignTargetsRequest;
+import com.epms.dto.FeedbackManualAssignmentRequest;
+import com.epms.dto.FeedbackReminderResponse;
 import com.epms.dto.GenericApiResponse;
 import com.epms.entity.FeedbackCampaign;
 import com.epms.entity.FeedbackRequest;
@@ -16,6 +18,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -84,14 +87,95 @@ public class FeedbackCampaignController {
         return ResponseEntity.ok(GenericApiResponse.success("Evaluator assignments generated successfully", response));
     }
 
+
+
+    @GetMapping("/{campaignId}/assignments/preview")
+    public ResponseEntity<GenericApiResponse<FeedbackAssignmentGenerationResponse>> getAssignmentPreview(
+            @PathVariable Long campaignId
+    ) {
+        ensureHrOrAdmin();
+        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.getAssignmentPreview(campaignId);
+        return ResponseEntity.ok(GenericApiResponse.success("Evaluator assignment preview retrieved successfully", response));
+    }
+
+    @PostMapping("/{campaignId}/assignments/manual")
+    public ResponseEntity<GenericApiResponse<FeedbackAssignmentGenerationResponse>> addManualAssignment(
+            @PathVariable Long campaignId,
+            @Valid @RequestBody FeedbackManualAssignmentRequest request
+    ) {
+        ensureHrOrAdmin();
+        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.addManualAssignment(campaignId, request);
+        return ResponseEntity.ok(GenericApiResponse.success("Manual evaluator assignment added successfully", response));
+    }
+
+    @DeleteMapping("/{campaignId}/assignments/{assignmentId}")
+    public ResponseEntity<GenericApiResponse<FeedbackAssignmentGenerationResponse>> removeAssignment(
+            @PathVariable Long campaignId,
+            @PathVariable Long assignmentId
+    ) {
+        ensureHrOrAdmin();
+        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.removeAssignment(campaignId, assignmentId);
+        return ResponseEntity.ok(GenericApiResponse.success("Evaluator assignment removed successfully", response));
+    }
+
+
+    @PostMapping("/{campaignId}/activate")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignResponse>> activateCampaign(@PathVariable Long campaignId) {
+        ensureHrOrAdmin();
+        FeedbackCampaign campaign = feedbackCampaignService.activateCampaign(campaignId, SecurityUtils.currentUserId().longValue());
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Feedback campaign activated successfully",
+                mapCampaign(campaign)
+        ));
+    }
+
+    @PostMapping("/{campaignId}/close")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignResponse>> closeCampaign(@PathVariable Long campaignId) {
+        ensureHrOrAdmin();
+        FeedbackCampaign campaign = feedbackCampaignService.closeCampaign(campaignId, SecurityUtils.currentUserId().longValue());
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Feedback campaign closed successfully",
+                mapCampaign(campaign)
+        ));
+    }
+
+    @PostMapping("/{campaignId}/cancel")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignResponse>> cancelCampaign(@PathVariable Long campaignId) {
+        ensureHrOrAdmin();
+        FeedbackCampaign campaign = feedbackCampaignService.cancelCampaign(campaignId, SecurityUtils.currentUserId().longValue());
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Feedback campaign cancelled successfully",
+                mapCampaign(campaign)
+        ));
+    }
+
+    @PostMapping("/{campaignId}/reminders")
+    public ResponseEntity<GenericApiResponse<FeedbackReminderResponse>> sendPendingReminders(@PathVariable Long campaignId) {
+        ensureHrOrAdmin();
+        FeedbackReminderResponse response = feedbackCampaignService.sendPendingEvaluatorReminders(
+                campaignId,
+                SecurityUtils.currentUserId().longValue()
+        );
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Pending evaluator reminders sent successfully",
+                response
+        ));
+    }
+
     private FeedbackCampaignResponse mapCampaign(FeedbackCampaign campaign) {
         List<FeedbackRequest> requests = feedbackCampaignService.getRequestsForCampaign(campaign.getId());
 
         return FeedbackCampaignResponse.builder()
                 .id(campaign.getId())
                 .name(campaign.getName())
+                .reviewYear(campaign.getReviewYear())
+                .reviewRound(campaign.getReviewRound())
                 .startDate(campaign.getStartDate())
                 .endDate(campaign.getEndDate())
+                .startAt(campaign.getStartAt())
+                .endAt(campaign.getEndAt())
+                .description(campaign.getDescription())
+                .instructions(campaign.getInstructions())
                 .status(campaign.getStatus().name())
                 .formId(campaign.getFormId())
                 .createdBy(campaign.getCreatedByUserId())

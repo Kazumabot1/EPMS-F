@@ -1,27 +1,35 @@
 package com.epms.controller;
 
 import com.epms.dto.FeedbackFormCreateRequest;
+import com.epms.dto.FeedbackFormDetailResponse;
 import com.epms.dto.FeedbackFormOptionResponse;
 import com.epms.dto.FeedbackQuestionRequest;
 import com.epms.dto.FeedbackSectionRequest;
 import com.epms.dto.GenericApiResponse;
-import com.epms.exception.UnauthorizedActionException;
-import com.epms.dto.FeedbackFormDetailResponse;
-import com.epms.security.SecurityUtils;
 import com.epms.entity.FeedbackForm;
 import com.epms.entity.FeedbackQuestion;
 import com.epms.entity.FeedbackSection;
 import com.epms.entity.enums.FeedbackFormStatus;
+import com.epms.exception.UnauthorizedActionException;
+import com.epms.security.SecurityUtils;
 import com.epms.service.FeedbackFormService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -72,10 +80,10 @@ public class FeedbackFormController {
     }
 
     @GetMapping("/{formId}/versions")
-    public ResponseEntity<GenericApiResponse<List<Long>>> getFeedbackFormVersions(@PathVariable Long formId) {
+    public ResponseEntity<GenericApiResponse<List<FeedbackFormOptionResponse>>> getFeedbackFormVersions(@PathVariable Long formId) {
         ensureHrOrAdmin();
-        List<Long> versions = feedbackFormService.getFormVersions(formId).stream()
-                .map(FeedbackForm::getId)
+        List<FeedbackFormOptionResponse> versions = feedbackFormService.getFormVersions(formId).stream()
+                .map(this::toOptionResponse)
                 .toList();
         return ResponseEntity.ok(GenericApiResponse.success("Feedback form versions retrieved successfully", versions));
     }
@@ -93,13 +101,7 @@ public class FeedbackFormController {
     public ResponseEntity<GenericApiResponse<List<FeedbackFormOptionResponse>>> getAllFeedbackForms() {
         ensureHrOrAdmin();
         List<FeedbackFormOptionResponse> response = feedbackFormService.getAllForms().stream()
-                .map(form -> FeedbackFormOptionResponse.builder()
-                        .id(form.getId())
-                        .formName(form.getFormName())
-                        .anonymousAllowed(form.getAnonymousAllowed())
-                        .versionNumber(form.getVersionNumber())
-                        .status(form.getStatus().name())
-                        .build())
+                .map(this::toOptionResponse)
                 .toList();
         return ResponseEntity.ok(GenericApiResponse.success("Feedback forms retrieved successfully", response));
     }
@@ -108,13 +110,7 @@ public class FeedbackFormController {
     public ResponseEntity<GenericApiResponse<List<FeedbackFormOptionResponse>>> getActiveFeedbackForms() {
         ensureHrOrAdmin();
         List<FeedbackFormOptionResponse> response = feedbackFormService.getAllActiveForms().stream()
-                .map(form -> FeedbackFormOptionResponse.builder()
-                        .id(form.getId())
-                        .formName(form.getFormName())
-                        .anonymousAllowed(form.getAnonymousAllowed())
-                        .versionNumber(form.getVersionNumber())
-                        .status(form.getStatus().name())
-                        .build())
+                .map(this::toOptionResponse)
                 .toList();
         return ResponseEntity.ok(GenericApiResponse.success("Active feedback forms retrieved successfully", response));
     }
@@ -123,19 +119,39 @@ public class FeedbackFormController {
     public ResponseEntity<GenericApiResponse<FeedbackFormDetailResponse>> getFeedbackFormDetail(@PathVariable Long formId) {
         ensureHrOrAdmin();
         FeedbackForm form = feedbackFormService.getFormById(formId);
-        FeedbackFormDetailResponse detail = FeedbackFormDetailResponse.builder()
+        return ResponseEntity.ok(GenericApiResponse.success("Feedback form detail retrieved successfully", toDetailResponse(form)));
+    }
+
+    private FeedbackFormOptionResponse toOptionResponse(FeedbackForm form) {
+        return FeedbackFormOptionResponse.builder()
                 .id(form.getId())
                 .formName(form.getFormName())
                 .anonymousAllowed(form.getAnonymousAllowed())
+                .rootFormId(form.getRootFormId())
                 .versionNumber(form.getVersionNumber())
                 .status(form.getStatus().name())
+                .createdByUserId(form.getCreatedByUserId())
+                .createdAt(form.getCreatedAt())
+                .build();
+    }
+
+    private FeedbackFormDetailResponse toDetailResponse(FeedbackForm form) {
+        return FeedbackFormDetailResponse.builder()
+                .id(form.getId())
+                .formName(form.getFormName())
+                .anonymousAllowed(form.getAnonymousAllowed())
+                .rootFormId(form.getRootFormId())
+                .versionNumber(form.getVersionNumber())
+                .status(form.getStatus().name())
+                .createdByUserId(form.getCreatedByUserId())
+                .createdAt(form.getCreatedAt())
                 .sections(form.getSections().stream().map(sec -> {
                     List<FeedbackFormDetailResponse.QuestionDetail> questions = sec.getQuestions().stream().map(q ->
                             FeedbackFormDetailResponse.QuestionDetail.builder()
                                     .id(q.getId())
                                     .questionText(q.getQuestionText())
                                     .questionOrder(q.getQuestionOrder())
-                                    .ratingScaleId(q.getRatingScaleId().longValue())
+                                    .ratingScaleId(q.getRatingScaleId() == null ? null : q.getRatingScaleId().longValue())
                                     .weight(q.getWeight())
                                     .isRequired(q.getIsRequired())
                                     .build()
@@ -148,7 +164,6 @@ public class FeedbackFormController {
                             .build();
                 }).collect(Collectors.toList()))
                 .build();
-        return ResponseEntity.ok(GenericApiResponse.success("Feedback form detail retrieved successfully", detail));
     }
 
     private FeedbackForm mapRequestToForm(FeedbackFormCreateRequest request) {
@@ -182,8 +197,18 @@ public class FeedbackFormController {
     private void ensureHrOrAdmin() {
         List<String> roles = SecurityUtils.currentUser().getRoles();
         boolean authorized = roles != null && roles.stream()
-                .map(String::toUpperCase)
-                .anyMatch(role -> role.equals("HR") || role.equals("ADMIN") || role.equals("ROLE_HR") || role.equals("ROLE_ADMIN"));
+                .filter(role -> role != null && !role.isBlank())
+                .map(role -> role.trim().toUpperCase(Locale.ROOT))
+                .anyMatch(role -> role.equals("HR")
+                        || role.equals("ADMIN")
+                        || role.equals("ROLE_HR")
+                        || role.equals("ROLE_ADMIN")
+                        || role.equals("HR_ADMIN")
+                        || role.equals("ROLE_HR_ADMIN")
+                        || role.equals("HR_MANAGER")
+                        || role.equals("ROLE_HR_MANAGER")
+                        || role.equals("HUMAN_RESOURCES")
+                        || role.equals("ROLE_HUMAN_RESOURCES"));
         if (!authorized) {
             throw new UnauthorizedActionException("Only HR/Admin can manage feedback forms.");
         }

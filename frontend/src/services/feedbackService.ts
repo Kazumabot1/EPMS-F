@@ -19,24 +19,47 @@ import type {
   SpringPage,
 } from '../types/feedback';
 
-const FEEDBACK_BASE = '/api/v1/feedback';
+const FEEDBACK_BASE = '/v1/feedback';
 
 export const feedbackService = {
   async createCampaign(payload: FeedbackCampaignPayload): Promise<FeedbackCampaign> {
     try {
-      const response = await api.post<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns`, payload);
+      const { status: _status, ...createPayload } = payload;
+      const response = await api.post<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns`, createPayload);
       return response.data.data;
     } catch (error) {
       throw new Error(extractApiErrorMessage(error, 'Failed to create feedback campaign.'));
     }
   },
 
-  async updateCampaign(campaignId: number, payload: FeedbackCampaignPayload): Promise<FeedbackCampaign> {
+  async updateCampaign(_campaignId: number, _payload: FeedbackCampaignPayload): Promise<FeedbackCampaign> {
+    throw new Error('Editing an existing 360 campaign is not supported by the backend yet. Create the campaign in DRAFT, then use target assignment and lifecycle actions.');
+  },
+
+  async activateCampaign(campaignId: number): Promise<FeedbackCampaign> {
     try {
-      const response = await api.put<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns/${campaignId}`, payload);
+      const response = await api.post<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns/${campaignId}/activate`);
       return response.data.data;
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Failed to update feedback campaign.'));
+      throw new Error(extractApiErrorMessage(error, 'Failed to activate feedback campaign.'));
+    }
+  },
+
+  async closeCampaign(campaignId: number): Promise<FeedbackCampaign> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns/${campaignId}/close`);
+      return response.data.data;
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to close feedback campaign.'));
+    }
+  },
+
+  async cancelCampaign(campaignId: number): Promise<FeedbackCampaign> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackCampaign>>(`${FEEDBACK_BASE}/campaigns/${campaignId}/cancel`);
+      return response.data.data;
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to cancel feedback campaign.'));
     }
   },
 
@@ -49,31 +72,16 @@ export const feedbackService = {
     }
   },
 
-  async createRequest(payload: FeedbackRequestCreatePayload): Promise<number> {
-    try {
-      const response = await api.post<ApiEnvelope<number>>(`${FEEDBACK_BASE}/requests`, payload);
-      return response.data.data;
-    } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Failed to create feedback request.'));
-    }
+  async createRequest(_payload: FeedbackRequestCreatePayload): Promise<number> {
+    throw new Error('Manual feedback request creation is not supported by the 360 backend flow. Use campaign targets and Generate Assignments instead.');
   },
 
-  async updateDeadline(requestId: number, dueAt: string): Promise<number> {
-    try {
-      const response = await api.patch<ApiEnvelope<number>>(`${FEEDBACK_BASE}/requests/${requestId}/deadline`, { dueAt });
-      return response.data.data;
-    } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Failed to update deadline.'));
-    }
+  async updateDeadline(_requestId: number, _dueAt: string): Promise<number> {
+    throw new Error('Request-level deadline editing is not supported yet. The campaign end date controls the 360 submission deadline.');
   },
 
-  async sendReminders(requestId: number): Promise<number> {
-    try {
-      const response = await api.post<ApiEnvelope<number>>(`${FEEDBACK_BASE}/requests/${requestId}/reminders`);
-      return response.data.data;
-    } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Failed to send reminders.'));
-    }
+  async sendReminders(_requestId: number): Promise<number> {
+    throw new Error('Reminder sending is not implemented by the backend yet. This should be added after campaign lifecycle is stable.');
   },
 
   async getRequestsForEmployee(employeeId: number): Promise<SpringPage<FeedbackRequestListItem>> {

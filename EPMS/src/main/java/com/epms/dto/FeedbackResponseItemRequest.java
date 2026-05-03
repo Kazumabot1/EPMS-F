@@ -1,7 +1,5 @@
 package com.epms.dto;
 
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -11,9 +9,10 @@ public class FeedbackResponseItemRequest {
     @NotNull(message = "Question ID is required")
     private Long questionId;
 
-    @NotNull(message = "Rating value is required")
-    @DecimalMin(value = "1.0", message = "Rating must be at least 1")
-    @DecimalMax(value = "5.0", message = "Rating must be at most 5")
+    /**
+     * Rating is validated against the question's configured rating scale in the service layer.
+     * It is nullable here because the same request DTO is used for drafts and final submissions.
+     */
     private Double ratingValue;
 
     private String comment;

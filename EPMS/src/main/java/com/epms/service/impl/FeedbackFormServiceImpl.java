@@ -96,9 +96,9 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
                 .map(FeedbackForm::getVersionNumber)
                 .orElse(baseForm.getVersionNumber() != null ? baseForm.getVersionNumber() : 1);
 
-        baseForm.setStatus(FeedbackFormStatus.ARCHIVED);
-        feedbackFormRepository.save(baseForm);
-
+        // Do not archive the currently active form when a draft version is created.
+        // Historical submissions and active campaign setup must keep using the active version
+        // until HR explicitly activates the new draft version.
         newForm.setRootFormId(rootId);
         newForm.setVersionNumber(latestVersion + 1);
         validateForm(newForm);
@@ -169,6 +169,17 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
             throw new BusinessValidationException(
                     "Invalid form status change. Only DRAFT forms can be activated manually."
             );
+        }
+
+        if (newStatus == FeedbackFormStatus.ACTIVE) {
+            Long rootId = form.getRootFormId() != null ? form.getRootFormId() : form.getId();
+            feedbackFormRepository.findByRootFormIdOrderByVersionNumberAsc(rootId).stream()
+                    .filter(version -> !version.getId().equals(form.getId()))
+                    .filter(version -> version.getStatus() == FeedbackFormStatus.ACTIVE)
+                    .forEach(activeVersion -> {
+                        activeVersion.setStatus(FeedbackFormStatus.ARCHIVED);
+                        feedbackFormRepository.save(activeVersion);
+                    });
         }
 
         form.setStatus(newStatus);

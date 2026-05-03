@@ -9,6 +9,7 @@ import com.epms.entity.FeedbackResponseItem;
 import com.epms.entity.FeedbackSection;
 import com.epms.entity.User;
 import com.epms.entity.enums.AssignmentStatus;
+import com.epms.entity.enums.FeedbackCampaignStatus;
 import com.epms.entity.enums.FeedbackRequestStatus;
 import com.epms.entity.enums.ResponseStatus;
 import com.epms.exception.BusinessValidationException;
@@ -19,6 +20,7 @@ import com.epms.repository.FeedbackFormRepository;
 import com.epms.repository.FeedbackQuestionRepository;
 import com.epms.repository.FeedbackRequestRepository;
 import com.epms.repository.FeedbackResponseRepository;
+import com.epms.repository.RatingScaleRepository;
 import com.epms.repository.UserRepository;
 import com.epms.service.AuditLogService;
 import com.epms.service.FeedbackResponseService;
@@ -28,7 +30,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -51,6 +52,7 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
     private final FeedbackRequestRepository feedbackRequestRepository;
     private final FeedbackFormRepository feedbackFormRepository;
     private final FeedbackQuestionRepository questionRepository;
+    private final RatingScaleRepository ratingScaleRepository;
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
 
@@ -64,6 +66,8 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         if (!assignment.getEvaluatorEmployeeId().equals(submittingEmployeeId)) {
             throw new UnauthorizedActionException("You are not authorized to edit this feedback.");
         }
+
+        ensureCampaignAcceptsFeedback(assignment, "saved as draft");
 
         LocalDateTime dueAt = resolveEffectiveDeadline(assignment);
         if (dueAt != null && LocalDateTime.now().isAfter(dueAt)) {
@@ -124,6 +128,8 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
             log.error("Unauthorized submission attempt by User ID: {}", submittingUserId);
             throw new UnauthorizedActionException("You are not authorized to submit this feedback.");
         }
+
+        ensureCampaignAcceptsFeedback(assignment, "submitted");
 
         LocalDateTime dueAt = resolveEffectiveDeadline(assignment);
         if (dueAt != null && LocalDateTime.now().isAfter(dueAt)) {
@@ -195,15 +201,8 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
             throw new BusinessValidationException("Feedback is visible only after deadline or campaign completion.");
         }
 
-        if (Boolean.TRUE.equals(assignment.getIsAnonymous()) && !isPrivileged && !isSubmitter) {
-            FeedbackEvaluatorAssignment maskedAssignment = new FeedbackEvaluatorAssignment();
-            maskedAssignment.setId(assignment.getId());
-            maskedAssignment.setFeedbackRequest(assignment.getFeedbackRequest());
-            maskedAssignment.setRelationshipType(assignment.getRelationshipType());
-            maskedAssignment.setIsAnonymous(true);
-            maskedAssignment.setStatus(assignment.getStatus());
-            maskedAssignment.setEvaluatorEmployeeId(null);
-            response.setEvaluatorAssignment(maskedAssignment);
+        if (shouldHideEvaluatorIdentity(assignment, requestingEmployeeId)) {
+            return maskedAnonymousResponse(response);
         }
 
         return response;
@@ -214,6 +213,8 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
     public List<FeedbackSubmissionStatusResponse> getSubmissionStatuses(Long evaluatorUserId) {
         Long evaluatorEmployeeId = resolveEmployeeIdForUser(evaluatorUserId);
         return assignmentRepository.findByEvaluatorEmployeeId(evaluatorEmployeeId).stream()
+                .filter(assignment -> assignment.getStatus() != AssignmentStatus.CANCELLED)
+                .filter(assignment -> assignment.getFeedbackRequest().getCampaign().getStatus() != FeedbackCampaignStatus.CANCELLED)
                 .sorted(Comparator.comparing(this::resolveEffectiveDeadline, Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(assignment -> FeedbackSubmissionStatusResponse.builder()
                         .evaluatorAssignmentId(assignment.getId())
@@ -246,7 +247,7 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
                 .filter(response -> privileged || hasVisibilityReached(response.getEvaluatorAssignment().getFeedbackRequest()))
                 .map(response -> {
                     FeedbackEvaluatorAssignment assignment = response.getEvaluatorAssignment();
-                    boolean hideIdentity = Boolean.TRUE.equals(assignment.getIsAnonymous()) && !privileged;
+                    boolean hideIdentity = shouldHideEvaluatorIdentity(assignment, requestingEmployeeId);
                     return FeedbackReceivedItemResponse.builder()
                             .responseId(response.getId())
                             .requestId(assignment.getFeedbackRequest().getId())
@@ -264,7 +265,62 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
                 .toList();
     }
 
+
+    private boolean shouldHideEvaluatorIdentity(FeedbackEvaluatorAssignment assignment, Long requestingEmployeeId) {
+        boolean isSubmitter = requestingEmployeeId != null
+                && Objects.equals(assignment.getEvaluatorEmployeeId(), requestingEmployeeId);
+        return Boolean.TRUE.equals(assignment.getIsAnonymous()) && !isSubmitter;
+    }
+
+    private FeedbackResponse maskedAnonymousResponse(FeedbackResponse original) {
+        FeedbackEvaluatorAssignment assignment = original.getEvaluatorAssignment();
+        FeedbackEvaluatorAssignment maskedAssignment = new FeedbackEvaluatorAssignment();
+        maskedAssignment.setId(assignment.getId());
+        maskedAssignment.setFeedbackRequest(assignment.getFeedbackRequest());
+        maskedAssignment.setRelationshipType(assignment.getRelationshipType());
+        maskedAssignment.setSelectionMethod(assignment.getSelectionMethod());
+        maskedAssignment.setIsAnonymous(true);
+        maskedAssignment.setStatus(assignment.getStatus());
+        maskedAssignment.setEvaluatorEmployeeId(null);
+
+        FeedbackResponse maskedResponse = new FeedbackResponse();
+        maskedResponse.setId(original.getId());
+        maskedResponse.setEvaluatorAssignment(maskedAssignment);
+        maskedResponse.setSubmittedAt(original.getSubmittedAt());
+        maskedResponse.setOverallScore(original.getOverallScore());
+        maskedResponse.setComments(original.getComments());
+        maskedResponse.setFinalStatus(original.getFinalStatus());
+        maskedResponse.setCreatedAt(original.getCreatedAt());
+        maskedResponse.setUpdatedAt(original.getUpdatedAt());
+        maskedResponse.getItems().addAll(original.getItems());
+        return maskedResponse;
+    }
+
+    private void ensureCampaignAcceptsFeedback(FeedbackEvaluatorAssignment assignment, String action) {
+        com.epms.entity.FeedbackRequest request = assignment.getFeedbackRequest();
+        FeedbackCampaignStatus campaignStatus = request.getCampaign().getStatus();
+        if (campaignStatus != FeedbackCampaignStatus.ACTIVE) {
+            throw new BusinessValidationException("Feedback can be " + action + " only while the campaign is ACTIVE.");
+        }
+        if (request.getStatus() == FeedbackRequestStatus.CANCELLED) {
+            throw new BusinessValidationException("This feedback request has been cancelled.");
+        }
+        if (assignment.getStatus() == AssignmentStatus.CANCELLED) {
+            throw new BusinessValidationException("This evaluator assignment has been cancelled.");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (request.getCampaign().getStartAt() != null && now.isBefore(request.getCampaign().getStartAt())) {
+            throw new BusinessValidationException("Feedback campaign has not started yet.");
+        }
+        if (request.getCampaign().getEndAt() != null && now.isAfter(request.getCampaign().getEndAt())) {
+            throw new BusinessValidationException("Feedback campaign deadline has passed.");
+        }
+    }
+
     private boolean hasVisibilityReached(com.epms.entity.FeedbackRequest request) {
+        if (request.getCampaign().getStatus() == FeedbackCampaignStatus.CLOSED) {
+            return true;
+        }
         Long requestId = request.getId();
         LocalDateTime dueAt = resolveEffectiveDeadline(request);
         if (dueAt != null && LocalDateTime.now().isAfter(dueAt)) {
@@ -295,9 +351,7 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
     }
 
     private LocalDateTime resolveEffectiveDeadline(com.epms.entity.FeedbackRequest request) {
-        return request.getCampaign().getEndDate() != null
-                ? request.getCampaign().getEndDate().atTime(LocalTime.MAX)
-                : null;
+        return request.getCampaign().getEndAt();
     }
 
     private Map<Long, FeedbackQuestion> loadAssignmentQuestions(FeedbackEvaluatorAssignment assignment) {
@@ -320,13 +374,14 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
     }
 
     private void validateDraftItems(List<FeedbackResponseItem> items, Map<Long, FeedbackQuestion> assignmentQuestions) {
-        validateQuestionMembership(items, assignmentQuestions);
+        validateQuestionMembershipAndRatings(items, assignmentQuestions, false);
     }
 
     private void validateSubmittedItems(List<FeedbackResponseItem> items, Map<Long, FeedbackQuestion> assignmentQuestions) {
-        validateQuestionMembership(items, assignmentQuestions);
+        validateQuestionMembershipAndRatings(items, assignmentQuestions, true);
 
         Set<Long> answeredQuestionIds = items.stream()
+                .filter(item -> item.getRatingValue() != null)
                 .map(item -> item.getQuestion().getId())
                 .collect(Collectors.toSet());
 
@@ -337,11 +392,15 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
                 .toList();
 
         if (!missingRequiredIds.isEmpty()) {
-            throw new BusinessValidationException("All required feedback questions must be answered before submission.");
+            throw new BusinessValidationException("All required feedback questions must have a rating before submission.");
         }
     }
 
-    private void validateQuestionMembership(List<FeedbackResponseItem> items, Map<Long, FeedbackQuestion> assignmentQuestions) {
+    private void validateQuestionMembershipAndRatings(
+            List<FeedbackResponseItem> items,
+            Map<Long, FeedbackQuestion> assignmentQuestions,
+            boolean requireRatingsForRequiredQuestions
+    ) {
         Set<Long> seenQuestionIds = new HashSet<>();
 
         for (FeedbackResponseItem item : items) {
@@ -357,28 +416,72 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
                 throw new BusinessValidationException("Question " + questionId + " does not belong to the assigned feedback form.");
             }
             item.setQuestion(question);
+
+            Double ratingValue = item.getRatingValue();
+            if (ratingValue == null) {
+                if (requireRatingsForRequiredQuestions && Boolean.TRUE.equals(question.getIsRequired())) {
+                    throw new BusinessValidationException("Rating value is required for required question " + questionId + ".");
+                }
+                continue;
+            }
+
+            double maxRating = resolveMaxRating(question);
+            if (ratingValue < 1.0 || ratingValue > maxRating) {
+                throw new BusinessValidationException(
+                        "Rating for question " + questionId + " must be between 1 and " + formatScore(maxRating) + "."
+                );
+            }
         }
     }
 
     private Double calculateOverallScore(List<FeedbackResponseItem> items, Map<Long, FeedbackQuestion> assignmentQuestions) {
-        double weightedTotal = 0.0;
-        double totalWeight = 0.0;
+        double weightedPoints = 0.0;
+        double weightedPossiblePoints = 0.0;
+
         for (FeedbackResponseItem item : items) {
+            if (item.getRatingValue() == null) {
+                continue;
+            }
+
             Long questionId = item.getQuestion().getId();
             FeedbackQuestion question = assignmentQuestions.get(questionId);
             if (question == null) {
                 question = questionRepository.findById(questionId)
                         .orElseThrow(() -> new ResourceNotFoundException("Feedback question not found: " + questionId));
             }
+
             double weight = question.getWeight() != null && question.getWeight() > 0 ? question.getWeight() : 1.0;
-            weightedTotal += item.getRatingValue() * weight;
-            totalWeight += weight;
+            double maxRating = resolveMaxRating(question);
+            weightedPoints += item.getRatingValue() * weight;
+            weightedPossiblePoints += maxRating * weight;
             item.setQuestion(question);
         }
-        if (totalWeight == 0) {
+
+        if (weightedPossiblePoints == 0) {
             return 0.0;
         }
-        return weightedTotal / totalWeight;
+        return roundToTwoDecimals((weightedPoints / weightedPossiblePoints) * 100.0);
+    }
+
+    private double resolveMaxRating(FeedbackQuestion question) {
+        Integer ratingScaleId = question.getRatingScaleId();
+        if (ratingScaleId == null) {
+            return 5.0;
+        }
+        return ratingScaleRepository.findById(ratingScaleId)
+                .map(scale -> scale.getScales() != null && scale.getScales() > 0 ? scale.getScales().doubleValue() : 5.0)
+                .orElseThrow(() -> new BusinessValidationException("Rating scale not found for question " + question.getId() + "."));
+    }
+
+    private double roundToTwoDecimals(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
+
+    private String formatScore(double value) {
+        if (value == Math.rint(value)) {
+            return String.valueOf((long) value);
+        }
+        return String.valueOf(value);
     }
 
     private void markRequestInProgress(FeedbackEvaluatorAssignment assignment) {

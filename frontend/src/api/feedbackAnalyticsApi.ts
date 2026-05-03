@@ -7,7 +7,7 @@ import type {
   FeedbackTeamSummary,
 } from '../types/feedbackAnalytics';
 
-const FEEDBACK_BASE = '/api/v1/feedback';
+const FEEDBACK_BASE = '/v1/feedback';
 
 const unwrap = <T>(response: { data: ApiEnvelope<T> }): T => response.data.data;
 
@@ -15,7 +15,7 @@ export const feedbackAnalyticsApi = {
   async getCampaignSummary(campaignId: number): Promise<FeedbackCampaignSummary> {
     try {
       const response = await api.get<ApiEnvelope<FeedbackCampaignSummary>>(
-        `${FEEDBACK_BASE}/campaigns/${campaignId}/summary`,
+          `${FEEDBACK_BASE}/campaigns/${campaignId}/summary`,
       );
       return unwrap(response);
     } catch (error) {

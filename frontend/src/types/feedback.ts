@@ -18,7 +18,7 @@ export interface FeedbackResponseSubmitPayload {
   comments?: string;
 }
 
-export type EvaluatorType = 'MANAGER' | 'PEER' | 'SUBORDINATE';
+export type EvaluatorType = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF';
 
 export interface FeedbackRequestCreatePayload {
   formId: number;
@@ -33,7 +33,8 @@ export interface FeedbackCampaignPayload {
   name: string;
   startDate: string;
   endDate: string;
-  status: FeedbackCampaignStatus;
+  status?: FeedbackCampaignStatus;
+  formId?: number;
 }
 
 export interface FeedbackCampaign {
@@ -42,8 +43,12 @@ export interface FeedbackCampaign {
   startDate: string;
   endDate: string;
   status: FeedbackCampaignStatus;
+  formId?: number;
   createdBy: number;
   createdAt: string;
+  targetCount?: number;
+  assignmentCount?: number;
+  targetEmployeeIds?: number[];
 }
 
 export interface FeedbackQuestionDraft {
@@ -140,20 +145,42 @@ export interface FeedbackCompletionDashboard {
   requests: FeedbackCompletionItem[];
 }
 
+export interface FeedbackSourceBreakdown {
+  sourceType: string;
+  responseCount: number;
+  averageScore: number;
+  scoreCategory: string;
+}
+
 export interface ConsolidatedFeedbackItem {
   targetEmployeeId: number;
+  targetEmployeeName?: string;
   averageScore: number;
+  scoreCategory?: string;
   totalResponses: number;
   managerResponses: number;
   peerResponses: number;
   subordinateResponses: number;
+  selfResponses?: number;
+  managerAverageScore?: number;
+  peerAverageScore?: number;
+  subordinateAverageScore?: number;
+  selfAverageScore?: number;
+  sourceBreakdown?: FeedbackSourceBreakdown[];
 }
 
 export interface ConsolidatedFeedbackReport {
   campaignId: number;
   campaignName: string;
   campaignAverageScore: number;
+  campaignScoreCategory?: string;
   totalResponses: number;
+  totalEmployees?: number;
+  managerResponses?: number;
+  peerResponses?: number;
+  subordinateResponses?: number;
+  selfResponses?: number;
+  sourceBreakdown?: FeedbackSourceBreakdown[];
   items: ConsolidatedFeedbackItem[];
 }
 

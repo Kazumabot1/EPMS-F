@@ -7,6 +7,7 @@ export const evaluatorTypeLabels: Record<EvaluatorType, string> = {
   MANAGER: 'Manager',
   PEER: 'Peer',
   SUBORDINATE: 'Direct report',
+  SELF: 'Self',
 };
 
 export const auditEntityOptions = ['CAMPAIGN', 'FORM', 'REQUEST', 'RESPONSE', 'AUDIT'];
@@ -72,11 +73,11 @@ export const formatScore = (value?: number | null) => {
     return '-';
   }
 
-  return value.toFixed(2);
+  return `${value.toFixed(1)}%`;
 };
 
 export const formatEmployeeLabel = (employee: Employee) =>
-  `${employee.name}${employee.department ? ` • ${employee.department}` : ''}`;
+    `${employee.name}${employee.department ? ` • ${employee.department}` : ''}`;
 
 export const getStatusTone = (status?: string) => {
   switch ((status ?? '').toUpperCase()) {
@@ -102,11 +103,11 @@ type MetricCardProps = {
 };
 
 export const MetricCard = ({ label, value, hint }: MetricCardProps) => (
-  <div className="feedback-metric-card">
-    <span>{label}</span>
-    <strong>{value}</strong>
-    {hint ? <small>{hint}</small> : null}
-  </div>
+    <div className="feedback-metric-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {hint ? <small>{hint}</small> : null}
+    </div>
 );
 
 type StatusBadgeProps = {
@@ -114,7 +115,7 @@ type StatusBadgeProps = {
 };
 
 export const StatusBadge = ({ status }: StatusBadgeProps) => (
-  <span className={`feedback-status-badge ${getStatusTone(status)}`}>{status || 'Unknown'}</span>
+    <span className={`feedback-status-badge ${getStatusTone(status)}`}>{status || 'Unknown'}</span>
 );
 
 type EmptyStateProps = {
@@ -123,10 +124,10 @@ type EmptyStateProps = {
 };
 
 export const EmptyState = ({ title, body }: EmptyStateProps) => (
-  <div className="feedback-empty-state">
-    <strong>{title}</strong>
-    <p>{body}</p>
-  </div>
+    <div className="feedback-empty-state">
+      <strong>{title}</strong>
+      <p>{body}</p>
+    </div>
 );
 
 type SectionIntroProps = {
@@ -136,13 +137,13 @@ type SectionIntroProps = {
 };
 
 export const SectionIntro = ({ title, body, aside }: SectionIntroProps) => (
-  <div className="feedback-section-intro">
-    <div>
-      <h2>{title}</h2>
-      <p>{body}</p>
+    <div className="feedback-section-intro">
+      <div>
+        <h2>{title}</h2>
+        <p>{body}</p>
+      </div>
+      {aside ? <small>{aside}</small> : null}
     </div>
-    {aside ? <small>{aside}</small> : null}
-  </div>
 );
 
 type RecentIdListProps = {
@@ -153,18 +154,18 @@ type RecentIdListProps = {
 };
 
 export const RecentIdList = ({ title, ids, emptyLabel, onPick }: RecentIdListProps) => (
-  <div className="feedback-reference-block">
-    <span>{title}</span>
-    {ids.length ? (
-      <div className="feedback-reference-list">
-        {ids.map((id) => (
-          <button key={id} type="button" className="feedback-reference-chip" onClick={() => onPick(id)}>
-            #{id}
-          </button>
-        ))}
-      </div>
-    ) : (
-      <small>{emptyLabel}</small>
-    )}
-  </div>
+    <div className="feedback-reference-block">
+      <span>{title}</span>
+      {ids.length ? (
+          <div className="feedback-reference-list">
+            {ids.map((id) => (
+                <button key={id} type="button" className="feedback-reference-chip" onClick={() => onPick(id)}>
+                  #{id}
+                </button>
+            ))}
+          </div>
+      ) : (
+          <small>{emptyLabel}</small>
+      )}
+    </div>
 );

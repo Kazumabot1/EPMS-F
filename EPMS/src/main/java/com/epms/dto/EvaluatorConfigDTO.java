@@ -13,13 +13,18 @@ public class EvaluatorConfigDTO {
     @NotNull(message = "Team peer inclusion flag is required.")
     private Boolean includeTeamPeers;
 
+    private Boolean includeDepartmentPeers;
+
     @NotNull(message = "Project peer inclusion flag is required.")
     private Boolean includeProjectPeers;
 
     @NotNull(message = "Cross-team peer inclusion flag is required.")
     private Boolean includeCrossTeamPeers;
 
-    @NotNull(message = "Peer count is required.")
+    private Boolean includeSubordinates = false;
+
+    private Boolean includeSelf = false;
+
     @Positive(message = "Peer count must be greater than zero.")
     private Integer peerCount;
 }

@@ -5,6 +5,7 @@ import com.epms.entity.FeedbackEvaluatorAssignment;
 import com.epms.entity.FeedbackForm;
 import com.epms.entity.FeedbackQuestion;
 import com.epms.entity.FeedbackRequest;
+import com.epms.entity.FeedbackResponse;
 import com.epms.entity.FeedbackResponseItem;
 import com.epms.entity.FeedbackSection;
 import com.epms.entity.User;
@@ -16,6 +17,7 @@ import com.epms.repository.FeedbackFormRepository;
 import com.epms.repository.FeedbackQuestionRepository;
 import com.epms.repository.FeedbackRequestRepository;
 import com.epms.repository.FeedbackResponseRepository;
+import com.epms.repository.RatingScaleRepository;
 import com.epms.repository.UserRepository;
 import com.epms.service.AuditLogService;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +31,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -50,6 +53,9 @@ class FeedbackResponseServiceImplTest {
 
     @Mock
     private FeedbackQuestionRepository questionRepository;
+
+    @Mock
+    private RatingScaleRepository ratingScaleRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -118,32 +124,68 @@ class FeedbackResponseServiceImplTest {
 
         when(userRepository.findById(9)).thenReturn(Optional.of(user));
         when(assignmentRepository.findById(4L)).thenReturn(Optional.of(assignment));
-        when(feedbackFormRepository.findByIdWithSectionsAndQuestions(7L)).thenReturn(Optional.of(form));
+        when(feedbackFormRepository.findSectionsWithQuestionsByFormId(7L)).thenReturn(List.of(section));
     }
 
     @Test
     void submitResponseRejectsMissingRequiredQuestions() {
-        FeedbackResponseItem optionalItem = new FeedbackResponseItem();
-        FeedbackQuestion questionRef = new FeedbackQuestion();
-        questionRef.setId(12L);
-        optionalItem.setQuestion(questionRef);
-        optionalItem.setRatingValue(4.0);
+        FeedbackResponseItem optionalItem = item(12L, 4.0);
 
         assertThatThrownBy(() -> service.submitResponse(4L, 9L, "Looks good", List.of(optionalItem)))
                 .isInstanceOf(BusinessValidationException.class)
-                .hasMessage("All required feedback questions must be answered before submission.");
+                .hasMessage("All required feedback questions must have a rating before submission.");
+    }
+
+    @Test
+    void submitResponseRejectsMissingRequiredRatingValue() {
+        FeedbackResponseItem requiredItem = item(11L, null);
+
+        assertThatThrownBy(() -> service.submitResponse(4L, 9L, "Looks good", List.of(requiredItem)))
+                .isInstanceOf(BusinessValidationException.class)
+                .hasMessage("Rating value is required for required question 11.");
+    }
+
+    @Test
+    void submitResponseRejectsRatingBeyondConfiguredDefaultScale() {
+        FeedbackResponseItem requiredItem = item(11L, 6.0);
+
+        assertThatThrownBy(() -> service.submitResponse(4L, 9L, "Looks good", List.of(requiredItem)))
+                .isInstanceOf(BusinessValidationException.class)
+                .hasMessage("Rating for question 11 must be between 1 and 5.");
     }
 
     @Test
     void submitResponseRejectsQuestionsOutsideAssignedForm() {
-        FeedbackResponseItem invalidItem = new FeedbackResponseItem();
-        FeedbackQuestion questionRef = new FeedbackQuestion();
-        questionRef.setId(99L);
-        invalidItem.setQuestion(questionRef);
-        invalidItem.setRatingValue(4.0);
+        FeedbackResponseItem invalidItem = item(99L, 4.0);
 
         assertThatThrownBy(() -> service.submitResponse(4L, 9L, "Looks good", List.of(invalidItem)))
                 .isInstanceOf(BusinessValidationException.class)
                 .hasMessage("Question 99 does not belong to the assigned feedback form.");
+    }
+
+    @Test
+    void submitResponseStoresPercentageScoreInsteadOfRawRatingAverage() {
+        when(responseRepository.findByEvaluatorAssignmentId(4L)).thenReturn(Optional.empty());
+        when(responseRepository.save(any(FeedbackResponse.class))).thenAnswer(invocation -> {
+            FeedbackResponse response = invocation.getArgument(0);
+            response.setId(77L);
+            return response;
+        });
+
+        FeedbackResponse saved = service.submitResponse(4L, 9L, "Looks good", List.of(
+                item(11L, 4.0),
+                item(12L, 4.0)
+        ));
+
+        assertThat(saved.getOverallScore()).isEqualTo(80.0);
+    }
+
+    private FeedbackResponseItem item(Long questionId, Double ratingValue) {
+        FeedbackResponseItem item = new FeedbackResponseItem();
+        FeedbackQuestion questionRef = new FeedbackQuestion();
+        questionRef.setId(questionId);
+        item.setQuestion(questionRef);
+        item.setRatingValue(ratingValue);
+        return item;
     }
 }

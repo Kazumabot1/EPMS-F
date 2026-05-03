@@ -5,7 +5,8 @@ export type ApiEnvelope<T> = {
   timestamp: string;
 };
 
-export type FeedbackCampaignStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED';
+export type FeedbackCampaignStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED' | 'CANCELLED';
+export type FeedbackCampaignRound = 'ANNUAL' | 'FIRST_HALF' | 'SECOND_HALF' | 'SPECIAL';
 
 export interface FeedbackFormOption {
   id: number;
@@ -15,11 +16,27 @@ export interface FeedbackFormOption {
   status: string;
 }
 
+
+export interface FeedbackReminderResponse {
+  campaignId: number;
+  campaignName: string;
+  pendingAssignmentCount: number;
+  notifiedEvaluatorCount: number;
+  skippedAssignmentCount: number;
+  warnings: string[];
+}
+
 export interface FeedbackCampaign {
   id: number;
   name: string;
+  reviewYear: number;
+  reviewRound: FeedbackCampaignRound;
   startDate: string;
   endDate: string;
+  startAt: string;
+  endAt: string;
+  description?: string | null;
+  instructions?: string | null;
   status: FeedbackCampaignStatus;
   formId: number;
   createdBy: number;
@@ -31,9 +48,15 @@ export interface FeedbackCampaign {
 
 export interface CreateFeedbackCampaignInput {
   name: string;
-  startDate: string;
-  endDate: string;
+  reviewYear?: number;
+  reviewRound?: FeedbackCampaignRound;
+  startAt: string;
+  endAt: string;
+  startDate?: string;
+  endDate?: string;
   formId: number;
+  description?: string;
+  instructions?: string;
 }
 
 export interface FeedbackCampaignTargetsInput {
@@ -43,25 +66,58 @@ export interface FeedbackCampaignTargetsInput {
 export interface EvaluatorConfigInput {
   includeManager: boolean;
   includeTeamPeers: boolean;
+  includeDepartmentPeers: boolean;
   includeProjectPeers: boolean;
   includeCrossTeamPeers: boolean;
+  includeSubordinates: boolean;
+  includeSelf: boolean;
   peerCount: number;
 }
+
+export type FeedbackRelationshipType = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF';
+export type EvaluatorSelectionMethod = 'AUTO_RANDOM' | 'MANUAL';
+export type AssignmentStatus = 'PENDING' | 'IN_PROGRESS' | 'SUBMITTED' | 'DECLINED' | 'CANCELLED';
 
 export interface FeedbackAssignmentPreviewItem {
   requestId: number;
   targetEmployeeId: number;
   managerAssignments: number;
+  selfAssignments: number;
+  subordinateAssignments: number;
   peerAssignments: number;
   totalAssignments: number;
+  autoAssignments: number;
+  manualAssignments: number;
+  warnings: string[];
+}
+
+export interface FeedbackAssignmentDetailItem {
+  assignmentId: number;
+  requestId: number;
+  targetEmployeeId: number;
+  targetEmployeeName?: string | null;
+  evaluatorEmployeeId: number;
+  evaluatorEmployeeName?: string | null;
+  relationshipType: FeedbackRelationshipType;
+  selectionMethod: EvaluatorSelectionMethod;
+  status: AssignmentStatus;
+  anonymous: boolean;
+}
+
+export interface ManualAssignmentInput {
+  targetEmployeeId: number;
+  evaluatorEmployeeId: number;
+  relationshipType: FeedbackRelationshipType;
+  anonymous?: boolean;
 }
 
 export interface FeedbackAssignmentGenerationResponse {
   campaignId: number;
   totalTargets: number;
   totalEvaluatorsGenerated: number;
-  evaluatorConfig: EvaluatorConfigInput;
+  evaluatorConfig: EvaluatorConfigInput | null;
   requests: FeedbackAssignmentPreviewItem[];
+  assignmentDetails: FeedbackAssignmentDetailItem[];
   warnings: string[];
 }
 
