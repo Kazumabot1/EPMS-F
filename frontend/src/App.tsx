@@ -41,6 +41,7 @@ import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 import Notifications from './pages/Notifications';
 import DepartmentHeadDashboard from './pages/department-head/DepartmentHeadDashboard';
 import ProjectManagerDashboard from './pages/project-manager/ProjectManagerDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 function App() {
   return (
@@ -146,10 +147,7 @@ function App() {
 
           <Route element={<ProtectedRoute allowedRoles={['DepartmentHead']} />}>
             <Route element={<AppLayout />}>
-              <Route
-                path="/department-head/dashboard"
-                element={<DepartmentHeadDashboard />}
-              />
+              <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
             </Route>
           </Route>
@@ -187,6 +185,18 @@ function App() {
             </Route>
           </Route>
 
+          <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/users" element={<AdminDashboard />} />
+              <Route path="/admin/employee/import" element={<HrEmployeeAccountImport />} />
+
+              <Route path="/permissions" element={<Permissions />} />
+              <Route path="/user-roles" element={<UserRoles />} />
+              <Route path="/role-permissions" element={<RolePermissions />} />
+            </Route>
+          </Route>
+
           <Route element={<ProtectedRoute allowedRoles={['HR']} />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -194,8 +204,9 @@ function App() {
               <Route path="/hr/profile" element={<ProfilePage />} />
 
               <Route path="/hr/employee" element={<EmployeeManagement />} />
-              <Route path="/hr/employee/workforce" element={<EmployeeDashboard />} />
               <Route path="/hr/employee/import" element={<HrEmployeeAccountImport />} />
+              <Route path="/hr/employee/workforce" element={<EmployeeDashboard />} />
+
               <Route path="/hr/team" element={<TeamManagement />} />
               <Route path="/hr/team/create" element={<TeamCreate />} />
               <Route path="/hr/department" element={<DepartmentManagement />} />

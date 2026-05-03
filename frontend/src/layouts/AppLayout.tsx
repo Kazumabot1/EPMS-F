@@ -17,8 +17,9 @@ const AppLayout = () => {
     return <Navigate to="/login" replace />;
   }
 
-  const contentOffsetClass = role === 'HR' ? '' : collapsed ? 'employee-collapsed' : '';
-  const shellClassName = role === 'HR' ? 'hr-shell' : `app-shell ${contentOffsetClass}`;
+  const usesHrShell = role === 'HR' || role === 'Admin';
+  const contentOffsetClass = usesHrShell ? '' : collapsed ? 'employee-collapsed' : '';
+  const shellClassName = usesHrShell ? 'hr-shell' : `app-shell ${contentOffsetClass}`;
 
   return (
     <div className={shellClassName}>
@@ -27,8 +28,10 @@ const AppLayout = () => {
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
+
       <RoleBasedHeader role={role} collapsed={collapsed} user={user} />
-      {role === 'HR' ? (
+
+      {usesHrShell ? (
         <main className={`hr-content ${collapsed ? 'collapsed' : ''}`}>
           <div className="hr-content-inner">
             <Outlet />

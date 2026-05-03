@@ -9,6 +9,7 @@ interface ProtectedRouteProps {
 
 const fallbackByRole: Record<UserRole, string> = {
   Employee: '/employee/dashboard',
+  Admin: '/admin/dashboard',
   HR: '/dashboard',
   DepartmentHead: '/department-head/dashboard',
   Manager: '/manager/dashboard',
