@@ -919,6 +919,7 @@ import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 import Notifications from './pages/Notifications';
 import DepartmentHeadDashboard from './pages/department-head/DepartmentHeadDashboard';
 import ProjectManagerDashboard from './pages/project-manager/ProjectManagerDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 import PipCreatePage from './pages/pip/PipCreatePage';
 import PipPastPlansPage from './pages/pip/PipPastPlansPage';
@@ -940,6 +941,18 @@ function App() {
             <Route path="/pip/past-plans" element={<PipPastPlansPage />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/employee/notifications" element={<Notifications />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/users" element={<AdminDashboard />} />
+              <Route path="/admin/employee/import" element={<HrEmployeeAccountImport />} />
+
+              <Route path="/permissions" element={<Permissions />} />
+              <Route path="/user-roles" element={<UserRoles />} />
+              <Route path="/role-permissions" element={<RolePermissions />} />
+            </Route>
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={['Employee']} />}>
