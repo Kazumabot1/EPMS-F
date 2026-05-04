@@ -999,6 +999,7 @@ export const displayRoleName = (role: UserRole) => {
 
 export type UserRole =
   | 'Employee'
+  | 'Admin'
   | 'HR'
   | 'DepartmentHead'
   | 'Manager'
@@ -1035,6 +1036,22 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
       ],
     },
     { label: 'Notifications', path: '/employee/notifications', icon: 'bi-bell' },
+  ],
+
+  Admin: [
+    { label: 'Admin Dashboard', path: '/admin/dashboard', icon: 'bi-shield-lock', end: true },
+    { label: 'User Accounts', path: '/admin/users', icon: 'bi-person-plus' },
+    { label: 'Import Accounts', path: '/admin/employee/import', icon: 'bi-upload' },
+    {
+      label: 'Access Control',
+      path: '/user-roles',
+      icon: 'bi-shield-lock',
+      children: [
+        { label: 'User Roles', path: '/user-roles', icon: 'bi-person-gear' },
+        { label: 'Role Permissions', path: '/role-permissions', icon: 'bi-shield-check' },
+        { label: 'Permissions', path: '/permissions', icon: 'bi-key' },
+      ],
+    },
   ],
 
   HR: [
@@ -1130,6 +1147,11 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
   const normalizedRoles = (user.roles ?? []).map(normalizeRoleName);
   const dashboard = user.dashboard ?? '';
 
+  // Admin must be checked BEFORE HR, otherwise ADMIN is swallowed into HR
+  if (normalizedRoles.includes('ADMIN') || dashboard === 'ADMIN_DASHBOARD') {
+    return 'Admin';
+  }
+
   if (
     normalizedRoles.includes('DEPARTMENT_HEAD') ||
     normalizedRoles.includes('DEPARTMENTHEAD') ||
@@ -1138,12 +1160,7 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
     return 'DepartmentHead';
   }
 
-  if (
-    normalizedRoles.includes('HR') ||
-    normalizedRoles.includes('ADMIN') ||
-    dashboard === 'HR_DASHBOARD' ||
-    dashboard === 'ADMIN_DASHBOARD'
-  ) {
+  if (normalizedRoles.includes('HR') || dashboard === 'HR_DASHBOARD') {
     return 'HR';
   }
 
@@ -1172,6 +1189,7 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
 
 export const dashboardPathByRole: Record<UserRole, string> = {
   Employee: '/employee/dashboard',
+  Admin: '/admin/dashboard',
   HR: '/dashboard',
   DepartmentHead: '/department-head/dashboard',
   Manager: '/manager/dashboard',
