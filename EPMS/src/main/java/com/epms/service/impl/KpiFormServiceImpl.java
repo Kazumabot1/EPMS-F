@@ -81,6 +81,9 @@ public class KpiFormServiceImpl implements KpiFormService {
 
         form.getItems().clear();
         form.getKpiPositions().clear();
+        // Orphan deletes must hit the database before we insert new links/rows, or MySQL can reject
+        // duplicate (kpi_form_id, position_id) on kpi_positions (insert before delete in one flush).
+        kpiFormRepository.flush();
 
         applyPositions(form, dto.getPositionIds());
         applyItems(form, dto.getItems());
