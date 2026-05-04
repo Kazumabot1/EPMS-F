@@ -944,6 +944,9 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps — navItems is a local
+  // array rebuilt every render; including it would cause an infinite loop.
+  // We only need to re-expand when the URL changes.
   useEffect(() => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -954,9 +957,14 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
         }
       });
 
+      // Only update state if something actually changed to avoid unnecessary renders
+      if (next.size === prev.size && [...next].every((v) => prev.has(v))) {
+        return prev;
+      }
+
       return next;
     });
-  }, [location.pathname, navItems]);
+  }, [location.pathname]);
 
   const isParentActive = (item: NavItem) =>
     location.pathname.startsWith(item.to) || hasActiveChild(item);
