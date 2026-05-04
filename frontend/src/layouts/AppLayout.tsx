@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { resolveUserRole } from '../config/roleNavigation';
 import RoleBasedHeader from './RoleBasedHeader';
@@ -9,6 +9,7 @@ import '../components/layout/hr-layout.css';
 
 const AppLayout = () => {
   const { user, isAuthenticated } = useAuth();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
   const role = useMemo(() => resolveUserRole(user), [user]);
@@ -17,7 +18,7 @@ const AppLayout = () => {
     return <Navigate to="/login" replace />;
   }
 
-  const usesHrShell = role === 'HR' || role === 'Admin';
+  const usesHrShell = role === 'HR';
   const contentOffsetClass = usesHrShell ? '' : collapsed ? 'employee-collapsed' : '';
   const shellClassName = usesHrShell ? 'hr-shell' : `app-shell ${contentOffsetClass}`;
 
@@ -34,13 +35,13 @@ const AppLayout = () => {
       {usesHrShell ? (
         <main className={`hr-content ${collapsed ? 'collapsed' : ''}`}>
           <div className="hr-content-inner">
-            <Outlet />
+            <Outlet key={location.pathname} />
           </div>
         </main>
       ) : (
         <main className="app-main app-main-employee">
           <div className="app-content-employee">
-            <Outlet />
+            <Outlet key={location.pathname} />
           </div>
         </main>
       )}

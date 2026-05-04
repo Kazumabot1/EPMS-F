@@ -1,7 +1,6 @@
 import EmployeeSidebar from '../components/sidebar/EmployeeSidebar';
 import HRSidebar from '../components/sidebar/HRSidebar';
 import DepartmentHeadSidebar from '../components/sidebar/DepartmentHeadSidebar';
-import Sidebar from '../components/layout/Sidebar';
 import type { UserRole } from '../config/roleNavigation';
 
 interface RoleBasedSidebarProps {
@@ -15,10 +14,6 @@ const RoleBasedSidebar = ({
   collapsed,
   onToggleCollapse,
 }: RoleBasedSidebarProps) => {
-  if (role === 'Admin') {
-    return <Sidebar collapsed={collapsed} onToggle={onToggleCollapse} variant="admin" />;
-  }
-
   if (role === 'HR') {
     return <HRSidebar collapsed={collapsed} onToggleCollapse={onToggleCollapse} />;
   }
