@@ -1,24 +1,43 @@
 package com.epms.dto;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class OneOnOneMeetingResponseDto {
 
     private Integer id;
-    private Integer managerId;
+
     private Integer employeeId;
-    private Date scheduledDate;
+    private String employeeFirstName;
+    private String employeeLastName;
+
+    private Integer managerId;
+    private String managerFirstName;
+    private String managerLastName;
+
+    private LocalDateTime scheduledDate;
     private String notes;
-    private String status;
-    private Date followUpDate;
-    private Boolean isFinalized;
-    private Date createdAt;
-    private Date updatedAt;
+
+    private Boolean status;
+
+    private LocalDateTime followUpDate;
+    private LocalDateTime isFinalized;
+
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
+    private Integer parentMeetingId;
+    private boolean followUp;
+
+    private String followUpNotes;
+
+    private OneOnOneActionItemResponseDto actionItem;
+
+    // Combined parent + follow-up history fields for Past modal
+    private Integer followUpMeetingId;
+    private LocalDateTime followUpStartDate;
+    private LocalDateTime followUpEndDate;
+    private String followUpMeetingNotes;
 }

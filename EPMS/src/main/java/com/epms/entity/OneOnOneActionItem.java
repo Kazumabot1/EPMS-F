@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import java.util.Date;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "one_on_one_action_items")
@@ -12,14 +14,28 @@ import java.util.Date;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OneOnOneActionItem {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
-    private Integer meetingId;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "meeting_id", nullable = false)
+    private OneOnOneMeeting meeting;
+
+    @Column(length = 1000)
     private String description;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "due_date")
+    private LocalDate dueDate;
+
     private String owner;
-    @Temporal(TemporalType.DATE)
-    private Date dueDate;
-    private String status; // PENDING, COMPLETED
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date createdAt = new Date();
+
+    private String status;
 }

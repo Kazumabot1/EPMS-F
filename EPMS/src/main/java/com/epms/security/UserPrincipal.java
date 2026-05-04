@@ -35,37 +35,57 @@ public class UserPrincipal implements UserDetails {
         this.id = user.getId();
         this.email = user.getEmail();
         this.password = user.getPassword();
-        this.active = Boolean.TRUE.equals(user.getActive());
+        this.active = user.getActive() == null || Boolean.TRUE.equals(user.getActive());
+
         this.managerId = user.getManagerId();
         this.departmentId = user.getDepartmentId();
+
         this.fullName = user.getFullName();
         this.employeeCode = user.getEmployeeCode();
-        // Modified by KHN
         this.position = user.getPosition() != null ? user.getPosition().getPositionTitle() : null;
-        // END HERE
-        this.roles = roles;
-        this.permissions = permissions;
+
+        this.roles = roles == null ? List.of() : roles;
+        this.permissions = permissions == null ? List.of() : permissions;
+
         this.dashboard = dashboard;
         this.mustChangePassword = Boolean.TRUE.equals(user.getMustChangePassword());
-        this.authorities = buildAuthorities(roles, permissions);
+
+        this.authorities = buildAuthorities(this.roles, this.permissions);
     }
 
     private Collection<? extends GrantedAuthority> buildAuthorities(List<String> roles, List<String> permissions) {
         List<SimpleGrantedAuthority> granted = new ArrayList<>();
 
-        roles.forEach(role -> {
-            String normalized = role.toUpperCase();
-            if (!normalized.startsWith("ROLE_")) {
-                normalized = "ROLE_" + normalized;
-            }
-            granted.add(new SimpleGrantedAuthority(normalized));
-        });
+        for (String role : roles) {
+            String normalizedRole = normalizeAuthorityName(role);
 
-        permissions.forEach(permission ->
-                granted.add(new SimpleGrantedAuthority(permission.toUpperCase()))
-        );
+            if (!normalizedRole.isBlank()) {
+                granted.add(new SimpleGrantedAuthority("ROLE_" + normalizedRole));
+            }
+        }
+
+        for (String permission : permissions) {
+            String normalizedPermission = normalizeAuthorityName(permission);
+
+            if (!normalizedPermission.isBlank()) {
+                granted.add(new SimpleGrantedAuthority(normalizedPermission));
+            }
+        }
 
         return granted;
+    }
+
+    private String normalizeAuthorityName(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replaceFirst("(?i)^ROLE_", "")
+                .trim()
+                .replaceAll("[^A-Za-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "")
+                .toUpperCase();
     }
 
     @Override

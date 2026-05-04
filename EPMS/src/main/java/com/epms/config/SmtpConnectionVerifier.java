@@ -30,7 +30,7 @@ public class SmtpConnectionVerifier implements ApplicationRunner {
             return;
         }
         if (!StringUtils.hasText(impl.getHost())) {
-            log.warn("SMTP: host is empty; fix .env (SMTP_HOST) and restart. testConnection() skipped.");
+            log.warn("SMTP: host is empty; set spring.mail.host (or run with SMTP user/pass). testConnection() skipped.");
             return;
         }
         try {
