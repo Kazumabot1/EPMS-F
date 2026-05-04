@@ -7,6 +7,16 @@ interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
 }
 
+const fallbackByRole: Record<UserRole, string> = {
+  Employee: '/employee/dashboard',
+  Admin: '/admin/dashboard',
+  HR: '/dashboard',
+  DepartmentHead: '/department-head/dashboard',
+  Manager: '/manager/dashboard',
+  ProjectManager: '/project-manager/dashboard',
+  Executive: '/executive/dashboard',
+};
+
 const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
   const { isAuthenticated, loading, user } = useAuth();
 
@@ -26,14 +36,7 @@ const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
     const role = resolveUserRole(user);
 
     if (!allowedRoles.includes(role)) {
-      const fallbackPath =
-        role === 'HR'
-          ? '/dashboard'
-          : role === 'DepartmentHead'
-            ? '/department-head/dashboard'
-            : '/employee/dashboard';
-
-      return <Navigate to={fallbackPath} replace />;
+      return <Navigate to={fallbackByRole[role]} replace />;
     }
   }
 

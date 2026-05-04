@@ -9,7 +9,7 @@ interface RoleBasedHeaderProps {
 }
 
 const RoleBasedHeader = ({ role, collapsed, user }: RoleBasedHeaderProps) => {
-  if (role === 'HR') {
+  if (role === 'HR' || role === 'Admin') {
     return <HRHeader collapsed={collapsed} />;
   }
 

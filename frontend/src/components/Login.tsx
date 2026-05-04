@@ -14,20 +14,62 @@ function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const resolveRoute = (dashboard?: string) => {
+  const normalizeRoleName = (role: string) =>
+    role
+      .replace(/^ROLE_/i, '')
+      .replace(/[\s-]+/g, '_')
+      .toUpperCase();
+
+  const resolveRoute = (dashboard?: string, roles: string[] = []) => {
+    const normalizedRoles = roles.map(normalizeRoleName);
+
+    if (normalizedRoles.includes('ADMIN') || dashboard === 'ADMIN_DASHBOARD') {
+      return '/admin/dashboard';
+    }
+
     switch (dashboard) {
       case 'EMPLOYEE_DASHBOARD':
         return '/employee/dashboard';
+
       case 'MANAGER_DASHBOARD':
         return '/manager/dashboard';
+
+      case 'PROJECT_MANAGER_DASHBOARD':
+        return '/project-manager/dashboard';
+
       case 'DEPARTMENT_HEAD_DASHBOARD':
         return '/department-head/dashboard';
+
       case 'EXECUTIVE_DASHBOARD':
         return '/executive/dashboard';
-      case 'ADMIN_DASHBOARD':
+
       case 'HR_DASHBOARD':
-      default:
         return '/dashboard';
+
+      default:
+        if (normalizedRoles.includes('HR')) {
+          return '/dashboard';
+        }
+
+        if (
+          normalizedRoles.includes('DEPARTMENT_HEAD') ||
+          normalizedRoles.includes('DEPARTMENTHEAD')
+        ) {
+          return '/department-head/dashboard';
+        }
+
+        if (
+          normalizedRoles.includes('PROJECT_MANAGER') ||
+          normalizedRoles.includes('PROJECTMANAGER')
+        ) {
+          return '/project-manager/dashboard';
+        }
+
+        if (normalizedRoles.includes('MANAGER')) {
+          return '/manager/dashboard';
+        }
+
+        return '/employee/dashboard';
     }
   };
 
@@ -50,7 +92,13 @@ function Login() {
       }
 
       login(payload);
-      navigate(payload.mustChangePassword ? '/change-password' : resolveRoute(payload.dashboard), { replace: true });
+
+      navigate(
+        payload.mustChangePassword
+          ? '/change-password'
+          : resolveRoute(payload.dashboard, payload.roles ?? []),
+        { replace: true }
+      );
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||

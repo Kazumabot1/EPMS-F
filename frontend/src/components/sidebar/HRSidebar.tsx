@@ -6,7 +6,7 @@ interface HRSidebarProps {
 }
 
 const HRSidebar = ({ collapsed, onToggleCollapse }: HRSidebarProps) => {
-  return <Sidebar collapsed={collapsed} onToggle={onToggleCollapse} />;
+  return <Sidebar collapsed={collapsed} onToggle={onToggleCollapse} variant="hr" />;
 };
 
 export default HRSidebar;
