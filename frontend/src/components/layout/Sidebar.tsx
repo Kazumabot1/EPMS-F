@@ -729,9 +729,9 @@ export default Sidebar;
    - HR/Admin only sees Past Plans because HR cannot create/update PIP.
 */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { authStorage } from '../../services/authStorage';
+import { useAuth } from '../../contexts/AuthContext';
 
 type SidebarProps = {
   collapsed: boolean;
@@ -756,7 +756,7 @@ const normalizeRoleName = (role: string) =>
 const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = authStorage.getUser();
+  const { user } = useAuth();
 
   const dashboard = user?.dashboard ?? '';
   const normalizedRoles = (user?.roles ?? []).map(normalizeRoleName);
@@ -799,145 +799,147 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
       ? 'Executive'
       : 'User';
 
-  const pipChildren: NavItem[] = canCreatePip
-    ? [
-        { to: '/pip/create', label: 'Create', icon: 'bi bi-plus-square' },
-        { to: '/pip/past-plans', label: 'Past Plans', icon: 'bi bi-clock-history' },
-      ]
-    : [
-        { to: '/pip/past-plans', label: 'Past Plans', icon: 'bi bi-clock-history' },
-      ];
+  const navItems: NavItem[] = useMemo(() => {
+    const pipChildren: NavItem[] = canCreatePip
+      ? [
+          { to: '/pip/create', label: 'Create', icon: 'bi bi-plus-square' },
+          { to: '/pip/past-plans', label: 'Past Plans', icon: 'bi bi-clock-history' },
+        ]
+      : [
+          { to: '/pip/past-plans', label: 'Past Plans', icon: 'bi bi-clock-history' },
+        ];
 
-  const adminNavItems: NavItem[] = [
-    { to: '/admin/dashboard', label: 'Admin Dashboard', icon: 'bi bi-shield-lock' },
-    { to: '/admin/users', label: 'User Accounts', icon: 'bi bi-person-plus' },
-    { to: '/admin/employee/import', label: 'Import Accounts', icon: 'bi bi-upload' },
-    {
-      to: '/user-roles',
-      label: 'Access Control',
-      icon: 'bi bi-shield-lock',
-      children: [
-        { to: '/user-roles', label: 'User Roles', icon: 'bi bi-person-gear' },
-        { to: '/role-permissions', label: 'Role Permissions', icon: 'bi bi-shield-check' },
-        { to: '/permissions', label: 'Permissions', icon: 'bi bi-key' },
-      ],
-    },
-    {
-      to: '/pip',
-      label: 'PIP',
-      icon: 'bi bi-clipboard2-pulse',
-      children: [{ to: '/pip/past-plans', label: 'Past Plans', icon: 'bi bi-clock-history' }],
-    },
-  ];
+    const adminNavItems: NavItem[] = [
+      { to: '/admin/dashboard', label: 'Admin Dashboard', icon: 'bi bi-shield-lock' },
+      { to: '/admin/users', label: 'User Accounts', icon: 'bi bi-person-plus' },
+      { to: '/admin/employee/import', label: 'Import Accounts', icon: 'bi bi-upload' },
+      {
+        to: '/user-roles',
+        label: 'Access Control',
+        icon: 'bi bi-shield-lock',
+        children: [
+          { to: '/user-roles', label: 'User Roles', icon: 'bi bi-person-gear' },
+          { to: '/role-permissions', label: 'Role Permissions', icon: 'bi bi-shield-check' },
+          { to: '/permissions', label: 'Permissions', icon: 'bi bi-key' },
+        ],
+      },
+      {
+        to: '/pip',
+        label: 'PIP',
+        icon: 'bi bi-clipboard2-pulse',
+        children: [{ to: '/pip/past-plans', label: 'Past Plans', icon: 'bi bi-clock-history' }],
+      },
+    ];
 
-  const hrNavItems: NavItem[] = [
-    { to: '/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' },
+    const hrNavItems: NavItem[] = [
+      { to: '/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' },
 
-    {
-      to: '/hr/team',
-      label: 'Team Management',
-      icon: 'bi bi-people',
-      children: [
-        { to: '/hr/team', label: 'Teams', icon: 'bi bi-people', end: true },
-        { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-circle' },
-      ],
-    },
+      {
+        to: '/hr/team',
+        label: 'Team Management',
+        icon: 'bi bi-people',
+        children: [
+          { to: '/hr/team', label: 'Teams', icon: 'bi bi-people', end: true },
+          { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-circle' },
+        ],
+      },
 
-    {
-      to: '/hr/organization',
-      label: 'Organization',
-      icon: 'bi bi-building',
-      children: [
-        { to: '/hr/department', label: 'Departments', icon: 'bi bi-building' },
-        { to: '/hr/employee', label: 'Employee', icon: 'bi bi-people', end: true },
-        {
-          to: '/hr/employee/workforce',
-          label: 'Workforce overview',
-          icon: 'bi bi-person-badge',
-          end: true,
-        },
-        { to: '/hr/employee/import', label: 'Import Employees', icon: 'bi bi-upload' },
-      ],
-    },
+      {
+        to: '/hr/organization',
+        label: 'Organization',
+        icon: 'bi bi-building',
+        children: [
+          { to: '/hr/department', label: 'Departments', icon: 'bi bi-building' },
+          { to: '/hr/employee', label: 'Employee', icon: 'bi bi-people', end: true },
+          {
+            to: '/hr/employee/workforce',
+            label: 'Workforce overview',
+            icon: 'bi bi-person-badge',
+            end: true,
+          },
+          { to: '/hr/employee/import', label: 'Import Employees', icon: 'bi bi-upload' },
+        ],
+      },
 
-    { to: '/hr/assessment-scores', label: 'Assessment Scores', icon: 'bi bi-clipboard-data' },
+      { to: '/hr/assessment-scores', label: 'Assessment Scores', icon: 'bi bi-clipboard-data' },
 
-    {
-      to: '/user-roles',
-      label: 'Access Control',
-      icon: 'bi bi-shield-lock',
-      children: [
-        { to: '/user-roles', label: 'User Roles', icon: 'bi bi-person-gear' },
-        { to: '/role-permissions', label: 'Role Permissions', icon: 'bi bi-shield-check' },
-        { to: '/permissions', label: 'Permissions', icon: 'bi bi-key' },
-      ],
-    },
+      {
+        to: '/user-roles',
+        label: 'Access Control',
+        icon: 'bi bi-shield-lock',
+        children: [
+          { to: '/user-roles', label: 'User Roles', icon: 'bi bi-person-gear' },
+          { to: '/role-permissions', label: 'Role Permissions', icon: 'bi bi-shield-check' },
+          { to: '/permissions', label: 'Permissions', icon: 'bi bi-key' },
+        ],
+      },
 
-    {
-      to: '/one-on-one-meetings',
-      label: 'One-on-One',
-      icon: 'bi bi-chat-left-text',
-      children: [
-        { to: '/one-on-one-meetings', label: '1:1 Meetings', icon: 'bi bi-chat-dots' },
-        { to: '/one-on-one-action-items', label: 'Action Items', icon: 'bi bi-list-check' },
-      ],
-    },
+      {
+        to: '/one-on-one-meetings',
+        label: 'One-on-One',
+        icon: 'bi bi-chat-left-text',
+        children: [
+          { to: '/one-on-one-meetings', label: '1:1 Meetings', icon: 'bi bi-chat-dots' },
+          { to: '/one-on-one-action-items', label: 'Action Items', icon: 'bi bi-list-check' },
+        ],
+      },
 
-    {
-      to: '/pip',
-      label: 'PIP',
-      icon: 'bi bi-clipboard2-pulse',
-      children: pipChildren,
-    },
+      {
+        to: '/pip',
+        label: 'PIP',
+        icon: 'bi bi-clipboard2-pulse',
+        children: pipChildren,
+      },
 
-    { to: '/notifications', label: 'Notifications', icon: 'bi bi-bell' },
+      { to: '/notifications', label: 'Notifications', icon: 'bi bi-bell' },
 
-    {
-      to: '/hr/position/create',
-      label: 'Positions',
-      icon: 'bi bi-briefcase',
-      children: [
-        { to: '/hr/position/create', label: 'Create Position', icon: 'bi bi-briefcase' },
-        { to: '/hr/position-level/create', label: 'Position Levels', icon: 'bi bi-diagram-3' },
-        { to: '/hr/position/table', label: 'Positions Table', icon: 'bi bi-table' },
-      ],
-    },
+      {
+        to: '/hr/position/create',
+        label: 'Positions',
+        icon: 'bi bi-briefcase',
+        children: [
+          { to: '/hr/position/create', label: 'Create Position', icon: 'bi bi-briefcase' },
+          { to: '/hr/position-level/create', label: 'Position Levels', icon: 'bi bi-diagram-3' },
+          { to: '/hr/position/table', label: 'Positions Table', icon: 'bi bi-table' },
+        ],
+      },
 
-    {
-      to: '/hr/performance-kpi/unit',
-      label: 'KPI Management',
-      icon: 'bi bi-speedometer2',
-      children: [
-        { to: '/hr/performance-kpi/unit', label: 'KPI Units', icon: 'bi bi-speedometer2' },
-        { to: '/hr/performance-kpi/category', label: 'KPI Categories', icon: 'bi bi-tags' },
-        { to: '/hr/performance-kpi/item', label: 'KPI Items', icon: 'bi bi-card-checklist' },
-        { to: '/hr/kpi-template', label: 'KPI Templates', icon: 'bi bi-ui-checks-grid' },
-      ],
-    },
-  ];
+      {
+        to: '/hr/performance-kpi/unit',
+        label: 'KPI Management',
+        icon: 'bi bi-speedometer2',
+        children: [
+          { to: '/hr/performance-kpi/unit', label: 'KPI Units', icon: 'bi bi-speedometer2' },
+          { to: '/hr/performance-kpi/category', label: 'KPI Categories', icon: 'bi bi-tags' },
+          { to: '/hr/performance-kpi/item', label: 'KPI Items', icon: 'bi bi-card-checklist' },
+          { to: '/hr/kpi-template', label: 'KPI Templates', icon: 'bi bi-ui-checks-grid' },
+        ],
+      },
+    ];
 
-  const employeeNavItems: NavItem[] = [
-    { to: '/employee/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' },
-    {
-      to: '/pip',
-      label: 'PIP',
-      icon: 'bi bi-clipboard2-pulse',
-      children: [
-        { to: '/pip/past-plans', label: 'Past Plans', icon: 'bi bi-clock-history' },
-      ],
-    },
-  ];
+    const employeeNavItems: NavItem[] = [
+      { to: '/employee/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' },
+      {
+        to: '/pip',
+        label: 'PIP',
+        icon: 'bi bi-clipboard2-pulse',
+        children: [
+          { to: '/pip/past-plans', label: 'Past Plans', icon: 'bi bi-clock-history' },
+        ],
+      },
+    ];
 
-  const navItems: NavItem[] =
-    variant === 'admin'
-      ? adminNavItems
-      : variant === 'hr'
-      ? hrNavItems
-      : isAdmin
-      ? adminNavItems
-      : isEmployee
-      ? employeeNavItems
-      : hrNavItems;
+    if (variant === 'admin') return adminNavItems;
+    if (variant === 'hr') return hrNavItems;
+    if (isAdmin) return adminNavItems;
+    if (isEmployee) return employeeNavItems;
+    return hrNavItems;
+  }, [
+    variant,
+    isAdmin,
+    isEmployee,
+    canCreatePip,
+  ]);
 
   const hasActiveChild = (item: NavItem) =>
     item.children?.some((child) => location.pathname.startsWith(child.to)) ?? false;
