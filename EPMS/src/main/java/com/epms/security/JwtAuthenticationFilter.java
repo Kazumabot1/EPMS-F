@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -53,28 +54,42 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             userEmail = jwtService.extractUsername(jwt);
         } catch (Exception ex) {
-            filterChain.doFilter(request, response);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
 
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserPrincipal userPrincipal =
-                    (UserPrincipal) customUserDetailsService.loadUserByUsername(userEmail);
+        if (userEmail == null || userEmail.isBlank()) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        }
 
-            if (jwtService.isTokenValid(jwt, userPrincipal)) {
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                                userPrincipal,
-                                null,
-                                userPrincipal.getAuthorities()
-                        );
-
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
-
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            final UserPrincipal userPrincipal;
+            try {
+                userPrincipal =
+                        (UserPrincipal) customUserDetailsService.loadUserByUsername(userEmail);
+            } catch (UsernameNotFoundException ex) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
             }
+
+            if (!jwtService.isTokenValid(jwt, userPrincipal)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(
+                            userPrincipal,
+                            null,
+                            userPrincipal.getAuthorities()
+                    );
+
+            authToken.setDetails(
+                    new WebAuthenticationDetailsSource().buildDetails(request)
+            );
+
+            SecurityContextHolder.getContext().setAuthentication(authToken);
         }
 
         filterChain.doFilter(request, response);

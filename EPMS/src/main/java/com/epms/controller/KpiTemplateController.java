@@ -15,36 +15,36 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/hr/kpi-templates")
 @RequiredArgsConstructor
+@PreAuthorize(
+        "hasAnyRole('HR', 'ADMIN') "
+                + "or principal.dashboard == 'HR_DASHBOARD' "
+                + "or principal.dashboard == 'ADMIN_DASHBOARD'"
+)
 public class KpiTemplateController {
 
     private final KpiFormService kpiFormService;
 
     @PostMapping("/create")
-    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
     public ResponseEntity<KpiFormResponseDTO> create(@Valid @RequestBody KpiFormRequestDTO dto) {
         return new ResponseEntity<>(kpiFormService.createTemplate(dto), HttpStatus.CREATED);
     }
 
     @PutMapping("/update/{id}")
-    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
     public ResponseEntity<KpiFormResponseDTO> update(@PathVariable Integer id, @Valid @RequestBody KpiFormRequestDTO dto) {
         return ResponseEntity.ok(kpiFormService.updateTemplate(id, dto));
     }
 
     @GetMapping("/list")
-    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
     public ResponseEntity<List<KpiFormResponseDTO>> list() {
         return ResponseEntity.ok(kpiFormService.getAllTemplates());
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
     public ResponseEntity<KpiFormResponseDTO> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(kpiFormService.getTemplateById(id));
     }
 
     @DeleteMapping("/delete/{id}")
-    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         kpiFormService.deleteTemplate(id);
         return ResponseEntity.noContent().build();
