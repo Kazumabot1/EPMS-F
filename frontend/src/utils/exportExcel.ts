@@ -42,7 +42,7 @@ export function exportToExcel<T extends Record<string, unknown>>(
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
   // Auto-width columns
-  const colWidths = columns.map((c, i) => {
+  const colWidths = columns.map((c, _i) => {
     const maxLen = Math.max(
       c.header.length,
       ...rows.map((row) => String(row[c.key] ?? '').length)
