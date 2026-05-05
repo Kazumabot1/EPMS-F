@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { kpiCategoryService } from '../../../services/kpiCategoryService';
@@ -51,7 +51,7 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
   const [positions, setPositions] = useState<PositionResponse[]>([]);
 
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<'draft' | 'active' | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -122,11 +122,11 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
     setRows([newRow()]);
   };
 
-  const buildPayload = (): KpiTemplateRequest => ({
+  const buildPayload = (submitStatus: KpiFormStatus): KpiTemplateRequest => ({
     title: title.trim(),
     startDate,
     endDate,
-    status,
+    status: submitStatus,
     positionIds,
     items: rows.map((row, index) => ({
       kpiLabel: row.kpiItemId !== null ? null : row.kpiLabel.trim() || null,
@@ -146,7 +146,7 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
     })),
   });
 
-  const validate = (): string | null => {
+  const validate = (submitStatus: KpiFormStatus): string | null => {
     if (!title.trim()) return 'Title is required.';
     if (!startDate || !endDate) return 'Start and end dates are required.';
     if (new Date(endDate) < new Date(startDate)) return 'End date must be on or after start date.';
@@ -160,27 +160,27 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
         return `Row ${i + 1}: category, unit, target, and weight are required.`;
       }
     }
-    if ((status === 'ACTIVE' || status === 'FINALIZED') && totalWeight !== 100) {
+    if ((submitStatus === 'ACTIVE' || submitStatus === 'FINALIZED') && totalWeight !== 100) {
       return 'Total weight must equal 100% for ACTIVE or FINALIZED templates.';
     }
     return null;
   };
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    const message = validate();
+  const saveTemplate = async (action: 'draft' | 'active') => {
+    const submitStatus: KpiFormStatus = action === 'draft' ? 'DRAFT' : 'ACTIVE';
+    const message = validate(submitStatus);
     if (message) {
       toast.error(message);
       return;
     }
     try {
-      setSaving(true);
+      setSavingAction(action);
       if (isEdit && templateId) {
-        await kpiTemplateService.updateTemplate(templateId, buildPayload());
-        toast.success('Template updated.');
+        await kpiTemplateService.updateTemplate(templateId, buildPayload(submitStatus));
+        toast.success(action === 'draft' ? 'Draft saved.' : 'Template activated.');
       } else {
-        await kpiTemplateService.createTemplate(buildPayload());
-        toast.success('Template created.');
+        await kpiTemplateService.createTemplate(buildPayload(submitStatus));
+        toast.success(action === 'draft' ? 'Draft saved.' : 'Template activated.');
       }
       await onSaved();
       resetForm();
@@ -188,7 +188,7 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Save failed.');
     } finally {
-      setSaving(false);
+      setSavingAction(null);
     }
   };
 
@@ -214,7 +214,7 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
             Loading form...
           </div>
         ) : (
-          <form noValidate onSubmit={onSubmit} className="kpi-tpl-modal-body">
+          <form noValidate className="kpi-tpl-modal-body">
             <div className="kpi-tpl-modal-grid">
               <label>
                 Title
@@ -294,9 +294,24 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
             <div className="kpi-tpl-modal-footer">
               <p>Total weight: {totalWeight}%</p>
               {!isView && (
-                <button type="submit" disabled={saving} className="kpi-tpl-btn-primary">
-                  {saving ? 'Saving...' : isEdit ? 'Update template' : 'Save template'}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void saveTemplate('draft')}
+                    disabled={savingAction !== null}
+                    className="kpi-tpl-btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingAction === 'draft' ? 'Saving draft...' : 'Save Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveTemplate('active')}
+                    disabled={savingAction !== null}
+                    className="kpi-tpl-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingAction === 'active' ? 'Activating...' : 'Use Form'}
+                  </button>
+                </div>
               )}
             </div>
           </form>

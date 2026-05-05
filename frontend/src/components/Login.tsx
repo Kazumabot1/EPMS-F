@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import type { ApiEnvelope, AuthResponse } from '../types/auth';
 import './login.css';
 import { useAuth } from '../contexts/AuthContext';
+import aceLogo from '../assets/Ace.png';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -113,52 +114,75 @@ function Login() {
 
   return (
     <div className="login-page">
-      <div className="login-card">
-        <div className="login-card-header">
-          <div className="login-badge">EPMS</div>
-          <h2>Welcome Back</h2>
-          <p>Sign in to continue to your dashboard.</p>
+      <div className="login-shell">
+        <div className="login-showcase">
+          <div className="login-showcase-stars" aria-hidden="true">
+            <span className="star star-1" />
+            <span className="star star-2" />
+            <span className="star star-3" />
+            <span className="star star-4" />
+            <span className="star star-5" />
+          </div>
+          <img className="showcase-logo" src={aceLogo} alt="ACE Data Systems" />
+          <h2>Welcome back!</h2>
+          <p>You can sign in to access your existing account.</p>
         </div>
 
-        <form onSubmit={handleLogin} className="login-form">
-          <label className="login-label" htmlFor="email">
-            Email
-          </label>
+        <div className="login-card">
+          <div className="login-card-header">
+            <h1>Sign In</h1>
+          </div>
 
-          <input
-            id="email"
-            className="login-input"
-            type="email"
-            placeholder="you@company.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
+          <form onSubmit={handleLogin} className="login-form">
+            <label className="login-label" htmlFor="email">
+              Username or email
+            </label>
 
-          <label className="login-label" htmlFor="password">
-            Password
-          </label>
+            <input
+              id="email"
+              className="login-input"
+              type="email"
+              placeholder="Username or email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
 
-          <input
-            id="password"
-            className="login-input"
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
+            <label className="login-label" htmlFor="password">
+              Password
+            </label>
 
-          {error && <p className="login-error">{error}</p>}
+            <input
+              id="password"
+              className="login-input"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
 
-          <button className="login-submit" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+            <div className="login-form-actions">
+              <label className="remember-wrap">
+                <input type="checkbox" />
+                <span>Remember me</span>
+              </label>
 
-        <p className="login-footer">
-          No account yet? <Link to="/register">Create account</Link>
-        </p>
+              <a
+                className="forgot-password-link"
+                href="mailto:support@acedatasystemsltd.com?subject=Password%20Reset%20Request"
+              >
+                Forgot password?
+              </a>
+            </div>
+
+            {error && <p className="login-error">{error}</p>}
+
+            <button className="login-submit" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

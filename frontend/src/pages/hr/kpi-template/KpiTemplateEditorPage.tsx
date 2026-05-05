@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import KpiTemplateRowsTable from '../../../components/hr/kpi-template/KpiTemplateRowsTable';
@@ -50,7 +50,7 @@ const KpiTemplateEditorPage = () => {
   const [positions, setPositions] = useState<PositionResponse[]>([]);
 
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<'draft' | 'active' | null>(null);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -102,11 +102,11 @@ const KpiTemplateEditorPage = () => {
     [rows],
   );
 
-  const buildPayload = (): KpiTemplateRequest => ({
+  const buildPayload = (submitStatus: KpiFormStatus): KpiTemplateRequest => ({
     title: title.trim(),
     startDate,
     endDate,
-    status,
+    status: submitStatus,
     positionIds,
     items: rows.map((row, index) => ({
       kpiLabel: row.kpiItemId !== null ? null : row.kpiLabel.trim() || null,
@@ -126,7 +126,7 @@ const KpiTemplateEditorPage = () => {
     })),
   });
 
-  const validate = (): string | null => {
+  const validate = (submitStatus: KpiFormStatus): string | null => {
     if (!title.trim()) return 'Title is required.';
     if (!startDate || !endDate) return 'Start and end dates are required.';
     if (new Date(endDate) < new Date(startDate)) return 'End date must be on or after start date.';
@@ -141,34 +141,34 @@ const KpiTemplateEditorPage = () => {
         return `Row ${i + 1}: category, unit, target, and weight are required.`;
       }
     }
-    if ((status === 'ACTIVE' || status === 'FINALIZED') && totalWeight !== 100) {
+    if ((submitStatus === 'ACTIVE' || submitStatus === 'FINALIZED') && totalWeight !== 100) {
       return 'Total weight must equal 100% for ACTIVE or FINALIZED templates.';
     }
     return null;
   };
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    const message = validate();
+  const saveTemplate = async (action: 'draft' | 'active') => {
+    const submitStatus: KpiFormStatus = action === 'draft' ? 'DRAFT' : 'ACTIVE';
+    const message = validate(submitStatus);
     if (message) {
       toast.error(message);
       return;
     }
-    const payload = buildPayload();
+    const payload = buildPayload(submitStatus);
     try {
-      setSaving(true);
+      setSavingAction(action);
       if (isEdit && !Number.isNaN(templateId)) {
         await kpiTemplateService.updateTemplate(templateId, payload);
-        toast.success('Template updated.');
+        toast.success(action === 'draft' ? 'Draft saved.' : 'Template activated.');
       } else {
         await kpiTemplateService.createTemplate(payload);
-        toast.success('Template created.');
+        toast.success(action === 'draft' ? 'Draft saved.' : 'Template activated.');
       }
       navigate('/hr/kpi-template');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Save failed.');
     } finally {
-      setSaving(false);
+      setSavingAction(null);
     }
   };
 
@@ -234,7 +234,7 @@ const KpiTemplateEditorPage = () => {
           </Link>
         </div>
 
-        <form noValidate onSubmit={onSubmit} className="space-y-8">
+        <form noValidate className="space-y-8">
           <section className="kpi-tpl-card p-6 sm:p-8">
             <div className="mb-8 flex flex-wrap items-center gap-4 border-b border-gray-100 pb-6">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-700 ring-1 ring-violet-100">
@@ -389,15 +389,35 @@ const KpiTemplateEditorPage = () => {
             <Link to="/hr/kpi-template" className="kpi-tpl-btn-secondary no-underline">
               Cancel
             </Link>
-            <button type="submit" disabled={saving} className="kpi-tpl-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
-              {saving ? (
+            <button
+              type="button"
+              onClick={() => void saveTemplate('draft')}
+              disabled={savingAction !== null}
+              className="kpi-tpl-btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingAction === 'draft' ? (
                 <>
                   <span className="kpi-tpl-shimmer inline-block h-4 w-4 rounded-full bg-white/90" />
-                  Saving…
+                  Saving draft…
+                </>
+              ) : (
+                'Save Draft'
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveTemplate('active')}
+              disabled={savingAction !== null}
+              className="kpi-tpl-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingAction === 'active' ? (
+                <>
+                  <span className="kpi-tpl-shimmer inline-block h-4 w-4 rounded-full bg-white/90" />
+                  Activating…
                 </>
               ) : (
                 <>
-                  Save template
+                  Use Form
                   <i className="bi bi-check2-circle text-lg" aria-hidden />
                 </>
               )}
