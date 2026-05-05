@@ -1,62 +1,38 @@
 import api from './api';
 import type {
-  AssessmentRequest,
+  AssessmentDraft,
   AssessmentScoreRow,
-  EmployeeAssessment,
+  AssessmentTemplate,
+  SubmitAssessmentPayload,
 } from '../types/employeeAssessment';
 
-type ApiEnvelope<T> = {
-  success: boolean;
-  message: string;
-  data: T;
-  timestamp?: string;
-};
-
-const unwrap = <T>(response: { data: ApiEnvelope<T> | T }): T => {
-  const body = response.data as ApiEnvelope<T> | T;
-  if (body && typeof body === 'object' && 'data' in body) {
-    return (body as ApiEnvelope<T>).data;
-  }
-  return body as T;
+const unwrap = <T,>(payload: any, fallback: T): T => {
+  return payload?.data?.data ?? payload?.data ?? fallback;
 };
 
 export const employeeAssessmentService = {
-  async getTemplate(): Promise<EmployeeAssessment> {
-    const response = await api.get<ApiEnvelope<EmployeeAssessment>>('/employee-assessments/template');
-    return unwrap<EmployeeAssessment>(response);
+  async template(): Promise<AssessmentTemplate> {
+    const res = await api.get('/employee-assessments/template');
+    return unwrap<AssessmentTemplate>(res, {} as AssessmentTemplate);
   },
 
-  async getLatestDraft(): Promise<EmployeeAssessment> {
-    const response = await api.get<ApiEnvelope<EmployeeAssessment>>('/employee-assessments/my-latest-draft');
-    return unwrap<EmployeeAssessment>(response);
+  async draft(): Promise<AssessmentDraft | null> {
+    const res = await api.get('/employee-assessments/draft');
+    return unwrap<AssessmentDraft | null>(res, null);
   },
 
-  async getById(id: number): Promise<EmployeeAssessment> {
-    const response = await api.get<ApiEnvelope<EmployeeAssessment>>(`/employee-assessments/${id}`);
-    return unwrap<EmployeeAssessment>(response);
+  async saveDraft(payload: SubmitAssessmentPayload): Promise<AssessmentDraft> {
+    const res = await api.post('/employee-assessments/draft', payload);
+    return unwrap<AssessmentDraft>(res, {} as AssessmentDraft);
   },
 
-  async saveDraft(payload: AssessmentRequest, id?: number | null): Promise<EmployeeAssessment> {
-    if (id) {
-      const response = await api.put<ApiEnvelope<EmployeeAssessment>>(`/employee-assessments/${id}`, payload);
-      return unwrap<EmployeeAssessment>(response);
-    }
-    const response = await api.post<ApiEnvelope<EmployeeAssessment>>('/employee-assessments', payload);
-    return unwrap<EmployeeAssessment>(response);
-  },
-
-  async submit(id: number, payload: AssessmentRequest): Promise<EmployeeAssessment> {
-    const response = await api.post<ApiEnvelope<EmployeeAssessment>>(`/employee-assessments/${id}/submit`, payload);
-    return unwrap<EmployeeAssessment>(response);
+  async submit(payload: SubmitAssessmentPayload): Promise<AssessmentDraft> {
+    const res = await api.post('/employee-assessments/submit', payload);
+    return unwrap<AssessmentDraft>(res, {} as AssessmentDraft);
   },
 
   async myScores(): Promise<AssessmentScoreRow[]> {
-    const response = await api.get<ApiEnvelope<AssessmentScoreRow[]>>('/employee-assessments/my-scores');
-    return unwrap<AssessmentScoreRow[]>(response);
-  },
-
-  async scoreTable(): Promise<AssessmentScoreRow[]> {
-    const response = await api.get<ApiEnvelope<AssessmentScoreRow[]>>('/employee-assessments/score-table');
-    return unwrap<AssessmentScoreRow[]>(response);
+    const res = await api.get('/employee-assessments/my-scores');
+    return unwrap<AssessmentScoreRow[]>(res, []);
   },
 };

@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.List;
 
 @RestController
@@ -20,14 +21,21 @@ public class AppraisalFormController {
 
     @PostMapping
     public ResponseEntity<AppraisalFormResponseDto> createAppraisalForm(
-            @Valid @RequestBody AppraisalFormRequestDto requestDto) {
-        AppraisalFormResponseDto responseDto = appraisalFormService.createAppraisalForm(requestDto);
-        return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
+            @Valid @RequestBody AppraisalFormRequestDto requestDto
+    ) {
+        return new ResponseEntity<>(appraisalFormService.createAppraisalForm(requestDto), HttpStatus.CREATED);
     }
 
     @GetMapping
     public ResponseEntity<List<AppraisalFormResponseDto>> getAllAppraisalForms() {
         return ResponseEntity.ok(appraisalFormService.getAllAppraisalForms());
+    }
+
+    @GetMapping("/my-form")
+    public ResponseEntity<?> getMyActiveForm() {
+        return appraisalFormService.getMyActiveForm()
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.ok(Map.of("message", "No matching active form found")));
     }
 
     @GetMapping("/{id}")
@@ -38,7 +46,8 @@ public class AppraisalFormController {
     @PutMapping("/{id}")
     public ResponseEntity<AppraisalFormResponseDto> updateAppraisalForm(
             @PathVariable Long id,
-            @Valid @RequestBody AppraisalFormRequestDto requestDto) {
+            @Valid @RequestBody AppraisalFormRequestDto requestDto
+    ) {
         return ResponseEntity.ok(appraisalFormService.updateAppraisalForm(id, requestDto));
     }
 

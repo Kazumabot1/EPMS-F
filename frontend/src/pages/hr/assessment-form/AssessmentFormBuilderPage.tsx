@@ -1,4 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  assessmentFormService,
+  type AssessmentFormPayload,
+  type AssessmentFormResponse,
+  type AssessmentResponseType,
+  type AssessmentTargetRole,
+} from '../../../services/assessmentFormService';
 
 const TARGET_ROLES: { label: string; value: AssessmentTargetRole }[] = [
   { label: 'Employee', value: 'Employee' },
@@ -33,14 +40,16 @@ const AssessmentFormBuilderPage = () => {
   const [forms, setForms] = useState<AssessmentFormResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const [modalOpen, setModalOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<AssessmentFormPayload>(emptyForm());
   const [error, setError] = useState('');
 
-  const activeForms = useMemo(() => forms.filter((item) => item.isActive !== false), [forms]);
+  const activeForms = useMemo(
+    () => forms.filter((item) => item.isActive !== false),
+    [forms]
+  );
 
   const loadForms = async () => {
     try {
@@ -48,7 +57,8 @@ const AssessmentFormBuilderPage = () => {
       setError('');
       const data = await assessmentFormService.getAll();
       setForms(data);
-    } catch {
+    } catch (err) {
+      console.error('Failed to load assessment forms', err);
       setError('Failed to load assessment forms.');
     } finally {
       setLoading(false);
@@ -115,6 +125,35 @@ const AssessmentFormBuilderPage = () => {
         targetRoles: nextRoles.length ? nextRoles : prev.targetRoles,
       };
     });
+  };
+
+  const updateSectionTitle = (sectionIndex: number, title: string) => {
+    setForm((prev) => ({
+      ...prev,
+      sections: prev.sections.map((section, index) =>
+        index === sectionIndex ? { ...section, title } : section
+      ),
+    }));
+  };
+
+  const updateQuestion = (
+    sectionIndex: number,
+    questionIndex: number,
+    patch: Partial<AssessmentFormPayload['sections'][number]['questions'][number]>
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      sections: prev.sections.map((section, sIndex) =>
+        sIndex === sectionIndex
+          ? {
+              ...section,
+              questions: section.questions.map((question, qIndex) =>
+                qIndex === questionIndex ? { ...question, ...patch } : question
+              ),
+            }
+          : section
+      ),
+    }));
   };
 
   const addSection = () => {
@@ -263,7 +302,8 @@ const AssessmentFormBuilderPage = () => {
       setModalOpen(false);
       setPreviewOpen(false);
       await loadForms();
-    } catch {
+    } catch (err) {
+      console.error('Failed to save assessment form', err);
       setError('Failed to save assessment form.');
     } finally {
       setSaving(false);
@@ -272,13 +312,14 @@ const AssessmentFormBuilderPage = () => {
 
   const deactivate = async (id: number) => {
     const ok = window.confirm('Deactivate this assessment form?');
-
     if (!ok) return;
 
     try {
+      setError('');
       await assessmentFormService.deactivate(id);
       await loadForms();
-    } catch {
+    } catch (err) {
+      console.error('Failed to deactivate assessment form', err);
       setError('Failed to deactivate assessment form.');
     }
   };
@@ -292,7 +333,11 @@ const AssessmentFormBuilderPage = () => {
               <i className="bi bi-ui-checks-grid" />
               HR Assessment Forms
             </p>
-            <h1 className="text-2xl font-bold text-slate-900">Self-Assessment Form Builder</h1>
+
+            <h1 className="text-2xl font-bold text-slate-900">
+              Self-Assessment Form Builder
+            </h1>
+
             <p className="mt-1 text-sm text-slate-500">
               Create sections and questions for employees, managers, department heads, and project managers.
               CEO and Admin roles are excluded.
@@ -368,7 +413,9 @@ const AssessmentFormBuilderPage = () => {
                         </div>
                       </td>
 
-                      <td className="px-5 py-4 text-slate-600">{item.sections?.length ?? 0}</td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {item.sections?.length ?? 0}
+                      </td>
 
                       <td className="px-5 py-4">
                         <span
@@ -422,6 +469,7 @@ const AssessmentFormBuilderPage = () => {
                 <h2 className="text-lg font-bold text-slate-900">
                   {editingId ? 'Edit Assessment Form' : 'Create Assessment Form'}
                 </h2>
+
                 <p className="text-sm text-slate-500">
                   Build the self-assessment form HR wants employees to complete.
                 </p>
@@ -439,21 +487,31 @@ const AssessmentFormBuilderPage = () => {
             <div className="space-y-5 px-6 py-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-slate-700">Form Name</span>
+                  <span className="mb-1 block text-sm font-semibold text-slate-700">
+                    Form Name
+                  </span>
+
                   <input
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
                     value={form.formName}
-                    onChange={(e) => setForm((prev) => ({ ...prev, formName: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, formName: e.target.value }))
+                    }
                     placeholder="e.g. Annual Self Assessment"
                   />
                 </label>
 
                 <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-slate-700">Description</span>
+                  <span className="mb-1 block text-sm font-semibold text-slate-700">
+                    Description
+                  </span>
+
                   <input
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
                     value={form.description}
-                    onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, description: e.target.value }))
+                    }
                     placeholder="Optional"
                   />
                 </label>
@@ -463,6 +521,7 @@ const AssessmentFormBuilderPage = () => {
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
                   Target Roles
                 </span>
+
                 <div className="flex flex-wrap gap-2">
                   {TARGET_ROLES.map((role) => (
                     <button
@@ -491,14 +550,7 @@ const AssessmentFormBuilderPage = () => {
                       <input
                         className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-500"
                         value={section.title}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            sections: prev.sections.map((item, index) =>
-                              index === sectionIndex ? { ...item, title: e.target.value } : item
-                            ),
-                          }))
-                        }
+                        onChange={(e) => updateSectionTitle(sectionIndex, e.target.value)}
                         placeholder="Section title"
                       />
 
@@ -510,6 +562,7 @@ const AssessmentFormBuilderPage = () => {
                         >
                           Up
                         </button>
+
                         <button
                           type="button"
                           onClick={() => moveSection(sectionIndex, 1)}
@@ -517,6 +570,7 @@ const AssessmentFormBuilderPage = () => {
                         >
                           Down
                         </button>
+
                         <button
                           type="button"
                           onClick={() => removeSection(sectionIndex)}
@@ -538,21 +592,9 @@ const AssessmentFormBuilderPage = () => {
                               className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
                               value={question.questionText}
                               onChange={(e) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  sections: prev.sections.map((s, sIndex) =>
-                                    sIndex === sectionIndex
-                                      ? {
-                                          ...s,
-                                          questions: s.questions.map((q, qIndex) =>
-                                            qIndex === questionIndex
-                                              ? { ...q, questionText: e.target.value }
-                                              : q
-                                          ),
-                                        }
-                                      : s
-                                  ),
-                                }))
+                                updateQuestion(sectionIndex, questionIndex, {
+                                  questionText: e.target.value,
+                                })
                               }
                               placeholder="Question text"
                             />
@@ -561,24 +603,9 @@ const AssessmentFormBuilderPage = () => {
                               className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                               value={question.responseType}
                               onChange={(e) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  sections: prev.sections.map((s, sIndex) =>
-                                    sIndex === sectionIndex
-                                      ? {
-                                          ...s,
-                                          questions: s.questions.map((q, qIndex) =>
-                                            qIndex === questionIndex
-                                              ? {
-                                                  ...q,
-                                                  responseType: e.target.value as AssessmentResponseType,
-                                                }
-                                              : q
-                                          ),
-                                        }
-                                      : s
-                                  ),
-                                }))
+                                updateQuestion(sectionIndex, questionIndex, {
+                                  responseType: e.target.value as AssessmentResponseType,
+                                })
                               }
                             >
                               {RESPONSE_TYPES.map((type) => (
@@ -595,21 +622,9 @@ const AssessmentFormBuilderPage = () => {
                               step="0.1"
                               value={question.weight}
                               onChange={(e) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  sections: prev.sections.map((s, sIndex) =>
-                                    sIndex === sectionIndex
-                                      ? {
-                                          ...s,
-                                          questions: s.questions.map((q, qIndex) =>
-                                            qIndex === questionIndex
-                                              ? { ...q, weight: Number(e.target.value) }
-                                              : q
-                                          ),
-                                        }
-                                      : s
-                                  ),
-                                }))
+                                updateQuestion(sectionIndex, questionIndex, {
+                                  weight: Number(e.target.value),
+                                })
                               }
                             />
 
@@ -618,21 +633,9 @@ const AssessmentFormBuilderPage = () => {
                                 type="checkbox"
                                 checked={question.isRequired}
                                 onChange={(e) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    sections: prev.sections.map((s, sIndex) =>
-                                      sIndex === sectionIndex
-                                        ? {
-                                            ...s,
-                                            questions: s.questions.map((q, qIndex) =>
-                                              qIndex === questionIndex
-                                                ? { ...q, isRequired: e.target.checked }
-                                                : q
-                                            ),
-                                          }
-                                        : s
-                                    ),
-                                  }))
+                                  updateQuestion(sectionIndex, questionIndex, {
+                                    isRequired: e.target.checked,
+                                  })
                                 }
                               />
                               Required
@@ -677,8 +680,12 @@ const AssessmentFormBuilderPage = () => {
 
                   <div className="space-y-4 rounded-xl bg-white p-4">
                     <div>
-                      <h4 className="text-lg font-bold text-slate-900">{form.formName || 'Untitled Form'}</h4>
-                      <p className="text-sm text-slate-500">{form.description || 'No description'}</p>
+                      <h4 className="text-lg font-bold text-slate-900">
+                        {form.formName || 'Untitled Form'}
+                      </h4>
+                      <p className="text-sm text-slate-500">
+                        {form.description || 'No description'}
+                      </p>
                     </div>
 
                     {form.sections.map((section, index) => (

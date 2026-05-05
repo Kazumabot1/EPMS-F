@@ -39,12 +39,20 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+
                         .requestMatchers("/api/auth/me", "/api/auth/change-password").authenticated()
+
+                        .requestMatchers("/api/appraisal-forms/**").hasRole("HR")
+                        .requestMatchers("/api/employees/**").hasAnyRole("HR", "ADMIN")
+                        .requestMatchers("/api/dashboard/**").hasAnyRole("HR", "ADMIN")
+
                         .anyRequest().authenticated()
                 )
+
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
