@@ -11,7 +11,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "feedback_sections", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"form_id", "order_no"})
+        @UniqueConstraint(columnNames = {"form_id", "order_no"})
 })
 @Getter
 @Setter
@@ -39,6 +39,7 @@ public class FeedbackSection {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "section", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("questionOrder ASC")
     private List<FeedbackQuestion> questions = new ArrayList<>();
 
     @PrePersist

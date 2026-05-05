@@ -1,0 +1,144 @@
+.feedback-results-stack {
+  display: grid;
+  gap: 24px;
+}
+
+.feedback-results-hero,
+.feedback-results-card {
+  background: #ffffff;
+  border: 1px solid rgba(16, 32, 51, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 16px 36px rgba(16, 32, 51, 0.08);
+}
+
+.feedback-results-hero {
+  padding: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(42, 157, 143, 0.15), transparent 26%),
+    linear-gradient(135deg, #102033 0%, #1d3557 55%, #2a9d8f 100%);
+  color: #f8fbff;
+}
+
+.feedback-results-hero h1,
+.feedback-results-card h2 {
+  margin: 0 0 8px;
+}
+
+.feedback-results-hero p {
+  margin: 0;
+  color: rgba(248, 251, 255, 0.84);
+}
+
+.feedback-results-card {
+  padding: 24px;
+}
+
+.feedback-results-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.feedback-results-kicker {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #5e7289;
+}
+
+.feedback-results-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.feedback-results-metric {
+  padding: 16px;
+  border-radius: 16px;
+  background: #f7fbff;
+  border: 1px solid #dbe7f2;
+}
+
+.feedback-results-metric span,
+.feedback-results-inline-label {
+  display: block;
+  color: #5e7289;
+  font-size: 0.9rem;
+}
+
+.feedback-results-metric strong {
+  color: #102033;
+  font-size: 1.15rem;
+}
+
+.feedback-results-table-wrap {
+  overflow: auto;
+}
+
+.feedback-results-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.feedback-results-table th,
+.feedback-results-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #e4ecf4;
+  text-align: left;
+  vertical-align: top;
+}
+
+.feedback-results-table-title {
+  display: grid;
+  gap: 4px;
+}
+
+.feedback-results-empty,
+.feedback-results-banner {
+  padding: 18px 20px;
+  border-radius: 16px;
+}
+
+.feedback-results-empty {
+  border: 1px dashed #cad7e3;
+  background: #fbfdff;
+  color: #52657a;
+}
+
+.feedback-results-banner.error {
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.feedback-results-field {
+  display: grid;
+  gap: 8px;
+}
+
+.feedback-results-field span {
+  color: #16324f;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.feedback-results-field select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #ced9e5;
+  border-radius: 12px;
+  background: #fbfdff;
+}
+
+@media (max-width: 900px) {
+  .feedback-results-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feedback-results-card-header {
+    display: grid;
+  }
+}

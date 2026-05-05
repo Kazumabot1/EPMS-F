@@ -46,6 +46,11 @@ export interface EmployeeResponse {
   accountProvisioningSmtpError?: string | null;
 }
 
+export type Employee = EmployeeResponse & {
+  name: string;
+  department: string | null;
+};
+
 export interface EmployeeRequestPayload {
   firstName: string;
   lastName: string;
@@ -98,6 +103,18 @@ export const fetchEmployees = async (includeInactive = false): Promise<EmployeeR
     params: { includeInactive: includeInactive ? 'true' : 'false' },
   });
   return unwrap(response);
+};
+
+export const getAllEmployees = async (includeInactive = false): Promise<Employee[]> => {
+  const employees = await fetchEmployees(includeInactive);
+  return employees.map((employee) => ({
+    ...employee,
+    name:
+      employee.fullName?.trim() ||
+      `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim() ||
+      `Employee #${employee.id}`,
+    department: employee.currentDepartment ?? null,
+  }));
 };
 
 export const getEmployee = async (id: number): Promise<EmployeeResponse> => {

@@ -54,6 +54,14 @@
   font-weight: 700;
   background: linear-gradient(135deg, #6366f1, #7c3aed);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.hr-sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .hr-brand-copy h2 {
@@ -88,14 +96,16 @@
 .hr-role-chip small {
   display: block;
   color: #818cf8;
-  font-size: 0.64rem;
-  letter-spacing: 0.07em;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
 }
 
 .hr-role-chip strong {
   color: #4338ca;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .hr-nav {
@@ -107,7 +117,7 @@
   overflow-x: hidden;
   padding: 8px 10px 10px;
   scrollbar-width: thin;
-  scrollbar-color: #c7cedf transparent;
+  scrollbar-color: #e2e8f0 transparent;
 }
 
 .hr-nav::-webkit-scrollbar {
@@ -200,6 +210,11 @@
 .hr-submenu-link.active {
   background: #eef2ff;
   color: #4f46e5;
+  font-weight: 600;
+}
+
+.hr-nav-item.active i {
+  color: #4f46e5;
 }
 
 .hr-submenu-link:hover i,
@@ -267,6 +282,7 @@
 .hr-header.collapsed {
   left: 76px;
 }
+
 
 .hr-header-search {
   flex: 1 1 auto;

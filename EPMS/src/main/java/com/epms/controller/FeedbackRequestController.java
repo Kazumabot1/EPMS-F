@@ -1,103 +1,102 @@
 package com.epms.controller;
 
-import com.epms.dto.FeedbackDeadlineUpdateRequest;
-import com.epms.dto.FeedbackRequestCreateDTO;
 import com.epms.dto.FeedbackRequestListResponse;
 import com.epms.dto.GenericApiResponse;
 import com.epms.entity.FeedbackRequest;
+import com.epms.entity.User;
 import com.epms.exception.UnauthorizedActionException;
+import com.epms.repository.UserRepository;
 import com.epms.security.SecurityUtils;
 import com.epms.service.FeedbackRequestService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Objects;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/v1/feedback/requests")
 @RequiredArgsConstructor
 public class FeedbackRequestController {
 
     private final FeedbackRequestService feedbackRequestService;
-
-    @PostMapping
-    public ResponseEntity<GenericApiResponse<Long>> createFeedbackRequest(@Valid @RequestBody FeedbackRequestCreateDTO requestDTO) {
-        log.info("Received request to create feedback request for target employee ID: {}", requestDTO.getTargetEmployeeId());
-        ensureHrOrAdmin();
-
-        Long requesterUserId = SecurityUtils.currentUserId().longValue();
-
-        FeedbackRequest createdRequest = feedbackRequestService.createFeedbackRequest(
-                requestDTO.getFormId(),
-                requestDTO.getCampaignId(),
-                requestDTO.getTargetEmployeeId(),
-                requesterUserId,
-                requestDTO.getDueAt(),
-                Boolean.TRUE.equals(requestDTO.getAnonymousEnabled()),
-                requestDTO.getEvaluatorTypes()
-        );
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(GenericApiResponse.success("Feedback request and evaluators created successfully", createdRequest.getId()));
-    }
-
-    @PatchMapping("/{requestId}/deadline")
-    public ResponseEntity<GenericApiResponse<Long>> updateFeedbackDeadline(
-            @PathVariable Long requestId,
-            @Valid @RequestBody FeedbackDeadlineUpdateRequest request) {
-        ensureHrOrAdmin();
-        FeedbackRequest updated = feedbackRequestService.updateDeadline(requestId, request.getDueAt());
-        return ResponseEntity.ok(GenericApiResponse.success("Feedback deadline updated successfully", updated.getId()));
-    }
-
-    @PostMapping("/{requestId}/reminders")
-    public ResponseEntity<GenericApiResponse<Integer>> sendFeedbackReminders(@PathVariable Long requestId) {
-        ensureHrOrAdmin();
-        int sent = feedbackRequestService.sendReminderNotifications(requestId);
-        return ResponseEntity.ok(GenericApiResponse.success("Feedback reminders sent successfully", sent));
-    }
+    private final UserRepository userRepository;
 
     @GetMapping("/{employeeId}")
     public ResponseEntity<GenericApiResponse<Page<FeedbackRequestListResponse>>> getRequestsForEmployee(
-            @PathVariable Long employeeId, Pageable pageable) {
-        log.info("Fetching feedback requests for employee ID: {}", employeeId);
-        
+            @PathVariable Long employeeId,
+            Pageable pageable
+    ) {
+        ensureCanViewEmployeeRequests(employeeId);
         List<FeedbackRequest> requests = feedbackRequestService.getRequestsForEmployee(employeeId);
-        
         List<FeedbackRequestListResponse> dtoList = requests.stream()
                 .map(req -> FeedbackRequestListResponse.builder()
                         .id(req.getId())
-                        .formId(req.getForm().getId())
                         .campaignId(req.getCampaign().getId())
                         .campaignName(req.getCampaign().getName())
                         .targetEmployeeId(req.getTargetEmployeeId())
-                        .dueAt(req.getDueAt())
-                        .status(req.getStatus().name())
+                        .totalAssignments(req.getAssignments() != null ? req.getAssignments().size() : 0)
+                        .submittedAssignments(
+                                req.getAssignments() == null
+                                        ? 0
+                                        : req.getAssignments().stream().filter(a -> "SUBMITTED".equals(a.getStatus().name())).count()
+                        )
                         .build())
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
 
         int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), dtoList.size());
-        Page<FeedbackRequestListResponse> page = new PageImpl<>(dtoList.subList(start, Math.max(start, end)), pageable, dtoList.size());
+        int end = Math.min(start + pageable.getPageSize(), dtoList.size());
+        List<FeedbackRequestListResponse> content = start >= dtoList.size()
+                ? List.of()
+                : dtoList.subList(start, end);
 
-        return ResponseEntity.ok(GenericApiResponse.success("Feedback requests fetched successfully", page));
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Feedback requests fetched successfully",
+                new PageImpl<>(content, pageable, dtoList.size())
+        ));
     }
 
-    private void ensureHrOrAdmin() {
-        List<String> roles = SecurityUtils.currentUser().getRoles();
-        boolean authorized = roles != null && roles.stream()
-                .map(String::toUpperCase)
-                .anyMatch(role -> role.equals("HR") || role.equals("ADMIN") || role.equals("ROLE_HR") || role.equals("ROLE_ADMIN"));
-        if (!authorized) {
-            throw new UnauthorizedActionException("Only HR/Admin can perform this action.");
+    private void ensureCanViewEmployeeRequests(Long employeeId) {
+        if (hasRole("HR") || hasRole("ADMIN")) {
+            return;
+        }
+
+        Integer currentUserId = SecurityUtils.currentUserId();
+        Long currentEmployeeId = userRepository.findById(currentUserId)
+                .map(User::getEmployeeId)
+                .filter(Objects::nonNull)
+                .map(Integer::longValue)
+                .orElse(null);
+
+        if (Objects.equals(currentEmployeeId, employeeId)) {
+            return;
+        }
+
+        boolean managesTarget = userRepository.findByEmployeeId(employeeId.intValue())
+                .map(targetUser -> Objects.equals(targetUser.getManagerId(), currentUserId))
+                .orElse(false);
+
+        if (!managesTarget) {
+            throw new UnauthorizedActionException("You are not authorized to view feedback requests for this employee.");
         }
     }
+
+    private boolean hasRole(String roleName) {
+        List<String> roles = SecurityUtils.currentUser().getRoles();
+        if (roles == null) {
+            return false;
+        }
+        String normalized = roleName.toUpperCase();
+        return roles.stream()
+                .map(String::toUpperCase)
+                .anyMatch(role -> role.equals(normalized) || role.equals("ROLE_" + normalized));
+    }
+
 }

@@ -998,13 +998,13 @@ export const displayRoleName = (role: UserRole) => {
 */
 
 export type UserRole =
-  | 'Employee'
-  | 'Admin'
-  | 'HR'
-  | 'DepartmentHead'
-  | 'Manager'
-  | 'ProjectManager'
-  | 'Executive';
+    | 'Employee'
+    | 'Admin'
+    | 'HR'
+    | 'DepartmentHead'
+    | 'Manager'
+    | 'ProjectManager'
+    | 'Executive';
 
 export interface NavItem {
   label: string;
@@ -1061,6 +1061,7 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
     { label: 'Teams', path: '/hr/team', icon: 'bi-people-fill' },
     { label: 'Departments', path: '/hr/department', icon: 'bi-building' },
     { label: 'Assessment Scores', path: '/hr/assessment-scores', icon: 'bi-clipboard-data' },
+    { label: '360 Feedback', path: '/hr/feedback/dashboard', icon: 'bi-chat-dots' },
     {
       label: 'PIP',
       path: '/pip',
@@ -1136,10 +1137,10 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
 };
 
 const normalizeRoleName = (role: string) =>
-  role
-    .replace(/^ROLE_/i, '')
-    .replace(/[\s-]+/g, '_')
-    .toUpperCase();
+    role
+        .replace(/^ROLE_/i, '')
+        .replace(/[\s-]+/g, '_')
+        .toUpperCase();
 
 export const resolveUserRole = (user?: UserLike | null): UserRole => {
   if (!user) return 'Employee';
@@ -1153,9 +1154,9 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
   }
 
   if (
-    normalizedRoles.includes('DEPARTMENT_HEAD') ||
-    normalizedRoles.includes('DEPARTMENTHEAD') ||
-    dashboard === 'DEPARTMENT_HEAD_DASHBOARD'
+      normalizedRoles.includes('DEPARTMENT_HEAD') ||
+      normalizedRoles.includes('DEPARTMENTHEAD') ||
+      dashboard === 'DEPARTMENT_HEAD_DASHBOARD'
   ) {
     return 'DepartmentHead';
   }
@@ -1165,9 +1166,9 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
   }
 
   if (
-    normalizedRoles.includes('PROJECT_MANAGER') ||
-    normalizedRoles.includes('PROJECTMANAGER') ||
-    dashboard === 'PROJECT_MANAGER_DASHBOARD'
+      normalizedRoles.includes('PROJECT_MANAGER') ||
+      normalizedRoles.includes('PROJECTMANAGER') ||
+      dashboard === 'PROJECT_MANAGER_DASHBOARD'
   ) {
     return 'ProjectManager';
   }
@@ -1177,9 +1178,9 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
   }
 
   if (
-    normalizedRoles.includes('CEO') ||
-    normalizedRoles.includes('EXECUTIVE') ||
-    dashboard === 'EXECUTIVE_DASHBOARD'
+      normalizedRoles.includes('CEO') ||
+      normalizedRoles.includes('EXECUTIVE') ||
+      dashboard === 'EXECUTIVE_DASHBOARD'
   ) {
     return 'Executive';
   }

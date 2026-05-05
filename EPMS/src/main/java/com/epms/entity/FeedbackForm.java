@@ -42,11 +42,12 @@ public class FeedbackForm {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-    
+
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "form", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("orderNo ASC")
     private List<FeedbackSection> sections = new ArrayList<>();
 
     @OneToMany(mappedBy = "form", fetch = FetchType.LAZY)

@@ -7,7 +7,9 @@ import com.epms.entity.FeedbackRequest;
 import com.epms.entity.FeedbackResponse;
 import com.epms.entity.User;
 import com.epms.entity.enums.AssignmentStatus;
+import com.epms.entity.enums.FeedbackCampaignStatus;
 import com.epms.entity.enums.ResponseStatus;
+import com.epms.exception.BusinessValidationException;
 import com.epms.repository.FeedbackCampaignRepository;
 import com.epms.repository.FeedbackEvaluatorAssignmentRepository;
 import com.epms.repository.FeedbackFormRepository;
@@ -20,7 +22,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +42,9 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
     @Override
     @Transactional(readOnly = true)
     public FeedbackDashboardResponse getEmployeeDashboard(Long userId, List<String> roles) {
-        List<FeedbackSubmissionStatusResponse> pending = buildPendingStatuses(userId);
-        List<FeedbackReceivedItemResponse> ownResults = buildVisibleResults(userId, roles);
+        Long employeeId = resolveEmployeeIdForUser(userId);
+        List<FeedbackSubmissionStatusResponse> pending = buildPendingStatuses(employeeId);
+        List<FeedbackReceivedItemResponse> ownResults = buildVisibleResults(employeeId, roles);
 
         return FeedbackDashboardResponse.builder()
                 .dashboardType("EMPLOYEE")
@@ -60,9 +62,15 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
     @Override
     @Transactional(readOnly = true)
     public FeedbackDashboardResponse getManagerDashboard(Long userId, List<String> roles) {
-        List<FeedbackSubmissionStatusResponse> pending = buildPendingStatuses(userId);
+        Long managerEmployeeId = resolveEmployeeIdForUser(userId);
+        List<FeedbackSubmissionStatusResponse> pending = buildPendingStatuses(managerEmployeeId);
         List<User> directReports = userRepository.findByManagerIdAndActiveTrue(userId.intValue());
-        List<Long> directReportIds = directReports.stream().map(user -> user.getId().longValue()).toList();
+        List<Long> directReportIds = directReports.stream()
+                .map(User::getEmployeeId)
+                .filter(Objects::nonNull)
+                .map(Integer::longValue)
+                .distinct()
+                .toList();
 
         List<TeamFeedbackSummaryResponse> summaries = directReportIds.isEmpty()
                 ? List.of()
@@ -109,8 +117,18 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                 .build();
     }
 
+
+    private Long resolveEmployeeIdForUser(Long userId) {
+        return userRepository.findById(userId.intValue())
+                .map(User::getEmployeeId)
+                .filter(Objects::nonNull)
+                .map(Integer::longValue)
+                .orElseThrow(() -> new BusinessValidationException("This user is not linked to an employee record."));
+    }
+
     private List<FeedbackSubmissionStatusResponse> buildPendingStatuses(Long evaluatorEmployeeId) {
         return assignmentRepository.findByEvaluatorEmployeeId(evaluatorEmployeeId).stream()
+                .filter(assignment -> assignment.getFeedbackRequest().getCampaign().getStatus() == FeedbackCampaignStatus.ACTIVE)
                 .filter(assignment -> assignment.getStatus() == AssignmentStatus.PENDING
                         || assignment.getStatus() == AssignmentStatus.IN_PROGRESS)
                 .sorted(java.util.Comparator.comparing(this::resolveEffectiveDeadline, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
@@ -120,7 +138,7 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                         .campaignId(assignment.getFeedbackRequest().getCampaign().getId())
                         .campaignName(assignment.getFeedbackRequest().getCampaign().getName())
                         .targetEmployeeId(assignment.getFeedbackRequest().getTargetEmployeeId())
-                        .evaluatorType(assignment.getSourceType().name())
+                        .relationshipType(assignment.getRelationshipType().name())
                         .status(assignment.getStatus().name())
                         .dueAt(resolveEffectiveDeadline(assignment))
                         .build())
@@ -133,7 +151,8 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                 .filter(response -> privileged || hasVisibilityReached(response.getEvaluatorAssignment().getFeedbackRequest()))
                 .map(response -> {
                     FeedbackEvaluatorAssignment assignment = response.getEvaluatorAssignment();
-                    boolean hideIdentity = Boolean.TRUE.equals(assignment.getIsAnonymous()) && !privileged;
+                    boolean hideIdentity = Boolean.TRUE.equals(assignment.getIsAnonymous())
+                            && !Objects.equals(assignment.getEvaluatorEmployeeId(), targetEmployeeId);
                     return FeedbackReceivedItemResponse.builder()
                             .responseId(response.getId())
                             .requestId(assignment.getFeedbackRequest().getId())
@@ -143,7 +162,7 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                             .overallScore(response.getOverallScore())
                             .comments(response.getComments())
                             .submittedAt(response.getSubmittedAt())
-                            .sourceType(assignment.getSourceType().name())
+                            .relationshipType(assignment.getRelationshipType().name())
                             .anonymous(Boolean.TRUE.equals(assignment.getIsAnonymous()))
                             .evaluatorEmployeeId(hideIdentity ? null : assignment.getEvaluatorEmployeeId())
                             .build();
@@ -170,6 +189,8 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                     long pendingEvaluations = requestRepository.findByTargetEmployeeId(targetEmployeeId).stream()
                             .flatMap(request -> assignmentRepository.findByFeedbackRequestId(request.getId()).stream())
                             .filter(assignment -> assignment.getStatus() != AssignmentStatus.SUBMITTED)
+                            .filter(assignment -> assignment.getStatus() != AssignmentStatus.CANCELLED)
+                            .filter(assignment -> assignment.getFeedbackRequest().getCampaign().getStatus() != FeedbackCampaignStatus.CANCELLED)
                             .count();
 
                     return TeamFeedbackSummaryResponse.builder()
@@ -207,6 +228,9 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
     }
 
     private boolean hasVisibilityReached(FeedbackRequest request) {
+        if (request.getCampaign().getStatus() == FeedbackCampaignStatus.CLOSED) {
+            return true;
+        }
         LocalDateTime effectiveDeadline = resolveEffectiveDeadline(request);
         if (effectiveDeadline != null && LocalDateTime.now().isAfter(effectiveDeadline)) {
             return true;
@@ -221,9 +245,7 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
     }
 
     private LocalDateTime resolveEffectiveDeadline(FeedbackRequest request) {
-        LocalDateTime campaignDeadline = request.getCampaign().getEndDate() != null
-                ? request.getCampaign().getEndDate().atTime(LocalTime.MAX)
-                : null;
+        LocalDateTime campaignDeadline = request.getCampaign().getEndAt();
         if (request.getDueAt() == null) {
             return campaignDeadline;
         }

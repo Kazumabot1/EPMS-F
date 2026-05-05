@@ -1,0 +1,16 @@
+ALTER TABLE feedback_summary
+    MODIFY COLUMN average_score DOUBLE NULL,
+    ADD COLUMN raw_average_score DOUBLE NULL AFTER average_score,
+    ADD COLUMN self_responses BIGINT NOT NULL DEFAULT 0 AFTER subordinate_responses,
+    ADD COLUMN assigned_evaluator_count BIGINT NOT NULL DEFAULT 0 AFTER self_responses,
+    ADD COLUMN submitted_evaluator_count BIGINT NOT NULL DEFAULT 0 AFTER assigned_evaluator_count,
+    ADD COLUMN pending_evaluator_count BIGINT NOT NULL DEFAULT 0 AFTER submitted_evaluator_count,
+    ADD COLUMN completion_rate DOUBLE NOT NULL DEFAULT 0 AFTER pending_evaluator_count,
+    ADD COLUMN confidence_level VARCHAR(32) NOT NULL DEFAULT 'INSUFFICIENT' AFTER completion_rate,
+    ADD COLUMN insufficient_feedback BOOLEAN NOT NULL DEFAULT TRUE AFTER confidence_level,
+    ADD COLUMN score_calculation_method VARCHAR(64) NOT NULL DEFAULT 'WEIGHTED_RELATIONSHIP_AVERAGE' AFTER insufficient_feedback,
+    ADD COLUMN score_calculation_note VARCHAR(500) NULL AFTER score_calculation_method,
+    ADD COLUMN manager_average_score DOUBLE NULL AFTER score_calculation_note,
+    ADD COLUMN peer_average_score DOUBLE NULL AFTER manager_average_score,
+    ADD COLUMN subordinate_average_score DOUBLE NULL AFTER peer_average_score,
+    ADD COLUMN self_average_score DOUBLE NULL AFTER subordinate_average_score;

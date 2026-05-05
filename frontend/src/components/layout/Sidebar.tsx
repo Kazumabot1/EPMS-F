@@ -863,6 +863,8 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
 
       { to: '/hr/assessment-scores', label: 'Assessment Scores', icon: 'bi bi-clipboard-data' },
 
+      { to: '/hr/feedback', label: '360 Feedback', icon: 'bi bi-chat-square-dots' },
+
       {
         to: '/user-roles',
         label: 'Access Control',

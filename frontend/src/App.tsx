@@ -923,6 +923,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 
 import PipCreatePage from './pages/pip/PipCreatePage';
 import PipPastPlansPage from './pages/pip/PipPastPlansPage';
+import HrFeedbackDashboard from './pages/hr-feedback/HrFeedbackDashboard';
 
 function App() {
   return (
@@ -1087,6 +1088,9 @@ function App() {
               <Route path="/hr/team/create" element={<TeamCreate />} />
               <Route path="/hr/department" element={<DepartmentManagement />} />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
+
+              {/* 360 Feedback — single page with internal tabs */}
+              <Route path="/hr/feedback" element={<HrFeedbackDashboard />} />
 
               <Route path="/permissions" element={<Permissions />} />
               <Route path="/user-roles" element={<UserRoles />} />
