@@ -13,6 +13,13 @@ import type { KpiItem } from '../../../types/kpiItem';
 import type { KpiFormStatus, KpiTemplateRequest, KpiTemplateRowDraft } from '../../../types/kpiTemplate';
 import type { KpiUnit } from '../../../types/kpiUnit';
 import type { PositionResponse } from '../../../types/position';
+import {
+  calculateKpiTemplateEndDate,
+  DEFAULT_KPI_TEMPLATE_DURATION_MONTHS,
+  inferKpiTemplateDurationMonths,
+  KPI_TEMPLATE_DURATION_OPTIONS,
+  type KpiTemplateDurationMonths,
+} from '../../../components/hr/kpi-template/kpiTemplateUi';
 
 const fieldClass =
   'kpi-tpl-input min-h-[42px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm placeholder:text-gray-400';
@@ -40,6 +47,7 @@ const KpiTemplateEditorPage = () => {
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [durationMonths, setDurationMonths] = useState<KpiTemplateDurationMonths>(DEFAULT_KPI_TEMPLATE_DURATION_MONTHS);
   const [status, setStatus] = useState<KpiFormStatus>('DRAFT');
   const [positionIds, setPositionIds] = useState<number[]>([]);
   const [rows, setRows] = useState<KpiTemplateRowDraft[]>([newRow()]);
@@ -70,8 +78,11 @@ const KpiTemplateEditorPage = () => {
         if (isEdit && !Number.isNaN(templateId)) {
           const tmpl = await kpiTemplateService.getTemplateById(templateId);
           setTitle(tmpl.title);
-          setStartDate(tmpl.startDate?.slice(0, 10) ?? '');
-          setEndDate(tmpl.endDate?.slice(0, 10) ?? '');
+          const nextStartDate = tmpl.startDate?.slice(0, 10) ?? '';
+          const nextEndDate = tmpl.endDate?.slice(0, 10) ?? '';
+          setStartDate(nextStartDate);
+          setEndDate(nextEndDate);
+          setDurationMonths(inferKpiTemplateDurationMonths(nextStartDate, nextEndDate));
           setStatus(tmpl.status);
           setPositionIds(tmpl.positions.map((p) => p.positionId));
           setRows(
@@ -183,6 +194,16 @@ const KpiTemplateEditorPage = () => {
     setPositionIds((prev) => prev.filter((idValue) => idValue !== pid));
   };
 
+  const handleDurationChange = (value: KpiTemplateDurationMonths) => {
+    setDurationMonths(value);
+    setEndDate(calculateKpiTemplateEndDate(startDate, value));
+  };
+
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+    setEndDate(calculateKpiTemplateEndDate(value, durationMonths));
+  };
+
   const positionTitleById = useMemo(() => {
     const map = new Map<number, string>();
     positions.forEach((p) => map.set(p.id, p.positionTitle));
@@ -273,11 +294,25 @@ const KpiTemplateEditorPage = () => {
               </label>
               <label className="flex flex-col gap-2">
                 <FieldLabel>Start date</FieldLabel>
-                <input required type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={fieldClass} />
+                <input required type="date" value={startDate} onChange={(e) => handleStartDateChange(e.target.value)} className={fieldClass} />
+              </label>
+              <label className="flex flex-col gap-2">
+                <FieldLabel>Duration</FieldLabel>
+                <select
+                  value={durationMonths}
+                  onChange={(event) => handleDurationChange(Number(event.target.value) as KpiTemplateDurationMonths)}
+                  className={`${fieldClass} cursor-pointer`}
+                >
+                  {KPI_TEMPLATE_DURATION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="flex flex-col gap-2">
                 <FieldLabel>End date</FieldLabel>
-                <input required type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={fieldClass} />
+                <input required type="date" value={endDate} disabled className={fieldClass} />
               </label>
             </div>
           </section>

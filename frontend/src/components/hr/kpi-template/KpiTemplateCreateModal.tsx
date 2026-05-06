@@ -12,6 +12,13 @@ import type { KpiFormStatus, KpiTemplateRequest, KpiTemplateResponse, KpiTemplat
 import type { KpiUnit } from '../../../types/kpiUnit';
 import type { PositionResponse } from '../../../types/position';
 import KpiTemplateRowsTable from './KpiTemplateRowsTable';
+import {
+  calculateKpiTemplateEndDate,
+  DEFAULT_KPI_TEMPLATE_DURATION_MONTHS,
+  inferKpiTemplateDurationMonths,
+  KPI_TEMPLATE_DURATION_OPTIONS,
+  type KpiTemplateDurationMonths,
+} from './kpiTemplateUi';
 
 type Props = {
   open: boolean;
@@ -41,6 +48,7 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [durationMonths, setDurationMonths] = useState<KpiTemplateDurationMonths>(DEFAULT_KPI_TEMPLATE_DURATION_MONTHS);
   const [status, setStatus] = useState<KpiFormStatus>('DRAFT');
   const [positionIds, setPositionIds] = useState<number[]>([]);
   const [rows, setRows] = useState<KpiTemplateRowDraft[]>([newRow()]);
@@ -71,8 +79,11 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
         if (!isCreate && templateId) {
           const tmpl: KpiTemplateResponse = await kpiTemplateService.getTemplateById(templateId);
           setTitle(tmpl.title);
-          setStartDate(tmpl.startDate?.slice(0, 10) ?? '');
-          setEndDate(tmpl.endDate?.slice(0, 10) ?? '');
+          const nextStartDate = tmpl.startDate?.slice(0, 10) ?? '';
+          const nextEndDate = tmpl.endDate?.slice(0, 10) ?? '';
+          setStartDate(nextStartDate);
+          setEndDate(nextEndDate);
+          setDurationMonths(inferKpiTemplateDurationMonths(nextStartDate, nextEndDate));
           setStatus(tmpl.status);
           setPositionIds(tmpl.positions.map((p) => p.positionId));
           setRows(
@@ -117,9 +128,20 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
     setTitle('');
     setStartDate('');
     setEndDate('');
+    setDurationMonths(DEFAULT_KPI_TEMPLATE_DURATION_MONTHS);
     setStatus('DRAFT');
     setPositionIds([]);
     setRows([newRow()]);
+  };
+
+  const handleDurationChange = (value: KpiTemplateDurationMonths) => {
+    setDurationMonths(value);
+    setEndDate(calculateKpiTemplateEndDate(startDate, value));
+  };
+
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+    setEndDate(calculateKpiTemplateEndDate(value, durationMonths));
   };
 
   const buildPayload = (submitStatus: KpiFormStatus): KpiTemplateRequest => ({
@@ -237,11 +259,32 @@ const KpiTemplateCreateModal = ({ open, mode, templateId, onClose, onSaved }: Pr
               </label>
               <label>
                 Start date
-                <input type="date" disabled={isView} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={fieldClass} />
+                <input
+                  type="date"
+                  disabled={isView}
+                  value={startDate}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
+                  className={fieldClass}
+                />
+              </label>
+              <label>
+                Duration
+                <select
+                  value={durationMonths}
+                  disabled={isView}
+                  onChange={(event) => handleDurationChange(Number(event.target.value) as KpiTemplateDurationMonths)}
+                  className={`${fieldClass} cursor-pointer`}
+                >
+                  {KPI_TEMPLATE_DURATION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 End date
-                <input type="date" disabled={isView} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={fieldClass} />
+                <input type="date" disabled value={endDate} className={fieldClass} />
               </label>
             </div>
 

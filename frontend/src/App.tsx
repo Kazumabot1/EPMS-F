@@ -219,7 +219,7 @@ function App() {
               <Route path="/hr/department" element={<DepartmentManagement />} />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
 
-              {/* 360 Feedback — single page with internal tabs */}
+
               <Route path="/hr/feedback" element={<HrFeedbackDashboard />} />
 
               <Route path="/permissions" element={<Permissions />} />

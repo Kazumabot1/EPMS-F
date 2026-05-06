@@ -14,12 +14,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class KpiFormServiceImpl implements KpiFormService {
+    private static final Set<Integer> ALLOWED_TEMPLATE_DURATIONS_MONTHS = Set.of(3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
     private final KpiFormRepository kpiFormRepository;
     private final KpiPositionRepository kpiPositionRepository;
@@ -201,6 +204,19 @@ public class KpiFormServiceImpl implements KpiFormService {
         if (dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date must be on or after the start date.");
         }
+        boolean isAllowedDuration = ALLOWED_TEMPLATE_DURATIONS_MONTHS.stream()
+                .anyMatch(months -> matchesDuration(dto.getStartDate(), dto.getEndDate(), months));
+        if (!isAllowedDuration) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "End date must match one of the allowed durations from start date: 3-11 months or 1 year."
+            );
+        }
+    }
+
+    private boolean matchesDuration(LocalDate startDate, LocalDate endDate, int durationMonths) {
+        LocalDate expectedEndDate = startDate.plusMonths(durationMonths).minusDays(1);
+        return expectedEndDate.equals(endDate);
     }
 
     private void validateItems(List<KpiFormItemDTO> items) {
