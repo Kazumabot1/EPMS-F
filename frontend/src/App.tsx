@@ -172,10 +172,11 @@ function App() {
           </Route>
 
           {/* Department Head */}
+          {/* Department Head */}
           <Route element={<ProtectedRoute allowedRoles={['DepartmentHead']} />}>
             <Route element={<AppLayout />}>
               <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
-              <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
+              <Route path="/department-head/assessment-scores" element={<AssessmentScoreTablePage />} />
               <Route path="/pip/create" element={<PipCreatePage />} />
             </Route>
           </Route>

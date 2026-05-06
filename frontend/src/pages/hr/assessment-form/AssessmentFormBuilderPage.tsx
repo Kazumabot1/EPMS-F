@@ -16,6 +16,12 @@ const TARGET_ROLES: { label: string; value: AssessmentTargetRole }[] = [
 
 const RESPONSE_TYPES: AssessmentResponseType[] = ['RATING', 'TEXT', 'YES_NO'];
 
+const RESPONSE_TYPE_LABELS: Record<AssessmentResponseType, string> = {
+  RATING: 'Rating',
+  TEXT: 'Text',
+  YES_NO: 'Yes / No',
+};
+
 const emptyForm = (): AssessmentFormPayload => ({
   formName: '',
   description: '',
@@ -51,10 +57,37 @@ const AssessmentFormBuilderPage = () => {
     [forms]
   );
 
+  const totalSections = useMemo(() => {
+    return forms.reduce((total, item) => total + (item.sections?.length ?? 0), 0);
+  }, [forms]);
+
+  const totalQuestions = useMemo(() => {
+    return forms.reduce((total, item) => {
+      return (
+        total +
+        (item.sections?.reduce(
+          (sectionTotal, section) =>
+            sectionTotal + (section.questions?.length ?? 0),
+          0
+        ) ?? 0)
+      );
+    }, 0);
+  }, [forms]);
+
+  const getQuestionCount = (item: AssessmentFormResponse) => {
+    return (
+      item.sections?.reduce(
+        (total, section) => total + (section.questions?.length ?? 0),
+        0
+      ) ?? 0
+    );
+  };
+
   const loadForms = async () => {
     try {
       setLoading(true);
       setError('');
+
       const data = await assessmentFormService.getAll();
       setForms(data);
     } catch (err) {
@@ -79,6 +112,7 @@ const AssessmentFormBuilderPage = () => {
 
   const openEdit = (item: AssessmentFormResponse) => {
     setEditingId(item.id);
+
     setForm({
       formName: item.formName,
       description: item.description ?? '',
@@ -107,6 +141,7 @@ const AssessmentFormBuilderPage = () => {
           }))
         : emptyForm().sections,
     });
+
     setError('');
     setPreviewOpen(false);
     setModalOpen(true);
@@ -196,7 +231,10 @@ const AssessmentFormBuilderPage = () => {
   const moveSection = (sectionIndex: number, direction: -1 | 1) => {
     setForm((prev) => {
       const target = sectionIndex + direction;
-      if (target < 0 || target >= prev.sections.length) return prev;
+
+      if (target < 0 || target >= prev.sections.length) {
+        return prev;
+      }
 
       const next = [...prev.sections];
       [next[sectionIndex], next[target]] = [next[target], next[sectionIndex]];
@@ -325,87 +363,173 @@ const AssessmentFormBuilderPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-purple-50 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center">
-          <div>
-            <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
-              <i className="bi bi-ui-checks-grid" />
-              HR Assessment Forms
-            </p>
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 p-6 shadow-xl">
+          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10" />
+          <div className="absolute -bottom-20 right-20 h-56 w-56 rounded-full bg-white/10" />
 
-            <h1 className="text-2xl font-bold text-slate-900">
-              Self-Assessment Form Builder
-            </h1>
+          <div className="relative flex flex-col justify-between gap-5 md:flex-row md:items-center">
+            <div>
+              <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white backdrop-blur">
+                <i className="bi bi-ui-checks-grid" />
+                HR Assessment Forms
+              </p>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Create sections and questions for employees, managers, department heads, and project managers.
-              CEO and Admin roles are excluded.
-            </p>
+              <h1 className="text-3xl font-bold text-white">
+                Self-Assessment Form Builder
+              </h1>
+
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100">
+                Create beautiful assessment forms with sections, weighted questions,
+                role targeting, and live previews for employees and managers.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-indigo-700 shadow-lg shadow-indigo-900/20 transition hover:-translate-y-0.5 hover:bg-indigo-50"
+            >
+              <i className="bi bi-plus-circle" />
+              Create Form
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Total Forms</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{forms.length}</p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-xl text-indigo-600">
+                <i className="bi bi-files" />
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
-          >
-            <i className="bi bi-plus-circle" />
-            Create Form
-          </button>
+          <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Active Forms</p>
+                <p className="mt-2 text-3xl font-bold text-emerald-600">
+                  {activeForms.length}
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-xl text-emerald-600">
+                <i className="bi bi-check2-circle" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Sections</p>
+                <p className="mt-2 text-3xl font-bold text-violet-600">
+                  {totalSections}
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-xl text-violet-600">
+                <i className="bi bi-layout-three-columns" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Questions</p>
+                <p className="mt-2 text-3xl font-bold text-purple-600">
+                  {totalQuestions}
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-xl text-purple-600">
+                <i className="bi bi-question-circle" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 shadow-sm">
             <i className="bi bi-exclamation-triangle mr-2" />
             {error}
           </div>
         )}
 
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h2 className="font-semibold text-slate-800">Assessment Forms</h2>
-            <p className="text-sm text-slate-500">{activeForms.length} active form(s)</p>
+        <div className="overflow-hidden rounded-3xl border border-white bg-white/90 shadow-sm backdrop-blur">
+          <div className="flex flex-col justify-between gap-3 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Assessment Forms</h2>
+              <p className="text-sm text-slate-500">
+                Manage active and inactive HR assessment templates.
+              </p>
+            </div>
+
+            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+              <span className="h-2 w-2 rounded-full bg-indigo-500" />
+              {activeForms.length} active form(s)
+            </span>
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-sm text-slate-500">
-              <i className="bi bi-arrow-repeat mr-2 animate-spin" />
+            <div className="p-12 text-center text-sm text-slate-500">
+              <i className="bi bi-arrow-repeat mb-3 block animate-spin text-3xl text-indigo-600" />
               Loading forms...
             </div>
           ) : forms.length === 0 ? (
-            <div className="p-8 text-center text-sm text-slate-500">
-              No assessment forms yet. Create one to replace the hardcoded self-assessment template.
+            <div className="p-12 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-indigo-50 text-3xl text-indigo-600">
+                <i className="bi bi-clipboard-plus" />
+              </div>
+              <h3 className="font-bold text-slate-900">No assessment forms yet</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Create one to replace the hardcoded self-assessment template.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <thead className="bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-5 py-3">Form</th>
-                    <th className="px-5 py-3">Target Roles</th>
-                    <th className="px-5 py-3">Sections</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Updated</th>
-                    <th className="px-5 py-3 text-right">Actions</th>
+                    <th className="px-6 py-4">Form</th>
+                    <th className="px-6 py-4">Target Roles</th>
+                    <th className="px-6 py-4">Structure</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Updated</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
                   {forms.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-slate-800">{item.formName}</div>
-                        <div className="max-w-md truncate text-xs text-slate-500">
-                          {item.description || 'No description'}
+                    <tr key={item.id} className="transition hover:bg-indigo-50/40">
+                      <td className="px-6 py-5">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                            <i className="bi bi-file-earmark-text" />
+                          </div>
+
+                          <div>
+                            <div className="font-bold text-slate-900">
+                              {item.formName}
+                            </div>
+                            <div className="mt-1 max-w-md truncate text-xs text-slate-500">
+                              {item.description || 'No description'}
+                            </div>
+                          </div>
                         </div>
                       </td>
 
-                      <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-1">
+                      <td className="px-6 py-5">
+                        <div className="flex flex-wrap gap-1.5">
                           {(item.targetRoles || []).map((role) => (
                             <span
                               key={role}
-                              className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700"
+                              className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700"
                             >
                               {role}
                             </span>
@@ -413,43 +537,61 @@ const AssessmentFormBuilderPage = () => {
                         </div>
                       </td>
 
-                      <td className="px-5 py-4 text-slate-600">
-                        {item.sections?.length ?? 0}
+                      <td className="px-6 py-5">
+                        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                          <span>
+                            <i className="bi bi-layout-text-window mr-1 text-indigo-500" />
+                            {item.sections?.length ?? 0} section(s)
+                          </span>
+                          <span>
+                            <i className="bi bi-patch-question mr-1 text-purple-500" />
+                            {getQuestionCount(item)} question(s)
+                          </span>
+                        </div>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-6 py-5">
                         <span
-                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
                             item.isActive
                               ? 'bg-emerald-50 text-emerald-700'
                               : 'bg-slate-100 text-slate-500'
                           }`}
                         >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              item.isActive ? 'bg-emerald-500' : 'bg-slate-400'
+                            }`}
+                          />
                           {item.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
 
-                      <td className="px-5 py-4 text-slate-500">
+                      <td className="px-6 py-5 text-xs text-slate-500">
                         {item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '—'}
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-6 py-5">
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => openEdit(item)}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                           >
+                            <i className="bi bi-pencil-square" />
                             Edit
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => deactivate(item.id)}
-                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-                          >
-                            Deactivate
-                          </button>
+                          {item.isActive !== false && (
+                            <button
+                              type="button"
+                              onClick={() => deactivate(item.id)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 shadow-sm transition hover:bg-red-50"
+                            >
+                              <i className="bi bi-x-circle" />
+                              Deactivate
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -462,288 +604,344 @@ const AssessmentFormBuilderPage = () => {
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
-          <div className="my-6 w-full max-w-5xl rounded-2xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  {editingId ? 'Edit Assessment Form' : 'Create Assessment Form'}
-                </h2>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="my-6 w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">
+                    {editingId ? 'Edit Assessment Form' : 'Create Assessment Form'}
+                  </h2>
 
-                <p className="text-sm text-slate-500">
-                  Build the self-assessment form HR wants employees to complete.
-                </p>
+                  <p className="mt-1 text-sm text-indigo-100">
+                    Build sections, questions, role targets, and scoring weights.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-2xl bg-white/15 p-2 text-white transition hover:bg-white/25"
+                >
+                  <i className="bi bi-x-lg" />
+                </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              >
-                <i className="bi bi-x-lg" />
-              </button>
             </div>
 
-            <div className="space-y-5 px-6 py-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-slate-700">
-                    Form Name
-                  </span>
+            <div className="max-h-[75vh] overflow-y-auto bg-slate-50 px-6 py-5">
+              <div className="space-y-5">
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-bold text-slate-700">
+                        Form Name
+                      </span>
 
-                  <input
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                    value={form.formName}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, formName: e.target.value }))
-                    }
-                    placeholder="e.g. Annual Self Assessment"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-slate-700">
-                    Description
-                  </span>
-
-                  <input
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                    value={form.description}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    placeholder="Optional"
-                  />
-                </label>
-              </div>
-
-              <div>
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Target Roles
-                </span>
-
-                <div className="flex flex-wrap gap-2">
-                  {TARGET_ROLES.map((role) => (
-                    <button
-                      key={role.value}
-                      type="button"
-                      onClick={() => updateRole(role.value)}
-                      className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
-                        form.targetRoles.includes(role.value)
-                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-300 bg-white text-slate-600'
-                      }`}
-                    >
-                      {role.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {form.sections.map((section, sectionIndex) => (
-                  <div
-                    key={sectionIndex}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                  >
-                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
                       <input
-                        className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-500"
-                        value={section.title}
-                        onChange={(e) => updateSectionTitle(sectionIndex, e.target.value)}
-                        placeholder="Section title"
+                        className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                        value={form.formName}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, formName: e.target.value }))
+                        }
+                        placeholder="e.g. Annual Self Assessment"
                       />
+                    </label>
 
-                      <div className="flex gap-2">
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-bold text-slate-700">
+                        Description
+                      </span>
+
+                      <input
+                        className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                        value={form.description}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, description: e.target.value }))
+                        }
+                        placeholder="Optional"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-5">
+                    <span className="mb-2 block text-sm font-bold text-slate-700">
+                      Target Roles
+                    </span>
+
+                    <div className="flex flex-wrap gap-2">
+                      {TARGET_ROLES.map((role) => (
                         <button
+                          key={role.value}
                           type="button"
-                          onClick={() => moveSection(sectionIndex, -1)}
-                          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+                          onClick={() => updateRole(role.value)}
+                          className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
+                            form.targetRoles.includes(role.value)
+                              ? 'border-indigo-500 bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                              : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50'
+                          }`}
                         >
-                          Up
+                          {role.label}
                         </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {form.sections.map((section, sectionIndex) => (
+                    <div
+                      key={sectionIndex}
+                      className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+                    >
+                      <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-indigo-50 px-5 py-4 md:flex-row md:items-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600 text-sm font-bold text-white">
+                          {sectionIndex + 1}
+                        </div>
+
+                        <input
+                          className="flex-1 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                          value={section.title}
+                          onChange={(e) =>
+                            updateSectionTitle(sectionIndex, e.target.value)
+                          }
+                          placeholder="Section title"
+                        />
+
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => moveSection(sectionIndex, -1)}
+                            disabled={sectionIndex === 0}
+                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <i className="bi bi-arrow-up" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => moveSection(sectionIndex, 1)}
+                            disabled={sectionIndex === form.sections.length - 1}
+                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <i className="bi bi-arrow-down" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => removeSection(sectionIndex)}
+                            disabled={form.sections.length === 1}
+                            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <i className="bi bi-trash" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 p-5">
+                        {section.questions.map((question, questionIndex) => (
+                          <div
+                            key={questionIndex}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                          >
+                            <div className="mb-3 flex items-center justify-between">
+                              <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                Question {questionIndex + 1}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeQuestion(sectionIndex, questionIndex)
+                                }
+                                disabled={section.questions.length === 1}
+                                className="rounded-lg px-2 py-1 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                Remove
+                              </button>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-[1fr_150px_110px_120px] md:items-center">
+                              <input
+                                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                                value={question.questionText}
+                                onChange={(e) =>
+                                  updateQuestion(sectionIndex, questionIndex, {
+                                    questionText: e.target.value,
+                                  })
+                                }
+                                placeholder="Question text"
+                              />
+
+                              <select
+                                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                                value={question.responseType}
+                                onChange={(e) =>
+                                  updateQuestion(sectionIndex, questionIndex, {
+                                    responseType: e.target.value as AssessmentResponseType,
+                                  })
+                                }
+                              >
+                                {RESPONSE_TYPES.map((type) => (
+                                  <option key={type} value={type}>
+                                    {RESPONSE_TYPE_LABELS[type]}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <input
+                                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={question.weight}
+                                onChange={(e) =>
+                                  updateQuestion(sectionIndex, questionIndex, {
+                                    weight: Number(e.target.value),
+                                  })
+                                }
+                                placeholder="Weight"
+                              />
+
+                              <label className="flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={question.isRequired}
+                                  onChange={(e) =>
+                                    updateQuestion(sectionIndex, questionIndex, {
+                                      isRequired: e.target.checked,
+                                    })
+                                  }
+                                />
+                                Required
+                              </label>
+                            </div>
+                          </div>
+                        ))}
 
                         <button
                           type="button"
-                          onClick={() => moveSection(sectionIndex, 1)}
-                          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+                          onClick={() => addQuestion(sectionIndex)}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100"
                         >
-                          Down
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => removeSection(sectionIndex)}
-                          className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs text-red-600"
-                        >
-                          Remove
+                          <i className="bi bi-plus-circle" />
+                          Add Question
                         </button>
                       </div>
                     </div>
+                  ))}
+                </div>
 
-                    <div className="space-y-3">
-                      {section.questions.map((question, questionIndex) => (
+                <button
+                  type="button"
+                  onClick={addSection}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                >
+                  <i className="bi bi-plus-circle" />
+                  Add Section
+                </button>
+
+                {previewOpen && (
+                  <div className="rounded-3xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-indigo-950">
+                        Live Preview
+                      </h3>
+
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-indigo-700">
+                        {form.sections.length} section(s)
+                      </span>
+                    </div>
+
+                    <div className="space-y-5 rounded-3xl bg-white p-5 shadow-sm">
+                      <div>
+                        <h4 className="text-xl font-bold text-slate-900">
+                          {form.formName || 'Untitled Form'}
+                        </h4>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          {form.description || 'No description'}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {form.targetRoles.map((role) => (
+                            <span
+                              key={role}
+                              className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700"
+                            >
+                              {role}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {form.sections.map((section, index) => (
                         <div
-                          key={questionIndex}
-                          className="rounded-xl border border-slate-200 bg-white p-3"
+                          key={index}
+                          className="rounded-2xl border border-slate-200 p-4"
                         >
-                          <div className="grid gap-3 md:grid-cols-[1fr_140px_100px_100px_auto] md:items-center">
-                            <input
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                              value={question.questionText}
-                              onChange={(e) =>
-                                updateQuestion(sectionIndex, questionIndex, {
-                                  questionText: e.target.value,
-                                })
-                              }
-                              placeholder="Question text"
-                            />
+                          <h5 className="mb-4 font-bold text-slate-900">
+                            {index + 1}. {section.title || 'Untitled Section'}
+                          </h5>
 
-                            <select
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                              value={question.responseType}
-                              onChange={(e) =>
-                                updateQuestion(sectionIndex, questionIndex, {
-                                  responseType: e.target.value as AssessmentResponseType,
-                                })
-                              }
-                            >
-                              {RESPONSE_TYPES.map((type) => (
-                                <option key={type} value={type}>
-                                  {type}
-                                </option>
-                              ))}
-                            </select>
+                          <div className="space-y-4">
+                            {section.questions.map((question, qIndex) => (
+                              <div key={qIndex} className="rounded-xl bg-slate-50 p-4">
+                                <p className="text-sm font-bold text-slate-800">
+                                  {qIndex + 1}.{' '}
+                                  {question.questionText || 'Untitled question'}
+                                  {question.isRequired && (
+                                    <span className="text-red-500"> *</span>
+                                  )}
+                                </p>
 
-                            <input
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                              type="number"
-                              min="0"
-                              step="0.1"
-                              value={question.weight}
-                              onChange={(e) =>
-                                updateQuestion(sectionIndex, questionIndex, {
-                                  weight: Number(e.target.value),
-                                })
-                              }
-                            />
+                                <p className="mt-1 text-xs font-medium text-slate-400">
+                                  {RESPONSE_TYPE_LABELS[question.responseType]} · Weight:{' '}
+                                  {question.weight || 0}
+                                </p>
 
-                            <label className="flex items-center gap-2 text-sm text-slate-600">
-                              <input
-                                type="checkbox"
-                                checked={question.isRequired}
-                                onChange={(e) =>
-                                  updateQuestion(sectionIndex, questionIndex, {
-                                    isRequired: e.target.checked,
-                                  })
-                                }
-                              />
-                              Required
-                            </label>
+                                {question.responseType === 'RATING' && (
+                                  <div className="mt-3 flex gap-2">
+                                    {[1, 2, 3, 4, 5].map((rating) => (
+                                      <span
+                                        key={rating}
+                                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-bold text-slate-600"
+                                      >
+                                        {rating}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
 
-                            <button
-                              type="button"
-                              onClick={() => removeQuestion(sectionIndex, questionIndex)}
-                              className="rounded-lg border border-red-200 px-2 py-2 text-xs text-red-600 hover:bg-red-50"
-                            >
-                              Remove
-                            </button>
+                                {question.responseType === 'TEXT' && (
+                                  <div className="mt-3 h-24 rounded-2xl border border-slate-300 bg-white" />
+                                )}
+
+                                {question.responseType === 'YES_NO' && (
+                                  <div className="mt-3 flex gap-2">
+                                    <span className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600">
+                                      Yes
+                                    </span>
+                                    <span className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600">
+                                      No
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       ))}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => addQuestion(sectionIndex)}
-                      className="mt-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
-                    >
-                      <i className="bi bi-plus-circle mr-1" />
-                      Add Question
-                    </button>
                   </div>
-                ))}
+                )}
               </div>
-
-              <button
-                type="button"
-                onClick={addSection}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                <i className="bi bi-plus-circle mr-1" />
-                Add Section
-              </button>
-
-              {previewOpen && (
-                <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-                  <h3 className="mb-3 font-bold text-indigo-900">Preview</h3>
-
-                  <div className="space-y-4 rounded-xl bg-white p-4">
-                    <div>
-                      <h4 className="text-lg font-bold text-slate-900">
-                        {form.formName || 'Untitled Form'}
-                      </h4>
-                      <p className="text-sm text-slate-500">
-                        {form.description || 'No description'}
-                      </p>
-                    </div>
-
-                    {form.sections.map((section, index) => (
-                      <div key={index} className="rounded-xl border border-slate-200 p-4">
-                        <h5 className="mb-3 font-semibold text-slate-800">
-                          {index + 1}. {section.title || 'Untitled Section'}
-                        </h5>
-
-                        <div className="space-y-3">
-                          {section.questions.map((question, qIndex) => (
-                            <div key={qIndex}>
-                              <p className="text-sm font-medium text-slate-700">
-                                {qIndex + 1}. {question.questionText || 'Untitled question'}
-                                {question.isRequired && <span className="text-red-500"> *</span>}
-                              </p>
-
-                              {question.responseType === 'RATING' && (
-                                <div className="mt-2 flex gap-2">
-                                  {[1, 2, 3, 4, 5].map((rating) => (
-                                    <span
-                                      key={rating}
-                                      className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-sm"
-                                    >
-                                      {rating}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              {question.responseType === 'TEXT' && (
-                                <div className="mt-2 h-20 rounded-lg border border-slate-300 bg-slate-50" />
-                              )}
-
-                              {question.responseType === 'YES_NO' && (
-                                <div className="mt-2 flex gap-2">
-                                  <span className="rounded-lg border border-slate-300 px-3 py-1 text-sm">
-                                    Yes
-                                  </span>
-                                  <span className="rounded-lg border border-slate-300 px-3 py-1 text-sm">
-                                    No
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-6 py-4 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-6 py-4 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setPreviewOpen((prev) => !prev)}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-2xl border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               >
                 {previewOpen ? 'Hide Preview' : 'Preview'}
               </button>
@@ -751,7 +949,7 @@ const AssessmentFormBuilderPage = () => {
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-2xl border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               >
                 Cancel
               </button>
@@ -760,9 +958,18 @@ const AssessmentFormBuilderPage = () => {
                 type="button"
                 onClick={() => void saveForm()}
                 disabled={saving}
-                className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+                className="rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving ? 'Saving...' : editingId ? 'Update Form' : 'Create Form'}
+                {saving ? (
+                  <>
+                    <i className="bi bi-arrow-repeat mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : editingId ? (
+                  'Update Form'
+                ) : (
+                  'Create Form'
+                )}
               </button>
             </div>
           </div>

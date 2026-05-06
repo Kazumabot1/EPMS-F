@@ -1,22 +1,33 @@
-export type AssessmentStatus = 'DRAFT' | 'SUBMITTED';
+export type AssessmentStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+export type AssessmentResponseType = 'RATING' | 'TEXT' | 'YES_NO';
 
 export interface AssessmentItem {
   id?: number | null;
+  questionId?: number | null;
   sectionTitle: string;
   questionText: string;
   itemOrder: number;
+  responseType?: AssessmentResponseType;
+  isRequired?: boolean;
+  weight?: number;
   rating: number | null;
   maxRating: number;
   comment: string;
+  yesNoAnswer?: boolean | null;
 }
 
 export interface AssessmentSection {
+  id?: number | null;
   title: string;
+  orderNo?: number;
   items: AssessmentItem[];
 }
 
 export interface EmployeeAssessment {
   id: number | null;
+  formId?: number | null;
+  assessmentFormId?: number | null;
+  formName?: string;
   userId: number;
   employeeId?: number | null;
   employeeName: string;
@@ -38,14 +49,19 @@ export interface EmployeeAssessment {
 
 export interface AssessmentItemRequest {
   id?: number | null;
+  questionId?: number | null;
   sectionTitle: string;
   questionText: string;
   itemOrder: number;
-  rating: number | null;
-  comment: string;
+  responseType?: AssessmentResponseType;
+  rating?: number | null;
+  comment?: string;
+  yesNoAnswer?: boolean | null;
 }
 
 export interface AssessmentRequest {
+  formId?: number | null;
+  assessmentFormId?: number | null;
   period: string;
   remarks: string;
   items: AssessmentItemRequest[];
