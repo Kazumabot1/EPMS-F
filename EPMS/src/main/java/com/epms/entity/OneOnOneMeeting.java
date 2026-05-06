@@ -2,69 +2,82 @@ package com.epms.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * Why this file is updated:
+ * - Added location for normal and follow-up one-on-one meetings.
+ * - Follow-up meetings are still normal rows in one_on_one_meetings.
+ * - parentMeetingId only connects the follow-up to the original meeting.
+ */
 @Entity
 @Table(name = "one_on_one_meetings")
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class OneOnOneMeeting {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    // The employee who is being met with
+    /**
+     * The selected employee for the meeting.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "employee_id", nullable = false)
+    @JoinColumn(name = "employee_id")
     private Employee employee;
 
-    // The HR/Manager who created the meeting (manager_id)
+    /**
+     * The creator/manager/department head employee record.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "manager_id", nullable = false)
+    @JoinColumn(name = "manager_id")
     private Employee manager;
 
-    // Full datetime: e.g. 2026-05-01T10:30:00
     @Column(name = "scheduled_date")
     private LocalDateTime scheduledDate;
 
+    /**
+     * New simple text location.
+     * Example: ACE 3rd Building, 4th floor
+     */
+    @Column(name = "location", length = 500)
+    private String location;
+
+    @Column(length = 1000)
     private String notes;
 
-    // 0 = not started, 1 = started/ongoing. Auto-flips when scheduledDate is reached.
-    @Column(columnDefinition = "BIT(1) DEFAULT 0")
-    private Boolean status = false;
+    /**
+     * false = upcoming
+     * true = ongoing/activated
+     */
+    private Boolean status;
 
-    // Full datetime of follow-up meeting (null = no follow-up)
-    @Column(name = "follow_up_date")
-    private LocalDateTime followUpDate;
-
-    // Set when meeting is fully finalized (null = not yet finalized). Auto-stamped by server.
+    /**
+     * Meeting finished time.
+     * null means not finalized yet.
+     */
     @Column(name = "is_finalized")
     private LocalDateTime isFinalized;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    // modified by KHN ( ChatGPT)
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Self-referencing FK: set when this meeting is a follow-up of another meeting
-    @Column(name = "parent_meeting_id")
-    private Integer parentMeetingId;
-
-    // One meeting has at most one action item
-    @OneToOne(mappedBy = "meeting", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private OneOnOneActionItem actionItem;
+    @Column(name = "follow_up_date")
+    private LocalDateTime followUpDate;
 
     @Column(name = "follow_up_notes", length = 1000)
     private String followUpNotes;
 
+    @Column(name = "parent_meeting_id")
+    private Integer parentMeetingId;
+
     @Column(name = "reminder_24h_sent")
     private Boolean reminder24hSent = false;
 
+    @OneToOne(mappedBy = "meeting", fetch = FetchType.LAZY)
+    private OneOnOneActionItem actionItem;
 }

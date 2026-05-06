@@ -7,10 +7,14 @@ import com.epms.entity.Department;
 import com.epms.entity.Team;
 import com.epms.entity.TeamMember;
 import com.epms.entity.User;
+import com.epms.exception.BusinessValidationException;
 import com.epms.repository.DepartmentRepository;
+import com.epms.repository.EmployeeDepartmentRepository;
 import com.epms.repository.TeamMemberRepository;
 import com.epms.repository.TeamRepository;
 import com.epms.repository.UserRepository;
+import com.epms.security.SecurityUtils;
+import com.epms.security.UserPrincipal;
 import com.epms.service.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,10 +25,17 @@ import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import com.epms.security.SecurityUtils;
-import com.epms.security.UserPrincipal;
-import com.epms.exception.BusinessValidationException;
 
+/**
+ * Why this file is changed:
+ * - Team Creation must use working department.
+ *
+ * Working department rule:
+ *   parentdepartment if not null
+ *   otherwise currentdepartment
+ *
+ * Both currentdepartment and parentdepartment are now FK ids to department.id.
+ */
 @Service
 @RequiredArgsConstructor
 public class TeamServiceImpl implements TeamService {
@@ -33,6 +44,7 @@ public class TeamServiceImpl implements TeamService {
     private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final EmployeeDepartmentRepository employeeDepartmentRepository;
 
     @Override
     @Transactional
@@ -48,7 +60,12 @@ public class TeamServiceImpl implements TeamService {
         User creator = userRepository.findById(dto.getCreatedById())
                 .orElseThrow(() -> new RuntimeException("Creator not found: " + dto.getCreatedById()));
 
-        validateUserBelongsToDepartment(leader, department.getId(), "Selected Team Leader must belong to the same department as the team");
+        validateUserBelongsToWorkingDepartment(
+                leader,
+                department,
+                "Selected Team Leader must belong to the selected working department"
+        );
+
         validateLeaderIsAvailableForActiveTeam(leader.getId(), null);
 
         Team team = new Team();
@@ -64,7 +81,6 @@ public class TeamServiceImpl implements TeamService {
         syncMembers(savedTeam, dto.getEffectiveMemberUserIds(), creator);
 
         return mapToResponseDto(savedTeam);
-
     }
 
     @Override
@@ -109,7 +125,11 @@ public class TeamServiceImpl implements TeamService {
             User newLeader = userRepository.findById(dto.getTeamLeaderId())
                     .orElseThrow(() -> new RuntimeException("New Team Leader not found: " + dto.getTeamLeaderId()));
 
-            validateUserBelongsToDepartment(newLeader, team.getDepartment().getId(), "New Team Leader must belong to the same department");
+            validateUserBelongsToWorkingDepartment(
+                    newLeader,
+                    team.getDepartment(),
+                    "New Team Leader must belong to the selected working department"
+            );
 
             if (isActive(team.getStatus())) {
                 validateLeaderIsAvailableForActiveTeam(newLeader.getId(), team.getId());
@@ -120,14 +140,17 @@ public class TeamServiceImpl implements TeamService {
 
         if (dto.getStatus() != null && !dto.getStatus().equalsIgnoreCase(team.getStatus())) {
             String newStatus = normalizeStatus(dto.getStatus());
+
             if (isActive(newStatus)) {
                 validateLeaderIsAvailableForActiveTeam(team.getTeamLeader().getId(), team.getId());
                 validateCurrentMembersAreAvailableForActiveTeam(team);
             }
+
             team.setStatus(newStatus);
         }
 
         User editor = null;
+
         if (dto.getCreatedById() != null) {
             editor = userRepository.findById(dto.getCreatedById())
                     .orElseThrow(() -> new RuntimeException("Editor not found: " + dto.getCreatedById()));
@@ -139,9 +162,9 @@ public class TeamServiceImpl implements TeamService {
             if (editor == null) {
                 editor = updatedTeam.getCreatedByUser();
             }
+
             syncMembers(updatedTeam, dto.getEffectiveMemberUserIds(), editor);
         }
-
 
         return mapToResponseDto(updatedTeam);
     }
@@ -149,7 +172,11 @@ public class TeamServiceImpl implements TeamService {
     @Override
     @Transactional(readOnly = true)
     public List<CandidateResponseDto> getCandidateUsers(Integer departmentId) {
-        List<User> users = userRepository.findByDepartmentIdAndActiveTrue(departmentId);
+        Department department = getDepartment(departmentId);
+
+        List<User> users = employeeDepartmentRepository
+                .findActiveUsersByWorkingDepartmentId(department.getId());
+
         List<CandidateResponseDto> candidates = new ArrayList<>();
 
         for (User user : users) {
@@ -158,12 +185,13 @@ public class TeamServiceImpl implements TeamService {
             }
 
             String positionTitle = user.getPosition().getPositionTitle().toLowerCase().replace(" ", "");
+
             if (!positionTitle.contains("teamleader")) {
                 continue;
             }
 
             Team activeTeam = getFirstActiveLeaderTeam(user.getId());
-            candidates.add(toCandidate(user, activeTeam));
+            candidates.add(toCandidate(user, activeTeam, department.getId()));
         }
 
         return candidates;
@@ -171,8 +199,12 @@ public class TeamServiceImpl implements TeamService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CandidateResponseDto> getCandidateMembers(Integer deptId) {
-        List<User> users = userRepository.findByDepartmentIdAndActiveTrue(deptId);
+    public List<CandidateResponseDto> getCandidateMembers(Integer departmentId) {
+        Department department = getDepartment(departmentId);
+
+        List<User> users = employeeDepartmentRepository
+                .findActiveUsersByWorkingDepartmentId(department.getId());
+
         List<CandidateResponseDto> candidates = new ArrayList<>();
 
         for (User user : users) {
@@ -182,7 +214,7 @@ public class TeamServiceImpl implements TeamService {
                 activeTeam = getFirstActiveLeaderTeam(user.getId());
             }
 
-            candidates.add(toCandidate(user, activeTeam));
+            candidates.add(toCandidate(user, activeTeam, department.getId()));
         }
 
         return candidates;
@@ -192,19 +224,21 @@ public class TeamServiceImpl implements TeamService {
         if (dto.getTeamName() == null || dto.getTeamName().trim().isEmpty()) {
             throw new RuntimeException("Team name is required");
         }
+
         if (dto.getDepartmentId() == null) {
             throw new RuntimeException("Department is required");
         }
+
         if (dto.getTeamLeaderId() == null) {
             throw new RuntimeException("Team Leader is required");
         }
+
         if (dto.getCreatedById() == null) {
             throw new RuntimeException("Created by user is required");
         }
     }
 
     private void syncMembers(Team team, List<Integer> memberUserIds, User editor) {
-
         team.clearTeamMembers();
 
         if (memberUserIds == null || memberUserIds.isEmpty()) {
@@ -223,10 +257,10 @@ public class TeamServiceImpl implements TeamService {
             User memberUser = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
-            validateUserBelongsToDepartment(
+            validateUserBelongsToWorkingDepartment(
                     memberUser,
-                    team.getDepartment().getId(),
-                    "Team member " + memberUser.getFullName() + " must belong to the same department"
+                    team.getDepartment(),
+                    "Team member " + memberUser.getFullName() + " must belong to the selected working department"
             );
 
             if (isActive(team.getStatus())) {
@@ -248,8 +282,10 @@ public class TeamServiceImpl implements TeamService {
 
         teamRepository.save(team);
     }
+
     private void validateCurrentMembersAreAvailableForActiveTeam(Team team) {
         List<TeamMember> members = teamMemberRepository.findByTeamId(team.getId());
+
         for (TeamMember member : members) {
             validateMemberIsAvailableForActiveTeam(
                     member.getMemberUser().getId(),
@@ -261,8 +297,10 @@ public class TeamServiceImpl implements TeamService {
 
     private void validateMemberIsAvailableForActiveTeam(Integer userId, Integer currentTeamId, String fullName) {
         List<TeamMember> memberships = teamMemberRepository.findByMemberUserId(userId);
+
         for (TeamMember membership : memberships) {
             Team otherTeam = membership.getTeam();
+
             if (otherTeam != null && isActive(otherTeam.getStatus()) && !Objects.equals(otherTeam.getId(), currentTeamId)) {
                 throw new RuntimeException("User " + fullName + " is already in an Active team: " + otherTeam.getTeamName());
             }
@@ -270,11 +308,16 @@ public class TeamServiceImpl implements TeamService {
     }
 
     private void validateLeaderIsAvailableForActiveTeam(Integer leaderId, Integer currentTeamId) {
-        validateLeaderIsAvailableForActiveTeam(leaderId, currentTeamId, "Selected Team Leader is already leading an Active team");
+        validateLeaderIsAvailableForActiveTeam(
+                leaderId,
+                currentTeamId,
+                "Selected Team Leader is already leading an Active team"
+        );
     }
 
     private void validateLeaderIsAvailableForActiveTeam(Integer leaderId, Integer currentTeamId, String message) {
         List<Team> activeLeaderTeams = teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(leaderId, "Active");
+
         for (Team activeTeam : activeLeaderTeams) {
             if (!Objects.equals(activeTeam.getId(), currentTeamId)) {
                 throw new RuntimeException(message + ": " + activeTeam.getTeamName());
@@ -282,8 +325,17 @@ public class TeamServiceImpl implements TeamService {
         }
     }
 
-    private void validateUserBelongsToDepartment(User user, Integer departmentId, String message) {
-        if (user.getDepartmentId() == null || !user.getDepartmentId().equals(departmentId)) {
+    private void validateUserBelongsToWorkingDepartment(User user, Department department, String message) {
+        if (user == null || user.getId() == null || department == null || department.getId() == null) {
+            throw new RuntimeException(message);
+        }
+
+        boolean belongs = employeeDepartmentRepository.existsActiveUserInWorkingDepartment(
+                user.getId(),
+                department.getId()
+        );
+
+        if (!belongs) {
             throw new RuntimeException(message);
         }
     }
@@ -295,20 +347,22 @@ public class TeamServiceImpl implements TeamService {
 
     private Team getFirstActiveMemberTeam(Integer userId) {
         List<TeamMember> memberships = teamMemberRepository.findByMemberUserId(userId);
+
         for (TeamMember membership : memberships) {
             if (membership.getTeam() != null && isActive(membership.getTeam().getStatus())) {
                 return membership.getTeam();
             }
         }
+
         return null;
     }
 
-    private CandidateResponseDto toCandidate(User user, Team activeTeam) {
+    private CandidateResponseDto toCandidate(User user, Team activeTeam, Integer selectedDepartmentId) {
         return new CandidateResponseDto(
                 user.getId(),
                 user.getFullName(),
                 "USER",
-                user.getDepartmentId(),
+                selectedDepartmentId,
                 null,
                 activeTeam == null,
                 activeTeam != null ? activeTeam.getId() : null,
@@ -318,6 +372,7 @@ public class TeamServiceImpl implements TeamService {
 
     private TeamResponseDto mapToResponseDto(Team team) {
         TeamResponseDto dto = new TeamResponseDto();
+
         dto.setId(team.getId());
         dto.setTeamName(team.getTeamName());
         dto.setDepartmentId(team.getDepartment() != null ? team.getDepartment().getId() : null);
@@ -331,6 +386,7 @@ public class TeamServiceImpl implements TeamService {
         dto.setTeamGoal(team.getTeamGoal());
 
         List<TeamMember> teamMembers = team.getTeamMembers();
+
         if (teamMembers == null) {
             teamMembers = teamMemberRepository.findByTeamId(team.getId());
         }
@@ -345,6 +401,7 @@ public class TeamServiceImpl implements TeamService {
                 .collect(Collectors.toList());
 
         dto.setMembers(members);
+
         return dto;
     }
 
@@ -352,19 +409,24 @@ public class TeamServiceImpl implements TeamService {
         if (status == null || status.trim().isEmpty()) {
             return "Active";
         }
+
         String trimmed = status.trim();
+
         if (trimmed.equalsIgnoreCase("Active")) {
             return "Active";
         }
+
         if (trimmed.equalsIgnoreCase("Inactive")) {
             return "Inactive";
         }
+
         return trimmed;
     }
 
     private boolean isActive(String status) {
         return "Active".equalsIgnoreCase(status);
     }
+
     @Override
     @Transactional(readOnly = true)
     public List<TeamResponseDto> getMyDepartmentTeams() {
@@ -437,5 +499,14 @@ public class TeamServiceImpl implements TeamService {
         if (requestedDepartmentId == null || !requestedDepartmentId.equals(currentDepartmentId)) {
             throw new BusinessValidationException("You can only access teams from your own department.");
         }
+    }
+
+    private Department getDepartment(Integer departmentId) {
+        if (departmentId == null) {
+            throw new RuntimeException("Department is required.");
+        }
+
+        return departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new RuntimeException("Department not found: " + departmentId));
     }
 }
