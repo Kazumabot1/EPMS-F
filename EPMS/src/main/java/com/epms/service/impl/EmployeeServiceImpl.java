@@ -15,6 +15,8 @@ import com.epms.repository.EmployeeDepartmentRepository;
 import com.epms.repository.EmployeeRepository;
 import com.epms.repository.PositionRepository;
 import com.epms.repository.UserRepository;
+import com.epms.security.SecurityUtils;
+import com.epms.security.UserPrincipal;
 import com.epms.service.EmployeeService;
 import com.epms.service.UserAccountProvisioningService;
 import lombok.RequiredArgsConstructor;
@@ -27,9 +29,23 @@ import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import com.epms.security.SecurityUtils;
-import com.epms.security.UserPrincipal;
 
+/**
+ * Why this file is changed:
+ * - employee_department.currentdepartment and employee_department.parentdepartment
+ *   are now integer FK columns to department.id.
+ *
+ * New department rule:
+ *   working department = parentDepartment if not null
+ *   otherwise currentDepartment
+ *
+ * For employee create/update:
+ * - Frontend still sends departmentId.
+ * - Backend stores that department as currentDepartment.
+ * - parentDepartment is left null by normal employee create/edit.
+ * - SQL/import or a future UI can set parentDepartment when employee is assigned
+ *   to work under another department.
+ */
 @Service
 @RequiredArgsConstructor
 public class EmployeeServiceImpl implements EmployeeService {
@@ -158,7 +174,13 @@ public class EmployeeServiceImpl implements EmployeeService {
             user.setEmail(trimToNull(employee.getEmail()));
             user.setEmployeeCode(trimToNull(employee.getStaffNrc()));
             user.setPosition(employee.getPosition());
+
+            /*
+             * Keep users.department_id because login/security/dashboard still uses it.
+             * employee_department uses currentdepartment/parentdepartment as FK IDs.
+             */
             user.setDepartmentId(departmentId);
+
             user.setActive(employee.getActive() == null || employee.getActive());
             user.setUpdatedAt(new Date());
 
@@ -220,6 +242,14 @@ public class EmployeeServiceImpl implements EmployeeService {
         employee.setPosition(position);
     }
 
+    /**
+     * Creates/closes employee_department history.
+     *
+     * currentdepartment = employee's original/current department FK.
+     * parentdepartment = working department FK, optional.
+     *
+     * Normal HR create/edit assigns currentDepartment only.
+     */
     private void syncDepartmentAssignment(Integer departmentId, Employee employee) {
         List<EmployeeDepartment> history = employee.getEmployeeDepartments() != null
                 ? new ArrayList<>(employee.getEmployeeDepartments())
@@ -231,31 +261,34 @@ public class EmployeeServiceImpl implements EmployeeService {
                         item -> item.getStartdate() == null ? new Date(0) : item.getStartdate()
                 ));
 
-        Integer currentDeptId = currentOpt
-                .map(item -> item.getDepartment() != null ? item.getDepartment().getId() : null)
-                .orElse(null);
-
         if (departmentId == null) {
             currentOpt.ifPresent(this::closeDepartmentAssignment);
-            return;
-        }
-
-        if (Objects.equals(currentDeptId, departmentId)) {
             return;
         }
 
         Department newDept = departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + departmentId));
 
+        Integer currentWorkingDepartmentId = currentOpt
+                .map(this::getWorkingDepartmentId)
+                .orElse(null);
+
+        /*
+         * If the selected department is already the active working department,
+         * no need to create another assignment row.
+         */
+        if (currentWorkingDepartmentId != null && currentWorkingDepartmentId.equals(newDept.getId())) {
+            return;
+        }
+
         currentOpt.ifPresent(this::closeDepartmentAssignment);
 
         EmployeeDepartment row = new EmployeeDepartment();
         row.setEmployee(employee);
-        row.setDepartment(newDept);
         row.setStartdate(new Date());
         row.setEnddate(null);
-        row.setCurrentdepartment(newDept.getDepartmentName());
-        row.setParentdepartment(null);
+        row.setCurrentDepartment(newDept);
+        row.setParentDepartment(null);
         row.setAssignBy("HR");
 
         employeeDepartmentRepository.save(row);
@@ -268,15 +301,6 @@ public class EmployeeServiceImpl implements EmployeeService {
     private void closeDepartmentAssignment(EmployeeDepartment row) {
         row.setEnddate(new Date());
         employeeDepartmentRepository.save(row);
-    }
-
-    private String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String t = value.trim();
-        return t.isEmpty() ? null : t;
     }
 
     private EmployeeResponseDto mapToDto(Employee emp) {
@@ -309,21 +333,14 @@ public class EmployeeServiceImpl implements EmployeeService {
         Date departmentEndDate = null;
 
         if (latestAssignment != null) {
-            Department department = latestAssignment.getDepartment();
+            Department currentDept = latestAssignment.getCurrentDepartment();
+            Department parentDept = latestAssignment.getParentDepartment();
 
-            if (department != null) {
-                currentDepartmentId = department.getId();
-            }
+            Department workingDept = parentDept != null ? parentDept : currentDept;
 
-            currentDepartment =
-                    latestAssignment.getCurrentdepartment() != null &&
-                            !latestAssignment.getCurrentdepartment().isBlank()
-                            ? latestAssignment.getCurrentdepartment()
-                            : department != null
-                            ? department.getDepartmentName()
-                            : null;
-
-            parentDepartment = latestAssignment.getParentdepartment();
+            currentDepartmentId = workingDept != null ? workingDept.getId() : null;
+            currentDepartment = currentDept != null ? currentDept.getDepartmentName() : null;
+            parentDepartment = parentDept != null ? parentDept.getDepartmentName() : null;
             assignedBy = latestAssignment.getAssignBy();
             departmentStartDate = latestAssignment.getStartdate();
             departmentEndDate = latestAssignment.getEnddate();
@@ -386,12 +403,14 @@ public class EmployeeServiceImpl implements EmployeeService {
                 null
         );
     }
+
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeResponseDto> getMyDepartmentEmployees(boolean includeInactive) {
         Integer departmentId = requireCurrentDepartmentId();
 
-        return employeeRepository.findCurrentByDepartmentId(departmentId, includeInactive)
+        return employeeRepository
+                .findCurrentByWorkingDepartmentId(departmentId, includeInactive)
                 .stream()
                 .map(this::mapToDto)
                 .toList();
@@ -401,7 +420,12 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Transactional(readOnly = true)
     public EmployeeResponseDto getMyDepartmentEmployeeById(Integer id) {
         EmployeeResponseDto dto = getEmployeeById(id);
-        assertSameDepartment(dto.getCurrentDepartmentId());
+        Integer departmentId = requireCurrentDepartmentId();
+
+        if (dto.getCurrentDepartmentId() == null || !dto.getCurrentDepartmentId().equals(departmentId)) {
+            throw new BusinessValidationException("You can only access employees from your own department.");
+        }
+
         return dto;
     }
 
@@ -415,11 +439,28 @@ public class EmployeeServiceImpl implements EmployeeService {
         return currentUser.getDepartmentId();
     }
 
-    private void assertSameDepartment(Integer requestedDepartmentId) {
-        Integer currentDepartmentId = requireCurrentDepartmentId();
-
-        if (requestedDepartmentId == null || !requestedDepartmentId.equals(currentDepartmentId)) {
-            throw new BusinessValidationException("You can only access employees from your own department.");
+    private Integer getWorkingDepartmentId(EmployeeDepartment assignment) {
+        if (assignment == null) {
+            return null;
         }
+
+        if (assignment.getParentDepartment() != null) {
+            return assignment.getParentDepartment().getId();
+        }
+
+        if (assignment.getCurrentDepartment() != null) {
+            return assignment.getCurrentDepartment().getId();
+        }
+
+        return null;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String t = value.trim();
+        return t.isEmpty() ? null : t;
     }
 }

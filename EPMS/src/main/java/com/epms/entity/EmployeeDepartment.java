@@ -4,8 +4,22 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+
 import java.util.Date;
 
+/**
+ * Why this file is changed:
+ * - currentdepartment and parentdepartment are now foreign keys to department.id.
+ * - This is better than storing department names as text.
+ *
+ * New department rule:
+ *   working department = parentDepartment if not null
+ *   otherwise currentDepartment
+ *
+ * Column meaning:
+ * - currentdepartment = employee's original/current department id
+ * - parentdepartment = employee's working/assigned department id
+ */
 @Entity
 @Table(name = "employee_department")
 @Data
@@ -17,26 +31,33 @@ public class EmployeeDepartment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    // Foreign key to Employee
+    /**
+     * employee_department.employee_id -> employee.id
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "employee_id", referencedColumnName = "id")
+    @JoinColumn(name = "employee_id", referencedColumnName = "id", nullable = false)
     private Employee employee;
 
-    // Foreign key to Department
+    /**
+     * employee_department.currentdepartment -> department.id
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id", referencedColumnName = "id")
-    private Department department;
-    private String currentdepartment;
-    private String parentdepartment;
+    @JoinColumn(name = "currentdepartment", referencedColumnName = "id")
+    private Department currentDepartment;
+
+    /**
+     * employee_department.parentdepartment -> department.id
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parentdepartment", referencedColumnName = "id")
+    private Department parentDepartment;
+
+    @Column(name = "assign_by")
     private String assignBy;
+
+    @Temporal(TemporalType.DATE)
     private Date startdate;
+
+    @Temporal(TemporalType.DATE)
     private Date enddate;
-
-
-    // Extra fields (optional)
-//    private String roleInDepartment;  // e.g., "Manager", "Member"
-//    @Temporal(TemporalType.DATE)
-//    private Date assignedDate;
-//
-//    private Boolean isActive = true;
 }
