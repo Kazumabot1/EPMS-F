@@ -10,12 +10,28 @@ export interface FeedbackResultItem {
   campaignName: string;
   targetEmployeeId: number;
   targetEmployeeName: string;
-  averageScore: number;
+  averageScore: number | null;
+  rawAverageScore?: number | null;
   scoreCategory?: string;
   totalResponses: number;
   managerResponses: number;
   peerResponses: number;
   subordinateResponses: number;
+  selfResponses?: number;
+  projectStakeholderResponses?: number;
+  assignedEvaluatorCount?: number;
+  submittedEvaluatorCount?: number;
+  pendingEvaluatorCount?: number;
+  completionRate?: number;
+  confidenceLevel?: string;
+  insufficientFeedback?: boolean;
+  managerAverageScore?: number | null;
+  peerAverageScore?: number | null;
+  subordinateAverageScore?: number | null;
+  selfAverageScore?: number | null;
+  projectStakeholderAverageScore?: number | null;
+  scoreCalculationMethod?: string;
+  scoreCalculationNote?: string;
   summarizedAt: string;
 }
 
@@ -27,6 +43,11 @@ export interface FeedbackCampaignSummary {
   overallScoreCategory?: string;
   totalEmployees: number;
   totalResponses: number;
+  assignedEvaluatorCount?: number;
+  submittedEvaluatorCount?: number;
+  pendingEvaluatorCount?: number;
+  completionRate?: number;
+  insufficientFeedbackCount?: number;
   summarizedAt: string;
   items: FeedbackResultItem[];
 }
@@ -42,4 +63,34 @@ export interface FeedbackTeamSummary {
   totalDirectReports: number;
   totalClosedResults: number;
   items: FeedbackResultItem[];
+}
+
+export interface FeedbackIntegrationScore {
+  campaignId: number;
+  campaignName: string;
+  campaignStatus: string;
+  targetEmployeeId: number;
+  targetEmployeeName: string;
+  feedbackScore: number | null;
+  rawFeedbackScore: number | null;
+  scoreBand: string;
+  assignedEvaluatorCount: number;
+  submittedEvaluatorCount: number;
+  pendingEvaluatorCount: number;
+  completionRate: number;
+  confidenceLevel: string;
+  insufficientFeedback: boolean;
+  managerAverageScore?: number | null;
+  peerAverageScore?: number | null;
+  subordinateAverageScore?: number | null;
+  selfAverageScore?: number | null;
+  projectStakeholderAverageScore?: number | null;
+  managerResponses: number;
+  peerResponses: number;
+  subordinateResponses: number;
+  selfResponses: number;
+  projectStakeholderResponses: number;
+  scoreCalculationMethod: string;
+  scoreCalculationNote?: string;
+  summarizedAt: string;
 }

@@ -4,6 +4,7 @@ import type {
   ApiEnvelope,
   FeedbackAssignmentDetail,
   FeedbackEvaluatorTask,
+  SaveFeedbackDraftPayload,
   SubmitFeedbackResponsePayload,
 } from '../types/feedbackEvaluator';
 
@@ -29,6 +30,15 @@ export const feedbackEvaluatorApi = {
       return unwrap(response);
     } catch (error) {
       throw new Error(extractApiErrorMessage(error, 'Failed to load the feedback assignment.'));
+    }
+  },
+
+  async saveDraft(payload: SaveFeedbackDraftPayload): Promise<number> {
+    try {
+      const response = await api.patch<ApiEnvelope<number>>(`${FEEDBACK_BASE}/responses/draft`, payload);
+      return unwrap(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to save feedback draft.'));
     }
   },
 

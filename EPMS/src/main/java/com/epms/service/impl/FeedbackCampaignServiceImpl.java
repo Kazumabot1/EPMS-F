@@ -135,14 +135,13 @@ public class FeedbackCampaignServiceImpl implements FeedbackCampaignService {
 
         List<FeedbackRequest> existingRequests = feedbackRequestRepository.findByCampaignIdOrderByTargetEmployeeIdAsc(campaignId);
         if (!existingRequests.isEmpty()) {
-            List<FeedbackEvaluatorAssignment> assignments = new ArrayList<>();
-            for (FeedbackRequest request : existingRequests) {
-                assignments.addAll(assignmentRepository.findByFeedbackRequestId(request.getId()));
-            }
-            if (!assignments.isEmpty()) {
-                assignmentRepository.deleteAll(assignments);
-            }
-            feedbackRequestRepository.deleteAll(existingRequests);
+            // Delete/flush old targets before inserting replacements. Without the flush, Hibernate may try
+            // to insert the new (campaign_id, target_employee_id) rows before the old rows are removed,
+            // causing a duplicate-key failure when HR saves the same target list again.
+            assignmentRepository.deleteByFeedbackRequestCampaignId(campaignId);
+            assignmentRepository.flush();
+            feedbackRequestRepository.deleteAllInBatch(existingRequests);
+            feedbackRequestRepository.flush();
         }
 
         List<FeedbackRequest> newRequests = uniqueTargetIds.stream()

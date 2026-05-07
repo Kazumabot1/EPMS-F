@@ -17,6 +17,8 @@ import com.epms.repository.FeedbackRequestRepository;
 import com.epms.repository.FeedbackResponseRepository;
 import com.epms.repository.UserRepository;
 import com.epms.service.FeedbackDashboardService;
+import com.epms.util.FeedbackPrivacyUtil;
+import com.epms.util.FeedbackScoreUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -132,16 +134,29 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                 .filter(assignment -> assignment.getStatus() == AssignmentStatus.PENDING
                         || assignment.getStatus() == AssignmentStatus.IN_PROGRESS)
                 .sorted(java.util.Comparator.comparing(this::resolveEffectiveDeadline, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
-                .map(assignment -> FeedbackSubmissionStatusResponse.builder()
-                        .evaluatorAssignmentId(assignment.getId())
-                        .requestId(assignment.getFeedbackRequest().getId())
-                        .campaignId(assignment.getFeedbackRequest().getCampaign().getId())
-                        .campaignName(assignment.getFeedbackRequest().getCampaign().getName())
-                        .targetEmployeeId(assignment.getFeedbackRequest().getTargetEmployeeId())
-                        .relationshipType(assignment.getRelationshipType().name())
-                        .status(assignment.getStatus().name())
-                        .dueAt(resolveEffectiveDeadline(assignment))
-                        .build())
+                .map(assignment -> {
+                    FeedbackRequest request = assignment.getFeedbackRequest();
+                    LocalDateTime dueAt = resolveEffectiveDeadline(assignment);
+                    boolean overdue = dueAt != null && LocalDateTime.now().isAfter(dueAt);
+                    boolean canSubmit = request.getCampaign().getStatus() == FeedbackCampaignStatus.ACTIVE
+                            && !overdue
+                            && assignment.getStatus() != AssignmentStatus.SUBMITTED
+                            && assignment.getStatus() != AssignmentStatus.CANCELLED;
+                    return FeedbackSubmissionStatusResponse.builder()
+                            .evaluatorAssignmentId(assignment.getId())
+                            .requestId(request.getId())
+                            .campaignId(request.getCampaign().getId())
+                            .campaignName(request.getCampaign().getName())
+                            .campaignStatus(request.getCampaign().getStatus().name())
+                            .targetEmployeeId(request.getTargetEmployeeId())
+                            .targetEmployeeName(resolveEmployeeName(request.getTargetEmployeeId()))
+                            .relationshipType(assignment.getRelationshipType().name())
+                            .status(assignment.getStatus().name())
+                            .canSubmit(canSubmit)
+                            .lifecycleMessage(buildLifecycleMessage(request.getCampaign().getStatus(), dueAt, assignment.getStatus()))
+                            .dueAt(dueAt)
+                            .build();
+                })
                 .toList();
     }
 
@@ -151,20 +166,30 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                 .filter(response -> privileged || hasVisibilityReached(response.getEvaluatorAssignment().getFeedbackRequest()))
                 .map(response -> {
                     FeedbackEvaluatorAssignment assignment = response.getEvaluatorAssignment();
-                    boolean hideIdentity = Boolean.TRUE.equals(assignment.getIsAnonymous())
-                            && !Objects.equals(assignment.getEvaluatorEmployeeId(), targetEmployeeId);
+                    boolean identityVisible = FeedbackPrivacyUtil.canViewerSeeEvaluatorIdentity(assignment, targetEmployeeId);
+                    FeedbackRequest request = assignment.getFeedbackRequest();
                     return FeedbackReceivedItemResponse.builder()
                             .responseId(response.getId())
-                            .requestId(assignment.getFeedbackRequest().getId())
-                            .campaignId(assignment.getFeedbackRequest().getCampaign().getId())
-                            .campaignName(assignment.getFeedbackRequest().getCampaign().getName())
-                            .targetEmployeeId(assignment.getFeedbackRequest().getTargetEmployeeId())
+                            .requestId(request.getId())
+                            .campaignId(request.getCampaign().getId())
+                            .campaignName(request.getCampaign().getName())
+                            .campaignStatus(request.getCampaign().getStatus().name())
+                            .targetEmployeeId(request.getTargetEmployeeId())
+                            .targetEmployeeName(resolveEmployeeName(request.getTargetEmployeeId()))
                             .overallScore(response.getOverallScore())
+                            .scoreCategory(FeedbackScoreUtil.category(response.getOverallScore()))
                             .comments(response.getComments())
                             .submittedAt(response.getSubmittedAt())
                             .relationshipType(assignment.getRelationshipType().name())
-                            .anonymous(Boolean.TRUE.equals(assignment.getIsAnonymous()))
-                            .evaluatorEmployeeId(hideIdentity ? null : assignment.getEvaluatorEmployeeId())
+                            .anonymous(FeedbackPrivacyUtil.isIdentityProtected(assignment))
+                            .evaluatorEmployeeId(identityVisible ? assignment.getEvaluatorEmployeeId() : null)
+                            .evaluatorDisplayName(identityVisible
+                                    ? resolveEmployeeName(assignment.getEvaluatorEmployeeId())
+                                    : FeedbackPrivacyUtil.maskedEvaluatorLabel(assignment.getRelationshipType()))
+                            .evaluatorIdentityVisible(identityVisible)
+                            .evaluatorSourceLabel(FeedbackPrivacyUtil.relationshipLabel(assignment.getRelationshipType()))
+                            .identityProtectionReason(FeedbackPrivacyUtil.identityProtectionReason(assignment))
+                            .visibilityReason(visibilityReason(request))
                             .build();
                 })
                 .toList();
@@ -225,6 +250,65 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                             .build();
                 })
                 .toList();
+    }
+
+    private String resolveEmployeeName(Long employeeId) {
+        if (employeeId == null) {
+            return "Unknown employee";
+        }
+        return userRepository.findActiveByEmployeeId(employeeId.intValue())
+                .map(this::displayUser)
+                .orElse("Employee #" + employeeId);
+    }
+
+    private String displayUser(User user) {
+        if (user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName();
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            return user.getEmail();
+        }
+        return "Employee #" + user.getEmployeeId();
+    }
+
+    private String anonymousEvaluatorLabel(String relationshipType) {
+        String label = relationshipType == null ? "Evaluator" : relationshipType.replace('_', ' ').toLowerCase();
+        return "Anonymous " + label.substring(0, 1).toUpperCase() + label.substring(1);
+    }
+
+    private String visibilityReason(FeedbackRequest request) {
+        if (request.getCampaign().getStatus() == FeedbackCampaignStatus.CLOSED) {
+            return "Campaign closed";
+        }
+        LocalDateTime effectiveDeadline = resolveEffectiveDeadline(request);
+        if (effectiveDeadline != null && LocalDateTime.now().isAfter(effectiveDeadline)) {
+            return "Submission deadline passed";
+        }
+        long totalAssignments = assignmentRepository.countByFeedbackRequestId(request.getId());
+        long submittedAssignments = assignmentRepository.countByFeedbackRequestIdAndStatus(request.getId(), AssignmentStatus.SUBMITTED);
+        if (totalAssignments > 0 && totalAssignments == submittedAssignments) {
+            return "All evaluators submitted";
+        }
+        return "Visible by role permission";
+    }
+
+    private String buildLifecycleMessage(FeedbackCampaignStatus campaignStatus, LocalDateTime dueAt, AssignmentStatus assignmentStatus) {
+        if (assignmentStatus == AssignmentStatus.SUBMITTED) {
+            return "Submitted feedback is locked and can only be viewed.";
+        }
+        if (campaignStatus == FeedbackCampaignStatus.DRAFT) {
+            return "This campaign is still in HR setup.";
+        }
+        if (campaignStatus == FeedbackCampaignStatus.CLOSED) {
+            return "This campaign is closed. Feedback can no longer be edited or submitted.";
+        }
+        if (campaignStatus == FeedbackCampaignStatus.CANCELLED) {
+            return "This campaign was cancelled.";
+        }
+        if (dueAt != null && LocalDateTime.now().isAfter(dueAt)) {
+            return "Feedback deadline has passed.";
+        }
+        return "Open for draft saving and final submission.";
     }
 
     private boolean hasVisibilityReached(FeedbackRequest request) {

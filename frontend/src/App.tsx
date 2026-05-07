@@ -742,6 +742,7 @@ function App() {
                   />
                 }
               />
+              <Route path="/manager/feedback" element={<EmployeeFeedbackDashboardPage />} />
 
               <Route path="/pip/create" element={<PipCreatePage />} />
               <Route path="/pip/past-plans" element={<PipPastPlansPage />} />
@@ -924,205 +925,196 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import PipCreatePage from './pages/pip/PipCreatePage';
 import PipPastPlansPage from './pages/pip/PipPastPlansPage';
 import HrFeedbackDashboard from './pages/hr-feedback/HrFeedbackDashboard';
+import EmployeeFeedbackDashboardPage from './pages/feedback-evaluator/EmployeeFeedbackDashboardPage';
+import FeedbackFormPage from './pages/feedback-evaluator/FeedbackFormPage';
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        <Route element={<ProtectedRoute />}>
-          <Route path="/change-password" element={<ForceChangePasswordPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/change-password" element={<ForceChangePasswordPage />} />
 
-          {/* Shared logged-in routes.
+            {/* Shared logged-in routes.
               These routes are available to multiple roles, so they must not be duplicated
               inside Employee/Manager/HR groups. */}
-          <Route element={<AppLayout />}>
-            <Route path="/pip/past-plans" element={<PipPastPlansPage />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/employee/notifications" element={<Notifications />} />
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
             <Route element={<AppLayout />}>
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/admin/users" element={<AdminDashboard />} />
-              <Route path="/admin/employee/import" element={<HrEmployeeAccountImport />} />
+              <Route path="/pip/past-plans" element={<PipPastPlansPage />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/employee/notifications" element={<Notifications />} />
+              <Route path="/feedback" element={<EmployeeFeedbackDashboardPage />} />
+              <Route path="/feedback/my-tasks" element={<EmployeeFeedbackDashboardPage />} />
+              <Route path="/feedback/assignments/:assignmentId" element={<FeedbackFormPage />} />
+            </Route>
 
-              <Route path="/permissions" element={<Permissions />} />
-              <Route path="/user-roles" element={<UserRoles />} />
-              <Route path="/role-permissions" element={<RolePermissions />} />
+            <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
+              <Route element={<AppLayout />}>
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/users" element={<AdminDashboard />} />
+                <Route path="/admin/employee/import" element={<HrEmployeeAccountImport />} />
+
+                <Route path="/permissions" element={<Permissions />} />
+                <Route path="/user-roles" element={<UserRoles />} />
+                <Route path="/role-permissions" element={<RolePermissions />} />
+              </Route>
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['Employee']} />}>
+              <Route element={<AppLayout />}>
+                <Route path="/employee/dashboard" element={<EmployeeMyDashboard />} />
+                <Route
+                    path="/employee/kpis"
+                    element={
+                      <EmployeeRoutePlaceholder
+                          title="My KPIs"
+                          description="Track your KPI progress, scores, and weight distribution."
+                      />
+                    }
+                />
+                <Route path="/employee/appraisals" element={<EmployeeAssessmentScoresPage />} />
+                <Route path="/employee/self-assessment" element={<EmployeeSelfAssessmentPage />} />
+                <Route path="/employee/feedback" element={<EmployeeFeedbackDashboardPage />} />
+                <Route path="/employee/feedback/assignments/:assignmentId" element={<FeedbackFormPage />} />
+                <Route
+                    path="/employee/one-on-ones"
+                    element={
+                      <EmployeeRoutePlaceholder
+                          title="One-on-Ones"
+                          description="Manage your one-on-one meetings and related notes."
+                      />
+                    }
+                />
+                <Route path="/employee/pip" element={<PipPastPlansPage />} />
+              </Route>
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['Manager']} />}>
+              <Route element={<AppLayout />}>
+                <Route path="/manager/dashboard" element={<ManagerDashboard />} />
+                <Route
+                    path="/manager/appraisals"
+                    element={
+                      <EmployeeRoutePlaceholder
+                          title="Team Appraisals"
+                          description="Manager appraisal workflow placeholder."
+                      />
+                    }
+                />
+                <Route
+                    path="/manager/reports"
+                    element={
+                      <EmployeeRoutePlaceholder
+                          title="Team Reports"
+                          description="Manager reporting workflow placeholder."
+                      />
+                    }
+                />
+
+                <Route path="/pip/create" element={<PipCreatePage />} />
+              </Route>
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['Executive']} />}>
+              <Route element={<AppLayout />}>
+                <Route path="/executive/dashboard" element={<CeoDashboard />} />
+                <Route
+                    path="/executive/reports"
+                    element={
+                      <EmployeeRoutePlaceholder
+                          title="Executive Reports"
+                          description="Executive performance reports placeholder."
+                      />
+                    }
+                />
+              </Route>
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['DepartmentHead']} />}>
+              <Route element={<AppLayout />}>
+                <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
+                <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
+                <Route path="/department-head/feedback" element={<EmployeeFeedbackDashboardPage />} />
+
+                <Route path="/pip/create" element={<PipCreatePage />} />
+              </Route>
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['ProjectManager']} />}>
+              <Route element={<AppLayout />}>
+                <Route path="/project-manager/dashboard" element={<ProjectManagerDashboard />} />
+                <Route
+                    path="/project-manager/performance"
+                    element={
+                      <EmployeeRoutePlaceholder
+                          title="Project Performance"
+                          description="Track KPI metrics and performance data across your projects."
+                      />
+                    }
+                />
+                <Route path="/project-manager/feedback" element={<EmployeeFeedbackDashboardPage />} />
+                <Route
+                    path="/project-manager/reports"
+                    element={
+                      <EmployeeRoutePlaceholder
+                          title="Project Reports"
+                          description="Generate and export project performance reports."
+                      />
+                    }
+                />
+              </Route>
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['HR']} />}>
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Home />} />
+                <Route path="/hr/profile" element={<ProfilePage />} />
+
+                <Route path="/hr/employee" element={<EmployeeManagement />} />
+                <Route path="/hr/employee/workforce" element={<EmployeeDashboard />} />
+                <Route path="/hr/employee/import" element={<HrEmployeeAccountImport />} />
+                <Route path="/hr/team" element={<TeamManagement />} />
+                <Route path="/hr/team/create" element={<TeamCreate />} />
+                <Route path="/hr/department" element={<DepartmentManagement />} />
+                <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
+
+                {/* 360 Feedback — single page with internal tabs */}
+                <Route path="/hr/feedback" element={<HrFeedbackDashboard />} />
+
+                <Route path="/permissions" element={<Permissions />} />
+                <Route path="/user-roles" element={<UserRoles />} />
+                <Route path="/role-permissions" element={<RolePermissions />} />
+
+                {/* Kept only for old direct URL compatibility. Removed from sidebar. */}
+                <Route path="/pip-updates" element={<PipUpdates />} />
+
+                <Route path="/notification-templates" element={<NotificationTemplates />} />
+
+                <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
+                <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
+
+                <Route path="/hr/position/create" element={<PositionCreate />} />
+                <Route path="/hr/position-level/create" element={<PositionLevelCreate />} />
+                <Route path="/hr/position/table" element={<PositionTable />} />
+
+                <Route path="/hr/performance-kpi/unit" element={<KpiUnitPage />} />
+                <Route path="/hr/performance-kpi/category" element={<KpiCategoryPage />} />
+                <Route path="/hr/performance-kpi/item" element={<KpiItemPage />} />
+
+                <Route path="/hr/kpi-template/new" element={<KpiTemplateEditorPage />} />
+                <Route path="/hr/kpi-template/:id/edit" element={<KpiTemplateEditorPage />} />
+                <Route path="/hr/kpi-template/:id" element={<KpiTemplateDetailPage />} />
+                <Route path="/hr/kpi-template" element={<KpiTemplateListPage />} />
+              </Route>
             </Route>
           </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={['Employee']} />}>
-            <Route element={<AppLayout />}>
-              <Route path="/employee/dashboard" element={<EmployeeMyDashboard />} />
-              <Route
-                path="/employee/kpis"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="My KPIs"
-                    description="Track your KPI progress, scores, and weight distribution."
-                  />
-                }
-              />
-              <Route path="/employee/appraisals" element={<EmployeeAssessmentScoresPage />} />
-              <Route path="/employee/self-assessment" element={<EmployeeSelfAssessmentPage />} />
-              <Route
-                path="/employee/feedback"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="My Feedback"
-                    description="View pending and completed feedback requests."
-                  />
-                }
-              />
-              <Route
-                path="/employee/one-on-ones"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="One-on-Ones"
-                    description="Manage your one-on-one meetings and related notes."
-                  />
-                }
-              />
-              <Route path="/employee/pip" element={<PipPastPlansPage />} />
-            </Route>
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={['Manager']} />}>
-            <Route element={<AppLayout />}>
-              <Route path="/manager/dashboard" element={<ManagerDashboard />} />
-              <Route
-                path="/manager/appraisals"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Team Appraisals"
-                    description="Manager appraisal workflow placeholder."
-                  />
-                }
-              />
-              <Route
-                path="/manager/reports"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Team Reports"
-                    description="Manager reporting workflow placeholder."
-                  />
-                }
-              />
-
-              <Route path="/pip/create" element={<PipCreatePage />} />
-            </Route>
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={['Executive']} />}>
-            <Route element={<AppLayout />}>
-              <Route path="/executive/dashboard" element={<CeoDashboard />} />
-              <Route
-                path="/executive/reports"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Executive Reports"
-                    description="Executive performance reports placeholder."
-                  />
-                }
-              />
-            </Route>
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={['DepartmentHead']} />}>
-            <Route element={<AppLayout />}>
-              <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
-              <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
-
-              <Route path="/pip/create" element={<PipCreatePage />} />
-            </Route>
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={['ProjectManager']} />}>
-            <Route element={<AppLayout />}>
-              <Route path="/project-manager/dashboard" element={<ProjectManagerDashboard />} />
-              <Route
-                path="/project-manager/performance"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Project Performance"
-                    description="Track KPI metrics and performance data across your projects."
-                  />
-                }
-              />
-              <Route
-                path="/project-manager/feedback"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Stakeholder Feedback"
-                    description="Collect and review stakeholder feedback for your projects."
-                  />
-                }
-              />
-              <Route
-                path="/project-manager/reports"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Project Reports"
-                    description="Generate and export project performance reports."
-                  />
-                }
-              />
-            </Route>
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={['HR']} />}>
-            <Route element={<AppLayout />}>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Home />} />
-              <Route path="/hr/profile" element={<ProfilePage />} />
-
-              <Route path="/hr/employee" element={<EmployeeManagement />} />
-              <Route path="/hr/employee/workforce" element={<EmployeeDashboard />} />
-              <Route path="/hr/employee/import" element={<HrEmployeeAccountImport />} />
-              <Route path="/hr/team" element={<TeamManagement />} />
-              <Route path="/hr/team/create" element={<TeamCreate />} />
-              <Route path="/hr/department" element={<DepartmentManagement />} />
-              <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
-
-              {/* 360 Feedback — single page with internal tabs */}
-              <Route path="/hr/feedback" element={<HrFeedbackDashboard />} />
-
-              <Route path="/permissions" element={<Permissions />} />
-              <Route path="/user-roles" element={<UserRoles />} />
-              <Route path="/role-permissions" element={<RolePermissions />} />
-
-              {/* Kept only for old direct URL compatibility. Removed from sidebar. */}
-              <Route path="/pip-updates" element={<PipUpdates />} />
-
-              <Route path="/notification-templates" element={<NotificationTemplates />} />
-
-              <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
-              <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
-
-              <Route path="/hr/position/create" element={<PositionCreate />} />
-              <Route path="/hr/position-level/create" element={<PositionLevelCreate />} />
-              <Route path="/hr/position/table" element={<PositionTable />} />
-
-              <Route path="/hr/performance-kpi/unit" element={<KpiUnitPage />} />
-              <Route path="/hr/performance-kpi/category" element={<KpiCategoryPage />} />
-              <Route path="/hr/performance-kpi/item" element={<KpiItemPage />} />
-
-              <Route path="/hr/kpi-template/new" element={<KpiTemplateEditorPage />} />
-              <Route path="/hr/kpi-template/:id/edit" element={<KpiTemplateEditorPage />} />
-              <Route path="/hr/kpi-template/:id" element={<KpiTemplateDetailPage />} />
-              <Route path="/hr/kpi-template" element={<KpiTemplateListPage />} />
-            </Route>
-          </Route>
-        </Route>
-
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
   );
 }
 

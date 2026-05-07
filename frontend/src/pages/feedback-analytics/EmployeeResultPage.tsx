@@ -1,7 +1,7 @@
 import { useMyFeedbackResult } from '../../hooks/useFeedbackAnalytics';
 import './feedback-analytics.css';
 
-const formatScore = (value: number) => `${value.toFixed(1)}%`;
+const formatScore = (value?: number | null) => (value == null ? '—' : `${value.toFixed(1)}%`);
 
 const formatDateTime = (value: string) =>
     new Intl.DateTimeFormat('en-US', {

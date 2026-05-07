@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api/v1/feedback/campaigns")
@@ -189,11 +190,12 @@ public class FeedbackCampaignController {
     private void ensureHrOrAdmin() {
         List<String> roles = SecurityUtils.currentUser().getRoles();
         boolean authorized = roles != null && roles.stream()
-                .filter(role -> role != null)
-                .map(role -> role.toUpperCase().replace("ROLE_", "").replace(" ", "_").replace("-", "_"))
+                .filter(role -> role != null && !role.isBlank())
+                .map(this::normalizeRole)
                 .anyMatch(role ->
                         role.equals("HR")
                                 || role.equals("ADMIN")
+                                || role.equals("HR_ADMIN")
                                 || role.equals("HUMAN_RESOURCES")
                                 || role.equals("HUMAN_RESOURCE")
                                 || role.equals("HR_MANAGER")
@@ -201,5 +203,14 @@ public class FeedbackCampaignController {
         if (!authorized) {
             throw new UnauthorizedActionException("Only HR/Admin can manage feedback campaigns.");
         }
+    }
+
+    private String normalizeRole(String role) {
+        return role
+                .replaceFirst("(?i)^ROLE_", "")
+                .trim()
+                .replaceAll("[^A-Za-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "")
+                .toUpperCase(Locale.ROOT);
     }
 }

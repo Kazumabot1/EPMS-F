@@ -67,7 +67,8 @@ export interface RatingScaleOption {
   scales?: number;
   description?: string;
   performanceLevel?: string;
-  promotionEligibility?: string;
+  /** Deprecated: feedback ratings do not decide promotion eligibility. */
+  promotionEligibility?: string | null;
   scaleName?: string;
   minScore?: number;
   maxScore?: number;

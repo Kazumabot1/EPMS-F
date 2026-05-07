@@ -65,15 +65,29 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
             throw new BusinessValidationException("Only DRAFT forms can be edited.");
         }
 
+        // Validate the incoming structure before mutating the managed entity.
+        // This keeps the current draft untouched if the request is invalid.
+        validateForm(updatedForm);
+
         existing.setFormName(updatedForm.getFormName());
         existing.setAnonymousAllowed(updatedForm.getAnonymousAllowed());
+
+        // The table has a unique key on (form_id, order_no). When replacing the whole
+        // section tree, Hibernate may try to INSERT new section rows before DELETEing
+        // the orphaned rows, causing Duplicate entry '<formId>-<orderNo>'. Force the
+        // orphan deletions to be flushed first, then insert the replacement structure.
         existing.getSections().clear();
+        feedbackFormRepository.flush();
+
         updatedForm.getSections().forEach(section -> {
+            section.setId(null);
             section.setForm(existing);
-            section.getQuestions().forEach(question -> question.setSection(section));
+            section.getQuestions().forEach(question -> {
+                question.setId(null);
+                question.setSection(section);
+            });
             existing.getSections().add(section);
         });
-        validateForm(existing);
         FeedbackForm saved = feedbackFormRepository.save(existing);
         auditLogService.log(
                 updatedForm.getCreatedByUserId() != null ? updatedForm.getCreatedByUserId().intValue() : null,

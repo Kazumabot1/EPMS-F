@@ -74,17 +74,19 @@ export interface EvaluatorConfigInput {
   peerCount: number;
 }
 
-export type FeedbackRelationshipType = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF';
-export type EvaluatorSelectionMethod = 'AUTO_RANDOM' | 'MANUAL';
+export type FeedbackRelationshipType = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF' | 'PROJECT_STAKEHOLDER';
+export type EvaluatorSelectionMethod = 'AUTO_RANDOM' | 'AUTO_RELATIONSHIP' | 'MANUAL';
 export type AssignmentStatus = 'PENDING' | 'IN_PROGRESS' | 'SUBMITTED' | 'DECLINED' | 'CANCELLED';
 
 export interface FeedbackAssignmentPreviewItem {
   requestId: number;
   targetEmployeeId: number;
+  targetEmployeeName?: string | null;
   managerAssignments: number;
   selfAssignments: number;
   subordinateAssignments: number;
   peerAssignments: number;
+  projectStakeholderAssignments?: number;
   totalAssignments: number;
   autoAssignments: number;
   manualAssignments: number;

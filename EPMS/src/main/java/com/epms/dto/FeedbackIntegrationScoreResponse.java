@@ -5,23 +5,22 @@ import lombok.Value;
 
 import java.time.LocalDateTime;
 
+/**
+ * Stable integration DTO for other EPMS modules.
+ * It exposes the 360 feedback score only; it does not decide overall appraisal,
+ * promotion eligibility, or salary increment.
+ */
 @Value
 @Builder
-public class FeedbackResultItemResponse {
+public class FeedbackIntegrationScoreResponse {
     Long campaignId;
     String campaignName;
+    String campaignStatus;
     Long targetEmployeeId;
     String targetEmployeeName;
-    /** Official normalized 0-100 feedback-only score. */
-    Double averageScore;
-    Double rawAverageScore;
-    String scoreCategory;
-    Long totalResponses;
-    Long managerResponses;
-    Long peerResponses;
-    Long subordinateResponses;
-    Long selfResponses;
-    Long projectStakeholderResponses;
+    Double feedbackScore;
+    Double rawFeedbackScore;
+    String scoreBand;
     Long assignedEvaluatorCount;
     Long submittedEvaluatorCount;
     Long pendingEvaluatorCount;
@@ -33,6 +32,11 @@ public class FeedbackResultItemResponse {
     Double subordinateAverageScore;
     Double selfAverageScore;
     Double projectStakeholderAverageScore;
+    Long managerResponses;
+    Long peerResponses;
+    Long subordinateResponses;
+    Long selfResponses;
+    Long projectStakeholderResponses;
     String scoreCalculationMethod;
     String scoreCalculationNote;
     LocalDateTime summarizedAt;

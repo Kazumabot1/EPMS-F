@@ -12,6 +12,8 @@ public class FeedbackAssignmentDetailResponse {
     Long assignmentId;
     Long campaignId;
     String campaignName;
+    String campaignStatus;
+    LocalDateTime campaignStartAt;
     Long targetEmployeeId;
     String targetEmployeeName;
     String relationshipType;
@@ -20,6 +22,14 @@ public class FeedbackAssignmentDetailResponse {
     LocalDateTime dueAt;
     LocalDateTime submittedAt;
     Boolean canSubmit;
+    String lifecycleMessage;
     String comments;
+    Integer totalQuestionCount;
+    Integer requiredQuestionCount;
+    Integer answeredQuestionCount;
+    Integer answeredRequiredQuestionCount;
+    Integer completionPercent;
+    Boolean finalSubmissionReady;
+    Boolean submittedLocked;
     List<FeedbackAssignmentSectionDetailResponse> sections;
 }

@@ -27,8 +27,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.Objects;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -62,46 +64,247 @@ public class FeedbackRequestServiceImpl implements FeedbackRequestService {
         FeedbackCampaign campaign = feedbackCampaignRepository.findById(campaignId)
                 .orElseThrow(() -> new ResourceNotFoundException("Feedback campaign not found."));
         List<FeedbackRequest> requests = feedbackRequestRepository.findByCampaignIdOrderByTargetEmployeeIdAsc(campaignId);
+        Map<Long, String> employeeNames = loadEmployeeNames(requests.stream()
+                .map(FeedbackRequest::getTargetEmployeeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList());
 
         List<FeedbackCompletionItemResponse> items = requests.stream()
-                .map(request -> {
-                    List<com.epms.entity.FeedbackEvaluatorAssignment> activeAssignments = assignmentRepository
-                            .findByFeedbackRequestId(request.getId())
-                            .stream()
-                            .filter(assignment -> assignment.getStatus() != AssignmentStatus.CANCELLED)
-                            .toList();
-                    long total = activeAssignments.size();
-                    long submitted = activeAssignments.stream()
-                            .filter(assignment -> assignment.getStatus() == AssignmentStatus.SUBMITTED)
-                            .count();
-                    long pending = Math.max(0L, total - submitted);
-                    double percent = total == 0 ? 0.0 : (submitted * 100.0) / total;
-                    return FeedbackCompletionItemResponse.builder()
-                            .requestId(request.getId())
-                            .targetEmployeeId(request.getTargetEmployeeId())
-                            .totalEvaluators(total)
-                            .submittedEvaluators(submitted)
-                            .pendingEvaluators(pending)
-                            .completionPercent(percent)
-                            .build();
-                })
+                .map(request -> buildCompletionItem(campaign, request, employeeNames))
                 .toList();
 
         long totalAssignments = items.stream().mapToLong(FeedbackCompletionItemResponse::getTotalEvaluators).sum();
         long submittedAssignments = items.stream().mapToLong(FeedbackCompletionItemResponse::getSubmittedEvaluators).sum();
-        long pendingUsers = Math.max(0L, totalAssignments - submittedAssignments);
-        double completionPercent = totalAssignments == 0 ? 0.0 : (submittedAssignments * 100.0) / totalAssignments;
+        long inProgressAssignments = items.stream().mapToLong(FeedbackCompletionItemResponse::getInProgressEvaluators).sum();
+        long notStartedAssignments = items.stream().mapToLong(FeedbackCompletionItemResponse::getNotStartedEvaluators).sum();
+        long overdueAssignments = items.stream().mapToLong(FeedbackCompletionItemResponse::getOverdueEvaluators).sum();
+        long declinedAssignments = items.stream().mapToLong(FeedbackCompletionItemResponse::getDeclinedEvaluators).sum();
+        long cancelledAssignments = items.stream().mapToLong(FeedbackCompletionItemResponse::getCancelledEvaluators).sum();
+        long pendingAssignments = Math.max(0L, totalAssignments - submittedAssignments - declinedAssignments - cancelledAssignments);
+        double completionPercent = totalAssignments == 0 ? 0.0 : roundOneDecimal((submittedAssignments * 100.0) / totalAssignments);
 
         return FeedbackCompletionDashboardResponse.builder()
                 .campaignId(campaignId)
                 .campaignName(campaign.getName())
+                .campaignStatus(campaign.getStatus().name())
+                .campaignStartAt(campaign.getStartAt())
+                .campaignEndAt(campaign.getEndAt())
                 .totalRequests((long) requests.size())
+                .totalTargets((long) requests.size())
                 .totalAssignments(totalAssignments)
                 .submittedAssignments(submittedAssignments)
+                .pendingAssignments(pendingAssignments)
+                .pendingUsers(pendingAssignments)
+                .inProgressAssignments(inProgressAssignments)
+                .notStartedAssignments(notStartedAssignments)
+                .overdueAssignments(overdueAssignments)
+                .declinedAssignments(declinedAssignments)
+                .cancelledAssignments(cancelledAssignments)
+                .completedTargets(items.stream().filter(item -> item.getTotalEvaluators() > 0 && item.getPendingEvaluators() == 0).count())
+                .targetsWithPending(items.stream().filter(item -> item.getPendingEvaluators() > 0).count())
+                .targetsWithOverdue(items.stream().filter(item -> item.getOverdueEvaluators() > 0).count())
+                .managerAssignments(items.stream().mapToLong(FeedbackCompletionItemResponse::getManagerEvaluators).sum())
+                .peerAssignments(items.stream().mapToLong(FeedbackCompletionItemResponse::getPeerEvaluators).sum())
+                .subordinateAssignments(items.stream().mapToLong(FeedbackCompletionItemResponse::getSubordinateEvaluators).sum())
+                .selfAssignments(items.stream().mapToLong(FeedbackCompletionItemResponse::getSelfEvaluators).sum())
+                .projectStakeholderAssignments(items.stream().mapToLong(FeedbackCompletionItemResponse::getProjectStakeholderEvaluators).sum())
                 .completionPercent(completionPercent)
-                .pendingUsers(pendingUsers)
+                .healthStatus(resolveCompletionHealth(campaign, totalAssignments, submittedAssignments, overdueAssignments))
+                .healthMessage(resolveCompletionMessage(campaign, totalAssignments, submittedAssignments, overdueAssignments, completionPercent))
+                .generatedAt(LocalDateTime.now())
                 .requests(items)
                 .build();
+    }
+
+    private FeedbackCompletionItemResponse buildCompletionItem(
+            FeedbackCampaign campaign,
+            FeedbackRequest request,
+            Map<Long, String> employeeNames
+    ) {
+        List<com.epms.entity.FeedbackEvaluatorAssignment> assignments = assignmentRepository.findByFeedbackRequestId(request.getId());
+        LocalDateTime effectiveDeadline = resolveEffectiveDeadline(campaign, request);
+
+        long total = assignments.stream().filter(this::isCountedAssignment).count();
+        long submitted = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.SUBMITTED).count();
+        long inProgress = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.IN_PROGRESS).count();
+        long notStarted = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.PENDING).count();
+        long declined = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.DECLINED).count();
+        long cancelled = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.CANCELLED).count();
+        long overdue = assignments.stream().filter(a -> isOverdue(campaign, effectiveDeadline, a)).count();
+        long pending = Math.max(0L, total - submitted - declined - cancelled);
+        double percent = total == 0 ? 0.0 : roundOneDecimal((submitted * 100.0) / total);
+
+        List<FeedbackResponse> submittedResponses = assignments.stream()
+                .map(com.epms.entity.FeedbackEvaluatorAssignment::getResponse)
+                .filter(Objects::nonNull)
+                .filter(response -> response.getFinalStatus() == ResponseStatus.SUBMITTED)
+                .toList();
+        double average = averageScore(submittedResponses);
+
+        String statusLabel = resolveTargetStatus(total, submitted, pending, overdue, campaign);
+        String actionNeeded = resolveTargetAction(total, submitted, pending, overdue, campaign);
+
+        return FeedbackCompletionItemResponse.builder()
+                .requestId(request.getId())
+                .targetEmployeeId(request.getTargetEmployeeId())
+                .targetEmployeeName(employeeNames.getOrDefault(request.getTargetEmployeeId(), "Employee #" + request.getTargetEmployeeId()))
+                .targetEmployeeEmail(null)
+                .requestStatus(request.getStatus().name())
+                .dueAt(request.getDueAt())
+                .effectiveDeadline(effectiveDeadline)
+                .totalEvaluators(total)
+                .submittedEvaluators(submitted)
+                .pendingEvaluators(pending)
+                .inProgressEvaluators(inProgress)
+                .notStartedEvaluators(notStarted)
+                .overdueEvaluators(overdue)
+                .declinedEvaluators(declined)
+                .cancelledEvaluators(cancelled)
+                .managerEvaluators(countAssignmentsByRelationship(assignments, FeedbackRelationshipType.MANAGER))
+                .peerEvaluators(countAssignmentsByRelationship(assignments, FeedbackRelationshipType.PEER))
+                .subordinateEvaluators(countAssignmentsByRelationship(assignments, FeedbackRelationshipType.SUBORDINATE))
+                .selfEvaluators(countAssignmentsByRelationship(assignments, FeedbackRelationshipType.SELF))
+                .projectStakeholderEvaluators(countAssignmentsByRelationship(assignments, FeedbackRelationshipType.PROJECT_STAKEHOLDER))
+                .completionPercent(percent)
+                .averageScore(average)
+                .scoreCategory(FeedbackScoreUtil.category(average))
+                .statusLabel(statusLabel)
+                .actionNeeded(actionNeeded)
+                .build();
+    }
+
+    private boolean isCountedAssignment(com.epms.entity.FeedbackEvaluatorAssignment assignment) {
+        return assignment.getStatus() != AssignmentStatus.CANCELLED;
+    }
+
+    private boolean isOverdue(
+            FeedbackCampaign campaign,
+            LocalDateTime effectiveDeadline,
+            com.epms.entity.FeedbackEvaluatorAssignment assignment
+    ) {
+        return campaign.getStatus() == FeedbackCampaignStatus.ACTIVE
+                && effectiveDeadline != null
+                && LocalDateTime.now().isAfter(effectiveDeadline)
+                && assignment.getStatus() != AssignmentStatus.SUBMITTED
+                && assignment.getStatus() != AssignmentStatus.CANCELLED
+                && assignment.getStatus() != AssignmentStatus.DECLINED;
+    }
+
+    private LocalDateTime resolveEffectiveDeadline(FeedbackCampaign campaign, FeedbackRequest request) {
+        LocalDateTime campaignDeadline = campaign.getEndAt();
+        if (request.getDueAt() == null) {
+            return campaignDeadline;
+        }
+        if (campaignDeadline == null) {
+            return request.getDueAt();
+        }
+        return request.getDueAt().isBefore(campaignDeadline) ? request.getDueAt() : campaignDeadline;
+    }
+
+    private long countAssignmentsByRelationship(
+            List<com.epms.entity.FeedbackEvaluatorAssignment> assignments,
+            FeedbackRelationshipType relationshipType
+    ) {
+        return assignments.stream()
+                .filter(this::isCountedAssignment)
+                .filter(assignment -> assignment.getRelationshipType() == relationshipType)
+                .count();
+    }
+
+    private String resolveTargetStatus(long total, long submitted, long pending, long overdue, FeedbackCampaign campaign) {
+        if (total == 0) {
+            return "No evaluators assigned";
+        }
+        if (submitted >= total) {
+            return "Complete";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.CANCELLED) {
+            return "Cancelled";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.CLOSED) {
+            return "Closed with pending feedback";
+        }
+        if (overdue > 0) {
+            return "Overdue";
+        }
+        if (pending > 0) {
+            return "In progress";
+        }
+        return "Pending";
+    }
+
+    private String resolveTargetAction(long total, long submitted, long pending, long overdue, FeedbackCampaign campaign) {
+        if (total == 0) {
+            return "Generate evaluator assignments for this target.";
+        }
+        if (submitted >= total) {
+            return "No action needed.";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.DRAFT) {
+            return "Activate the campaign when assignments are ready.";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.ACTIVE && overdue > 0) {
+            return "Send reminders or close the campaign when ready.";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.ACTIVE) {
+            return "Monitor pending evaluators and send reminders if needed.";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.CLOSED) {
+            return "Campaign is closed; pending feedback can no longer be submitted.";
+        }
+        return "Campaign was cancelled.";
+    }
+
+    private String resolveCompletionHealth(FeedbackCampaign campaign, long totalAssignments, long submittedAssignments, long overdueAssignments) {
+        if (campaign.getStatus() == FeedbackCampaignStatus.CANCELLED) {
+            return "CANCELLED";
+        }
+        if (totalAssignments == 0) {
+            return "SETUP_REQUIRED";
+        }
+        if (submittedAssignments >= totalAssignments) {
+            return "COMPLETE";
+        }
+        if (overdueAssignments > 0) {
+            return "OVERDUE";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.DRAFT) {
+            return "DRAFT";
+        }
+        return "IN_PROGRESS";
+    }
+
+    private String resolveCompletionMessage(
+            FeedbackCampaign campaign,
+            long totalAssignments,
+            long submittedAssignments,
+            long overdueAssignments,
+            double completionPercent
+    ) {
+        if (campaign.getStatus() == FeedbackCampaignStatus.CANCELLED) {
+            return "Campaign was cancelled. No more evaluator submissions are accepted.";
+        }
+        if (totalAssignments == 0) {
+            return "No evaluator assignments exist yet. Generate assignments before activating the campaign.";
+        }
+        if (submittedAssignments >= totalAssignments) {
+            return "All assigned evaluators have submitted feedback.";
+        }
+        if (overdueAssignments > 0) {
+            return overdueAssignments + " evaluator assignment(s) are overdue.";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.DRAFT) {
+            return "Assignments are prepared, but evaluators will not see tasks until the campaign is activated.";
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.CLOSED) {
+            return "Campaign is closed at " + completionPercent + "% completion.";
+        }
+        return "Campaign is active. Monitor pending evaluators and send reminders as needed.";
+    }
+
+    private double roundOneDecimal(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 
     @Override

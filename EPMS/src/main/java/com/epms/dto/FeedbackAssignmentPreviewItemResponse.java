@@ -10,10 +10,12 @@ import java.util.List;
 public class FeedbackAssignmentPreviewItemResponse {
     Long requestId;
     Long targetEmployeeId;
+    String targetEmployeeName;
     int managerAssignments;
     int selfAssignments;
     int subordinateAssignments;
     int peerAssignments;
+    int projectStakeholderAssignments;
     int totalAssignments;
     int autoAssignments;
     int manualAssignments;

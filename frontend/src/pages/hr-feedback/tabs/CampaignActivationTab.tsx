@@ -1,16 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { hrFeedbackApi } from '../../../api/hrFeedbackApi';
 import type { FeedbackCampaign } from '../../../types/feedbackCampaign';
-import type { FeedbackCompletionDashboard } from '../../../types/feedback';
+import type { FeedbackCompletionDashboard, FeedbackCompletionItem } from '../../../types/feedback';
 
 interface Props {
   activeCampaign: FeedbackCampaign | null;
 }
 
+type ProgressFilter = 'ALL' | 'PENDING' | 'OVERDUE' | 'COMPLETE' | 'NO_ASSIGNMENTS';
+
+const fmt = (value: number | null | undefined, digits = 0) => Number(value ?? 0).toFixed(digits);
+const sourceCount = (value: number | null | undefined) => Number(value ?? 0);
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return 'No deadline';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+};
+
+const statusClass = (status?: string | null) =>
+    `hfd-target-status ${String(status ?? 'pending').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
 export default function CampaignMonitoringTab({ activeCampaign }: Props) {
   const [campaigns, setCampaigns] = useState<FeedbackCampaign[]>([]);
   const [selectedId, setSelectedId] = useState<number | ''>(activeCampaign?.id ?? '');
   const [dashboard, setDashboard] = useState<FeedbackCompletionDashboard | null>(null);
+  const [filter, setFilter] = useState<ProgressFilter>('ALL');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
@@ -42,6 +58,7 @@ export default function CampaignMonitoringTab({ activeCampaign }: Props) {
 
   useEffect(() => {
     refreshDashboard();
+    setFilter('ALL');
   }, [selectedId]);
 
   const updateCampaignInList = (updated: FeedbackCampaign) => {
@@ -99,7 +116,39 @@ export default function CampaignMonitoringTab({ activeCampaign }: Props) {
   const offset = circ - (completion / 100) * circ;
 
   const selectedCampaign = campaigns.find(c => c.id === selectedId);
-  const status = selectedCampaign?.status;
+  const status = selectedCampaign?.status ?? dashboard?.campaignStatus;
+
+  const filteredRequests = useMemo(() => {
+    const rows = dashboard?.requests ?? [];
+    if (filter === 'ALL') return rows;
+    return rows.filter(row => {
+      if (filter === 'PENDING') return row.pendingEvaluators > 0;
+      if (filter === 'OVERDUE') return sourceCount(row.overdueEvaluators) > 0;
+      if (filter === 'COMPLETE') return row.totalEvaluators > 0 && row.pendingEvaluators === 0;
+      if (filter === 'NO_ASSIGNMENTS') return row.totalEvaluators === 0;
+      return true;
+    });
+  }, [dashboard?.requests, filter]);
+
+  const renderSourceChips = (row: FeedbackCompletionItem) => {
+    const chips = [
+      ['Manager', row.managerEvaluators],
+      ['Peer', row.peerEvaluators],
+      ['Subordinate', row.subordinateEvaluators],
+      ['Self', row.selfEvaluators],
+      ['Project', row.projectStakeholderEvaluators],
+    ].filter(([, value]) => sourceCount(value as number | undefined) > 0);
+
+    if (!chips.length) return <span className="hfd-muted">No evaluators</span>;
+
+    return (
+        <div className="hfd-source-chip-row">
+          {chips.map(([label, value]) => (
+              <span className="hfd-source-chip" key={label as string}>{label}: {value}</span>
+          ))}
+        </div>
+    );
+  };
 
   return (
       <div>
@@ -108,7 +157,7 @@ export default function CampaignMonitoringTab({ activeCampaign }: Props) {
             <i className="bi bi-graph-up-arrow" />
             <div>
               <h2>Campaign Monitoring</h2>
-              <p>Activate, close, cancel, and track submission progress</p>
+              <p>Track target-level completion, pending evaluators, overdue feedback, and campaign readiness.</p>
             </div>
           </div>
         </div>
@@ -131,15 +180,15 @@ export default function CampaignMonitoringTab({ activeCampaign }: Props) {
                 </option>
             ))}
           </select>
-          {selectedCampaign && (
-              <span className={`hfd-status-badge ${selectedCampaign.status}`}>
-            {selectedCampaign.status}
-          </span>
+          {status && (
+              <span className={`hfd-status-badge ${status}`}>
+                {status}
+              </span>
           )}
         </div>
 
         {selectedCampaign && (
-            <div className="hfd-campaign-select-bar" style={{ justifyContent: 'flex-start', gap: 10 }}>
+            <div className="hfd-campaign-select-bar" style={{ justifyContent: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
               {status === 'DRAFT' && (
                   <button
                       className="hfd-btn hfd-btn-primary"
@@ -161,7 +210,7 @@ export default function CampaignMonitoringTab({ activeCampaign }: Props) {
                     </button>
                     <button
                         className="hfd-btn hfd-btn-secondary"
-                        disabled={actionLoading || !dashboard || dashboard.pendingUsers === 0}
+                        disabled={actionLoading || !dashboard || (dashboard.pendingAssignments ?? dashboard.pendingUsers ?? 0) === 0}
                         onClick={sendReminders}
                     >
                       <i className="bi bi-bell" /> Send Pending Reminders
@@ -178,6 +227,14 @@ export default function CampaignMonitoringTab({ activeCampaign }: Props) {
                     <i className="bi bi-x-circle" /> Cancel Campaign
                   </button>
               )}
+
+              <button
+                  className="hfd-btn hfd-btn-secondary"
+                  disabled={loading || !selectedId}
+                  onClick={refreshDashboard}
+              >
+                <i className="bi bi-arrow-clockwise" /> Refresh Progress
+              </button>
 
               {status === 'CLOSED' && <span className="hfd-muted">Closed campaigns are read-only and visible in analytics.</span>}
               {status === 'CANCELLED' && <span className="hfd-muted">Cancelled campaigns cannot receive feedback.</span>}
@@ -198,84 +255,154 @@ export default function CampaignMonitoringTab({ activeCampaign }: Props) {
 
         {dashboard && !loading && (
             <>
-              <div className="hfd-completion-ring">
-                <div className="hfd-ring-wrap">
-                  <svg width="100" height="100" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="10" />
-                    <circle
-                        cx="50" cy="50" r={radius} fill="none"
-                        stroke={completion >= 80 ? '#22c55e' : completion >= 40 ? '#f59e0b' : '#6366f1'}
-                        strokeWidth="10"
-                        strokeDasharray={circ}
-                        strokeDashoffset={offset}
-                        strokeLinecap="round"
-                        style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-                    />
-                    <text
-                        x="50" y="54"
-                        textAnchor="middle"
-                        fontSize="14"
-                        fontWeight="700"
-                        fill="#1f2937"
-                        style={{ transform: 'rotate(90deg)', transformOrigin: '50px 50px' }}
-                    >
-                      {completion.toFixed(0)}%
-                    </text>
-                  </svg>
+              <div className={`hfd-monitor-health ${String(dashboard.healthStatus ?? 'IN_PROGRESS').toLowerCase()}`}>
+                <div>
+                  <strong>{dashboard.healthStatus?.replace(/_/g, ' ') ?? 'IN PROGRESS'}</strong>
+                  <p>{dashboard.healthMessage ?? 'Monitor campaign progress and pending evaluators.'}</p>
                 </div>
-                <div className="hfd-completion-stats">
+                <span>Updated {formatDateTime(dashboard.generatedAt)}</span>
+              </div>
+
+              <div className="hfd-completion-overview">
+                <div className="hfd-completion-ring">
+                  <div className="hfd-ring-wrap">
+                    <svg width="100" height="100" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="10" />
+                      <circle
+                          cx="50" cy="50" r={radius} fill="none"
+                          stroke={completion >= 80 ? '#22c55e' : completion >= 40 ? '#f59e0b' : '#6366f1'}
+                          strokeWidth="10"
+                          strokeDasharray={circ}
+                          strokeDashoffset={offset}
+                          strokeLinecap="round"
+                          style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+                      />
+                      <text
+                          x="50" y="54"
+                          textAnchor="middle"
+                          fontSize="14"
+                          fontWeight="700"
+                          fill="#1f2937"
+                          style={{ transform: 'rotate(90deg)', transformOrigin: '50px 50px' }}
+                      >
+                        {completion.toFixed(0)}%
+                      </text>
+                    </svg>
+                  </div>
+                  <div className="hfd-completion-stats">
+                    {[
+                      ['Campaign', dashboard.campaignName],
+                      ['Targets', String(dashboard.totalTargets ?? dashboard.totalRequests)],
+                      ['Total Assignments', String(dashboard.totalAssignments)],
+                      ['Submitted', String(dashboard.submittedAssignments)],
+                      ['Pending', String(dashboard.pendingAssignments ?? dashboard.pendingUsers)],
+                      ['Overdue', String(dashboard.overdueAssignments ?? 0)],
+                      ['Completion', `${completion.toFixed(1)}%`],
+                    ].map(([k, v]) => (
+                        <div className="row" key={k}>
+                          <span className="k">{k}</span>
+                          <span className="v">{v}</span>
+                        </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="hfd-monitor-kpis">
+                  <div className="hfd-monitor-kpi"><span>{dashboard.completedTargets ?? 0}</span><small>Completed targets</small></div>
+                  <div className="hfd-monitor-kpi"><span>{dashboard.targetsWithPending ?? 0}</span><small>Targets with pending</small></div>
+                  <div className="hfd-monitor-kpi warning"><span>{dashboard.targetsWithOverdue ?? 0}</span><small>Targets overdue</small></div>
+                  <div className="hfd-monitor-kpi"><span>{dashboard.inProgressAssignments ?? 0}</span><small>Draft / in progress</small></div>
+                </div>
+              </div>
+
+              <div className="hfd-source-summary">
+                <span>Manager: {dashboard.managerAssignments ?? 0}</span>
+                <span>Peer: {dashboard.peerAssignments ?? 0}</span>
+                <span>Subordinate: {dashboard.subordinateAssignments ?? 0}</span>
+                <span>Self: {dashboard.selfAssignments ?? 0}</span>
+                <span>Project / Manual: {dashboard.projectStakeholderAssignments ?? 0}</span>
+              </div>
+
+              <div className="hfd-monitor-toolbar">
+                <h4>Target-level Progress</h4>
+                <div className="hfd-filter-pills">
                   {[
-                    ['Campaign', dashboard.campaignName],
-                    ['Total Requests (Targets)', String(dashboard.totalRequests)],
-                    ['Total Assignments', String(dashboard.totalAssignments)],
-                    ['Submitted', String(dashboard.submittedAssignments)],
-                    ['Pending Users', String(dashboard.pendingUsers)],
-                    ['Completion', `${completion.toFixed(1)}%`],
-                  ].map(([k, v]) => (
-                      <div className="row" key={k}>
-                        <span className="k">{k}</span>
-                        <span className="v">{v}</span>
-                      </div>
+                    ['ALL', 'All'],
+                    ['PENDING', 'Pending'],
+                    ['OVERDUE', 'Overdue'],
+                    ['COMPLETE', 'Complete'],
+                    ['NO_ASSIGNMENTS', 'No assignments'],
+                  ].map(([value, label]) => (
+                      <button
+                          key={value}
+                          type="button"
+                          className={filter === value ? 'active' : ''}
+                          onClick={() => setFilter(value as ProgressFilter)}
+                      >
+                        {label}
+                      </button>
                   ))}
                 </div>
               </div>
 
-              <h4 style={{ margin: '0 0 10px', fontSize: '0.9rem', fontWeight: 700, color: '#374151' }}>
-                Per-Target Completion
-              </h4>
               {dashboard.requests.length === 0 ? (
                   <div className="hfd-empty" style={{ padding: 24 }}>
-                    <p>No assignment data yet. Generate assignments in the Assignment Preview step first.</p>
+                    <p>No target data yet. Save targets in the Target step first.</p>
+                  </div>
+              ) : filteredRequests.length === 0 ? (
+                  <div className="hfd-empty" style={{ padding: 24 }}>
+                    <p>No targets match this filter.</p>
                   </div>
               ) : (
                   <div className="hfd-table-wrap">
-                    <table className="hfd-preview-table">
+                    <table className="hfd-preview-table hfd-monitor-table">
                       <thead>
                       <tr>
-                        <th>Target Emp ID</th>
-                        <th>Total Evaluators</th>
-                        <th>Submitted</th>
-                        <th>Pending</th>
-                        <th>Completion</th>
+                        <th>Target Employee</th>
+                        <th>Evaluator Mix</th>
+                        <th>Progress</th>
+                        <th>Status</th>
+                        <th>Score</th>
+                        <th>Deadline</th>
+                        <th>Action Needed</th>
                       </tr>
                       </thead>
                       <tbody>
-                      {dashboard.requests.map(r => (
+                      {filteredRequests.map(r => (
                           <tr key={r.requestId}>
-                            <td>#{r.targetEmployeeId}</td>
-                            <td>{r.totalEvaluators}</td>
-                            <td style={{ color: '#16a34a', fontWeight: 600 }}>{r.submittedEvaluators}</td>
-                            <td style={{ color: r.pendingEvaluators > 0 ? '#f59e0b' : '#9ca3af' }}>{r.pendingEvaluators}</td>
                             <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ flex: 1, height: 6, background: '#e5e7eb', borderRadius: 999 }}>
-                                  <div style={{ width: `${r.completionPercent}%`, height: '100%', background: '#6366f1', borderRadius: 999 }} />
+                              <div className="hfd-person-cell">
+                                <span className="hfd-avatar-mini">{(r.targetEmployeeName ?? `#${r.targetEmployeeId}`).slice(0, 1).toUpperCase()}</span>
+                                <div>
+                                  <strong>{r.targetEmployeeName ?? `Employee #${r.targetEmployeeId}`}</strong>
+                                  <small>Employee #{r.targetEmployeeId}</small>
                                 </div>
-                                <span style={{ fontSize: '0.78rem', color: '#6b7280', width: 36, textAlign: 'right' }}>
-                            {r.completionPercent.toFixed(0)}%
-                          </span>
                               </div>
                             </td>
+                            <td>{renderSourceChips(r)}</td>
+                            <td>
+                              <div className="hfd-progress-cell">
+                                <span>{r.submittedEvaluators}/{r.totalEvaluators} submitted</span>
+                                <div className="hfd-progress-track">
+                                  <div style={{ width: `${r.completionPercent}%` }} />
+                                </div>
+                                <small>
+                                  {r.pendingEvaluators} pending
+                                  {sourceCount(r.overdueEvaluators) > 0 ? ` · ${r.overdueEvaluators} overdue` : ''}
+                                </small>
+                              </div>
+                            </td>
+                            <td><span className={statusClass(r.statusLabel)}>{r.statusLabel ?? 'Pending'}</span></td>
+                            <td>
+                              {r.averageScore && r.averageScore > 0 ? (
+                                  <div className="hfd-score-cell">
+                                    <strong>{fmt(r.averageScore, 1)}%</strong>
+                                    <small>{r.scoreCategory}</small>
+                                  </div>
+                              ) : <span className="hfd-muted">No score yet</span>}
+                            </td>
+                            <td>{formatDateTime(r.effectiveDeadline ?? r.dueAt)}</td>
+                            <td className="hfd-action-needed">{r.actionNeeded}</td>
                           </tr>
                       ))}
                       </tbody>

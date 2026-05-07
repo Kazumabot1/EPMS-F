@@ -1061,7 +1061,7 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
     { label: 'Teams', path: '/hr/team', icon: 'bi-people-fill' },
     { label: 'Departments', path: '/hr/department', icon: 'bi-building' },
     { label: 'Assessment Scores', path: '/hr/assessment-scores', icon: 'bi-clipboard-data' },
-    { label: '360 Feedback', path: '/hr/feedback/dashboard', icon: 'bi-chat-dots' },
+    { label: '360 Feedback', path: '/hr/feedback', icon: 'bi-chat-dots' },
     {
       label: 'PIP',
       path: '/pip',
@@ -1080,6 +1080,7 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
       end: true,
     },
     { label: 'Assessment Scores', path: '/hr/assessment-scores', icon: 'bi-clipboard-data' },
+    { label: '360 Feedback', path: '/department-head/feedback', icon: 'bi-chat-dots' },
     {
       label: 'PIP',
       path: '/pip',
@@ -1095,6 +1096,7 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
     { label: 'Manager Dashboard', path: '/manager/dashboard', icon: 'bi-person-workspace', end: true },
     { label: 'Team Appraisals', path: '/manager/appraisals', icon: 'bi-clipboard-check' },
     { label: 'Team Reports', path: '/manager/reports', icon: 'bi-file-earmark-bar-graph' },
+    { label: '360 Feedback', path: '/manager/feedback', icon: 'bi-chat-dots' },
     {
       label: 'PIP',
       path: '/pip',
@@ -1132,6 +1134,7 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
 
   Executive: [
     { label: 'Executive Dashboard', path: '/executive/dashboard', icon: 'bi-building', end: true },
+    { label: '360 Feedback', path: '/feedback', icon: 'bi-chat-dots' },
     { label: 'Reports', path: '/executive/reports', icon: 'bi-bar-chart-line' },
   ],
 };
