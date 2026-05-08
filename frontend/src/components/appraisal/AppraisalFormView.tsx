@@ -166,14 +166,14 @@ const AppraisalFormView = ({
       </div>
 
       <div className="appraisal-inline-grid">
-        <ReviewBlock title="PM Review" review={pmReview} />
+        <ReviewBlock title="Manager Review" review={pmReview} />
         <ReviewBlock title="Dept Head Review" review={deptHeadReview} />
       </div>
       <ReviewBlock title="HR Review" review={hrReview} />
 
       {(mode === 'pm' || mode === 'dept-head' || mode === 'hr') && (
         <div className="appraisal-review-block">
-          <h4>{mode === 'pm' ? 'PM Recommendation' : mode === 'dept-head' ? 'Dept Head Recommendation' : 'HR Final Check'}</h4>
+          <h4>{mode === 'pm' ? 'Manager Recommendation' : mode === 'dept-head' ? 'Dept Head Recommendation' : 'HR Final Check'}</h4>
           <label className="appraisal-field">
             <span>Recommendation</span>
             <textarea
@@ -214,7 +214,7 @@ const AppraisalFormView = ({
                   disabled={busy || returnNote.trim().length === 0}
                   onClick={() => onReturnToPm(returnNote.trim())}
                 >
-                  Return to PM
+                  Return to Manager
                 </button>
               </>
             )}

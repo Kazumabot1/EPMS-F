@@ -15,7 +15,7 @@ const titleByRole = {
 };
 
 const descriptionByRole = {
-  pm: 'Forms that you have submitted as Project Manager.',
+  pm: 'Forms that you have submitted as Manager.',
   'dept-head': 'Employee forms that you have checked and sent to HR.',
   employee: 'Completed appraisal forms approved by HR.',
 };

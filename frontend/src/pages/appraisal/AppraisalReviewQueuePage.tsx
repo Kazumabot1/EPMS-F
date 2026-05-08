@@ -55,7 +55,7 @@ const AppraisalReviewQueuePage = ({ mode }: AppraisalReviewQueuePageProps) => {
     setMessage('');
     try {
       await appraisalWorkflowService.returnToPm(selected.id, { note });
-      setMessage('Returned to PM.');
+      setMessage('Returned to Manager.');
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Return failed.');
@@ -68,8 +68,8 @@ const AppraisalReviewQueuePage = ({ mode }: AppraisalReviewQueuePageProps) => {
     <div className="appraisal-page">
       <div className="appraisal-page-header">
         <div>
-          <h1>{mode === 'dept-head' ? 'PM Review Check' : 'PM + Dept Review Check'}</h1>
-          <p>{mode === 'dept-head' ? 'Review PM-submitted employee forms and submit them to HR.' : 'Check PM and Dept Head reviews, then approve completed forms.'}</p>
+          <h1>{mode === 'dept-head' ? 'Manager Review Check' : 'Manager + Dept Review Check'}</h1>
+          <p>{mode === 'dept-head' ? 'Review manager-submitted employee forms and submit them to HR.' : 'Check Manager and Dept Head reviews, then approve completed forms.'}</p>
         </div>
       </div>
 
@@ -77,7 +77,7 @@ const AppraisalReviewQueuePage = ({ mode }: AppraisalReviewQueuePageProps) => {
 
       <div className="appraisal-grid">
         <div className="appraisal-card">
-          <h2>{mode === 'dept-head' ? 'PM Submitted Forms' : 'In Review Forms'}</h2>
+          <h2>{mode === 'dept-head' ? 'Manager Submitted Forms' : 'In Review Forms'}</h2>
           {forms.length === 0 && !loading ? (
             <div className="appraisal-empty">No pending forms.</div>
           ) : (

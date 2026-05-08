@@ -62,10 +62,40 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
     { label: 'Dashboard', path: '/dashboard', icon: 'bi-grid-1x2', end: true },
     { label: 'Profile', path: '/hr/profile', icon: 'bi-person' },
     { label: 'Employees', path: '/hr/employee', icon: 'bi-people' },
-    { label: 'Teams', path: '/hr/team', icon: 'bi-people-fill' },
-    { label: 'Departments', path: '/hr/department', icon: 'bi-building' },
+    {
+      label: 'Teams',
+      path: '/hr/team',
+      icon: 'bi-people-fill',
+      children: [
+        { label: 'Teams', path: '/hr/team', icon: 'bi-people-fill', end: true },
+        { label: 'Create Team', path: '/hr/team/create', icon: 'bi-plus-square' },
+        { label: 'Team History', path: '/hr/team/history', icon: 'bi-clock-history' },
+      ],
+    },
+    {
+      label: 'Organization',
+      path: '/hr/organization',
+      icon: 'bi-building',
+      children: [
+        { label: 'Departments', path: '/hr/department', icon: 'bi-building' },
+        { label: 'Department Comparison', path: '/hr/department-comparison', icon: 'bi-columns-gap' },
+      ],
+    },
     { label: 'Assessment Scores', path: '/hr/assessment-scores', icon: 'bi-clipboard-data' },
     { label: 'Assessment Forms', path: '/hr/assessment-forms', icon: 'bi-ui-checks-grid' },
+    {
+      label: 'Appraisals',
+      path: '/hr/appraisal',
+      icon: 'bi-clipboard-check',
+      children: [
+        { label: 'Template Form Create', path: '/hr/appraisal/template-create', icon: 'bi-file-earmark-plus' },
+        { label: 'Template Form Records', path: '/hr/appraisal/template-records', icon: 'bi-folder2-open' },
+        { label: 'Create Appraisal', path: '/hr/appraisal/create', icon: 'bi-calendar-plus' },
+        { label: 'Appraisal Create Records', path: '/hr/appraisal/create-records', icon: 'bi-journal-check' },
+        { label: 'Cycle Records', path: '/hr/appraisal/cycles', icon: 'bi-arrow-repeat' },
+        { label: 'Manager + Dept Review Check', path: '/hr/appraisal/review-check', icon: 'bi-shield-check' },
+      ],
+    },
     { label: '360 Feedback', path: '/hr/feedback/dashboard', icon: 'bi-chat-dots' },
     { label: 'Notifications', path: '/notifications', icon: 'bi-bell' },
     {
@@ -84,6 +114,15 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
       end: true,
     },
     { label: 'Assessment Scores', path: '/department-head/assessment-scores', icon: 'bi-clipboard-data' },
+    {
+      label: 'Appraisals',
+      path: '/department-head/appraisals',
+      icon: 'bi-clipboard-check',
+      children: [
+        { label: 'Manager Review Check', path: '/department-head/appraisals/review', icon: 'bi-shield-check' },
+        { label: 'Review Check Record', path: '/department-head/appraisals/history', icon: 'bi-clock-history' },
+      ],
+    },
     {
       label: 'One-on-One',
       path: '/one-on-one-meetings',
@@ -107,7 +146,15 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
 
   Manager: [
     { label: 'Manager Dashboard', path: '/manager/dashboard', icon: 'bi-person-workspace', end: true },
-    { label: 'Team Appraisals', path: '/manager/appraisals', icon: 'bi-clipboard-check' },
+    {
+      label: 'Team Appraisals',
+      path: '/manager/appraisals',
+      icon: 'bi-clipboard-check',
+      children: [
+        { label: 'Employee Performance Review', path: '/manager/appraisals', icon: 'bi-pencil-square', end: true },
+        { label: 'Review History List', path: '/manager/appraisals/history', icon: 'bi-clock-history' },
+      ],
+    },
     { label: 'Team Reports', path: '/manager/reports', icon: 'bi-file-earmark-bar-graph' },
     { label: 'Notifications', path: '/notifications', icon: 'bi-bell' },
     {
@@ -140,7 +187,6 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
   const normalizedRoles = (user.roles ?? []).map(normalizeRoleName);
   const dashboard = user.dashboard ?? '';
 
-  // Admin must be checked BEFORE HR, otherwise ADMIN is swallowed into HR
   if (normalizedRoles.includes('ADMIN') || dashboard === 'ADMIN_DASHBOARD') {
     return 'Admin';
   }

@@ -23,10 +23,10 @@ import java.util.List;
 
 /**
  * Handles the filled appraisal form workflow:
- * PM -> Dept Head -> HR -> Employee view.
+ * Manager -> Dept Head -> HR -> Employee view.
  *
  * The template structure is loaded through the employee appraisal form response.
- * PM ratings/recommendations are returned read-only for Dept Head and HR views.
+ * Manager ratings/recommendations are returned read-only for Dept Head and HR views.
  */
 @RestController
 @RequestMapping("/api/appraisal/workflow")
@@ -41,11 +41,9 @@ public class AppraisalWorkflowController {
 
     @GetMapping("/pm/cycles/active")
     @PreAuthorize(
-            "hasRole('PROJECT_MANAGER') "
-                    + "or hasRole('PROJECTMANAGER') "
-                    + "or hasAuthority('ROLE_PROJECT_MANAGER') "
-                    + "or hasAuthority('ROLE_PROJECTMANAGER') "
-                    + "or authentication.principal.dashboard == 'PROJECT_MANAGER_DASHBOARD' "
+            "hasRole('MANAGER') "
+                    + "or hasAuthority('ROLE_MANAGER') "
+                    + "or authentication.principal.dashboard == 'MANAGER_DASHBOARD' "
                     + "or hasAnyRole('HR', 'ADMIN') "
                     + "or authentication.principal.dashboard == 'HR_DASHBOARD' "
                     + "or authentication.principal.dashboard == 'ADMIN_DASHBOARD'"
@@ -57,11 +55,9 @@ public class AppraisalWorkflowController {
 
     @PostMapping("/pm/cycles/{cycleId}/employees/{employeeId}/draft")
     @PreAuthorize(
-            "hasRole('PROJECT_MANAGER') "
-                    + "or hasRole('PROJECTMANAGER') "
-                    + "or hasAuthority('ROLE_PROJECT_MANAGER') "
-                    + "or hasAuthority('ROLE_PROJECTMANAGER') "
-                    + "or authentication.principal.dashboard == 'PROJECT_MANAGER_DASHBOARD' "
+            "hasRole('MANAGER') "
+                    + "or hasAuthority('ROLE_MANAGER') "
+                    + "or authentication.principal.dashboard == 'MANAGER_DASHBOARD' "
                     + "or hasAnyRole('HR', 'ADMIN') "
                     + "or authentication.principal.dashboard == 'HR_DASHBOARD' "
                     + "or authentication.principal.dashboard == 'ADMIN_DASHBOARD'"
@@ -72,16 +68,14 @@ public class AppraisalWorkflowController {
     ) {
         EmployeeAppraisalFormResponse response = workflowService.createPmDraft(cycleId, employeeId, SecurityUtils.currentUserId());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(GenericApiResponse.success("PM appraisal draft ready", response));
+                .body(GenericApiResponse.success("Manager appraisal draft ready", response));
     }
 
     @PostMapping("/pm/forms/{formId}/submit")
     @PreAuthorize(
-            "hasRole('PROJECT_MANAGER') "
-                    + "or hasRole('PROJECTMANAGER') "
-                    + "or hasAuthority('ROLE_PROJECT_MANAGER') "
-                    + "or hasAuthority('ROLE_PROJECTMANAGER') "
-                    + "or authentication.principal.dashboard == 'PROJECT_MANAGER_DASHBOARD' "
+            "hasRole('MANAGER') "
+                    + "or hasAuthority('ROLE_MANAGER') "
+                    + "or authentication.principal.dashboard == 'MANAGER_DASHBOARD' "
                     + "or hasAnyRole('HR', 'ADMIN') "
                     + "or authentication.principal.dashboard == 'HR_DASHBOARD' "
                     + "or authentication.principal.dashboard == 'ADMIN_DASHBOARD'"
@@ -91,23 +85,21 @@ public class AppraisalWorkflowController {
             @Valid @RequestBody PmAppraisalSubmitRequest request
     ) {
         EmployeeAppraisalFormResponse response = workflowService.submitPmReview(formId, request, SecurityUtils.currentUserId());
-        return ResponseEntity.ok(GenericApiResponse.success("PM review submitted to Dept Head", response));
+        return ResponseEntity.ok(GenericApiResponse.success("Manager review submitted to Dept Head", response));
     }
 
     @GetMapping("/pm/history")
     @PreAuthorize(
-            "hasRole('PROJECT_MANAGER') "
-                    + "or hasRole('PROJECTMANAGER') "
-                    + "or hasAuthority('ROLE_PROJECT_MANAGER') "
-                    + "or hasAuthority('ROLE_PROJECTMANAGER') "
-                    + "or authentication.principal.dashboard == 'PROJECT_MANAGER_DASHBOARD' "
+            "hasRole('MANAGER') "
+                    + "or hasAuthority('ROLE_MANAGER') "
+                    + "or authentication.principal.dashboard == 'MANAGER_DASHBOARD' "
                     + "or hasAnyRole('HR', 'ADMIN') "
                     + "or authentication.principal.dashboard == 'HR_DASHBOARD' "
                     + "or authentication.principal.dashboard == 'ADMIN_DASHBOARD'"
     )
     public ResponseEntity<GenericApiResponse<List<EmployeeAppraisalFormResponse>>> getPmHistory() {
         List<EmployeeAppraisalFormResponse> response = workflowService.getPmHistory(SecurityUtils.currentUserId());
-        return ResponseEntity.ok(GenericApiResponse.success("PM appraisal review history fetched", response));
+        return ResponseEntity.ok(GenericApiResponse.success("Manager appraisal review history fetched", response));
     }
 
     @GetMapping("/dept-head/queue")
@@ -213,7 +205,7 @@ public class AppraisalWorkflowController {
                 request == null ? null : request.getNote(),
                 SecurityUtils.currentUserId()
         );
-        return ResponseEntity.ok(GenericApiResponse.success("Appraisal form returned to PM", response));
+        return ResponseEntity.ok(GenericApiResponse.success("Appraisal form returned to Manager", response));
     }
 
     @GetMapping("/forms/{formId}")

@@ -52,28 +52,26 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
     variant === 'hr' ||
     variant === 'admin';
 
-  const canCreatePip =
-    !isHrOnly &&
-    !isEmployee;
+  const canCreatePip = !isHrOnly && !isEmployee;
 
   const roleLabel =
     variant === 'admin'
       ? 'Admin'
       : variant === 'hr'
-      ? 'HR'
-      : isAdmin
-      ? 'Admin'
-      : dashboard === 'EMPLOYEE_DASHBOARD'
-      ? 'Employee'
-      : dashboard === 'HR_DASHBOARD'
-      ? 'HR'
-      : dashboard === 'MANAGER_DASHBOARD'
-      ? 'Manager'
-      : dashboard === 'DEPARTMENT_HEAD_DASHBOARD'
-      ? 'Department Head'
-      : dashboard === 'EXECUTIVE_DASHBOARD'
-      ? 'Executive'
-      : 'User';
+        ? 'HR'
+        : isAdmin
+          ? 'Admin'
+          : dashboard === 'EMPLOYEE_DASHBOARD'
+            ? 'Employee'
+            : dashboard === 'HR_DASHBOARD'
+              ? 'HR'
+              : dashboard === 'MANAGER_DASHBOARD'
+                ? 'Manager'
+                : dashboard === 'DEPARTMENT_HEAD_DASHBOARD'
+                  ? 'Department Head'
+                  : dashboard === 'EXECUTIVE_DASHBOARD'
+                    ? 'Executive'
+                    : 'User';
 
   const navItems: NavItem[] = useMemo(() => {
     const pipChildren: NavItem[] = canCreatePip
@@ -110,34 +108,28 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
 
     const hrNavItems: NavItem[] = [
       { to: '/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' },
-
-     /*  {
+      {
         to: '/hr/team',
-        label: 'Team Management',
-        icon: 'bi bi-people',
+        label: 'Teams',
+        icon: 'bi bi-people-fill',
         children: [
-          { to: '/hr/team', label: 'Teams', icon: 'bi bi-people', end: true },
-          { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-circle' },
+          { to: '/hr/team', label: 'Teams', icon: 'bi bi-people-fill', end: true },
+          { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-square', end: true },
+          { to: '/hr/team/history', label: 'Team History', icon: 'bi bi-clock-history', end: true },
         ],
-      }, */
-  {
-    to: '/hr/team',
-    label: 'Teams',
-    icon: 'bi bi-people-fill',
-    children: [
-      { to: '/hr/team', label: 'Teams', icon: 'bi bi-people-fill', end: true },
-      { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-square', end: true },
-      { to: '/hr/team/history', label: 'Team History', icon: 'bi bi-clock-history', end: true },
-    ],
-  },
-
-/*
+      },
       {
         to: '/hr/organization',
         label: 'Organization',
         icon: 'bi bi-building',
         children: [
           { to: '/hr/department', label: 'Departments', icon: 'bi bi-building' },
+          {
+            to: '/hr/department-comparison',
+            label: 'Departments Comparison',
+            icon: 'bi bi-columns-gap',
+            end: true,
+          },
           { to: '/hr/employee', label: 'Employee', icon: 'bi bi-people', end: true },
           {
             to: '/hr/employee/workforce',
@@ -145,41 +137,24 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
             icon: 'bi bi-person-badge',
             end: true,
           },
-          { to: '/hr/employee/import', label: 'Import Employees', icon: 'bi bi-upload' },
         ],
-      }, */
-{
-  to: '/hr/organization',
-  label: 'Organization',
-  icon: 'bi bi-building',
-  children: [
-    { to: '/hr/department', label: 'Departments', icon: 'bi bi-building' },
-    {
-      to: '/hr/department-comparison',
-      label: 'Departments Comparison',
-      icon: 'bi bi-columns-gap',
-      end: true,
-    },
-    { to: '/hr/employee', label: 'Employee', icon: 'bi bi-people', end: true },
-    {
-      to: '/hr/employee/workforce',
-      label: 'Workforce overview',
-      icon: 'bi bi-person-badge',
-      end: true,
-    },
-  ],
-},
-
-
-
-
-
-
+      },
       { to: '/hr/assessment-scores', label: 'Assessment Scores', icon: 'bi bi-clipboard-data' },
       { to: '/hr/assessment-forms', label: 'Assessment Forms', icon: 'bi bi-ui-checks-grid' },
-
+      {
+        to: '/hr/appraisal',
+        label: 'Appraisals',
+        icon: 'bi bi-clipboard-check',
+        children: [
+          { to: '/hr/appraisal/template-create', label: 'Template Form Create', icon: 'bi bi-file-earmark-plus' },
+          { to: '/hr/appraisal/template-records', label: 'Template Form Records', icon: 'bi bi-folder2-open' },
+          { to: '/hr/appraisal/create', label: 'Create Appraisal', icon: 'bi bi-calendar-plus' },
+          { to: '/hr/appraisal/create-records', label: 'Appraisal Create Records', icon: 'bi bi-journal-check' },
+          { to: '/hr/appraisal/cycles', label: 'Cycle Records', icon: 'bi bi-arrow-repeat' },
+          { to: '/hr/appraisal/review-check', label: 'Manager + Dept Review Check', icon: 'bi bi-shield-check' },
+        ],
+      },
       { to: '/hr/feedback/dashboard', label: '360 Feedback', icon: 'bi bi-chat-square-dots' },
-
       {
         to: '/user-roles',
         label: 'Access Control',
@@ -190,7 +165,6 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
           { to: '/permissions', label: 'Permissions', icon: 'bi bi-key' },
         ],
       },
-
       {
         to: '/one-on-one-meetings',
         label: 'One-on-One',
@@ -200,16 +174,13 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
           { to: '/one-on-one-action-items', label: 'Action Items', icon: 'bi bi-list-check' },
         ],
       },
-
       {
         to: '/pip',
         label: 'PIP',
         icon: 'bi bi-clipboard2-pulse',
         children: pipChildren,
       },
-
       { to: '/notifications', label: 'Notifications', icon: 'bi bi-bell' },
-
       {
         to: '/hr/position/create',
         label: 'Positions',
@@ -220,7 +191,6 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
           { to: '/hr/position/table', label: 'Positions Table', icon: 'bi bi-table' },
         ],
       },
-
       {
         to: '/hr/performance-kpi/unit',
         label: 'KPI Management',
@@ -251,21 +221,13 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
     if (isAdmin) return adminNavItems;
     if (isEmployee) return employeeNavItems;
     return hrNavItems;
-  }, [
-    variant,
-    isAdmin,
-    isEmployee,
-    canCreatePip,
-  ]);
+  }, [variant, isAdmin, isEmployee, canCreatePip]);
 
   const hasActiveChild = (item: NavItem) =>
     item.children?.some((child) => location.pathname.startsWith(child.to)) ?? false;
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps — navItems is a local
-  // array rebuilt every render; including it would cause an infinite loop.
-  // We only need to re-expand when the URL changes.
   useEffect(() => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -276,14 +238,13 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
         }
       });
 
-      // Only update state if something actually changed to avoid unnecessary renders
-      if (next.size === prev.size && [...next].every((v) => prev.has(v))) {
+      if (next.size === prev.size && [...next].every((value) => prev.has(value))) {
         return prev;
       }
 
       return next;
     });
-  }, [location.pathname]);
+  }, [location.pathname, navItems]);
 
   const isParentActive = (item: NavItem) =>
     location.pathname.startsWith(item.to) || hasActiveChild(item);

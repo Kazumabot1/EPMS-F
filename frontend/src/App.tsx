@@ -24,7 +24,9 @@ import EmployeeAssessmentScoresPage from './pages/employee/EmployeeAssessmentSco
 
 import TeamManagement from './pages/team/TeamManagement';
 import TeamCreate from './pages/team/TeamCreate';
+import TeamHistoryPage from './pages/team/TeamHistoryPage';
 import DepartmentManagement from './pages/department/DepartmentManagement';
+import DepartmentComparisonPage from './pages/department/DepartmentComparisonPage';
 
 import ManagerDashboard from './pages/manager/ManagerDashboard';
 import CeoDashboard from './pages/ceo/CeoDashboard';
@@ -55,6 +57,9 @@ import PipPastPlansPage from './pages/pip/PipPastPlansPage';
 import FeedbackLayoutPage from './pages/feedback/FeedbackLayoutPage';
 import HrFeedbackDashboard from './pages/hr-feedback/HrFeedbackDashboard';
 
+import EmployeePerformanceReviewPage from './pages/appraisal/EmployeePerformanceReviewPage';
+import AppraisalHistoryListPage from './pages/appraisal/AppraisalHistoryListPage';
+import AppraisalReviewQueuePage from './pages/appraisal/AppraisalReviewQueuePage';
 import { appraisalRoutes } from './routes/appraisalRoutes';
 
 function App() {
@@ -67,14 +72,12 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/change-password" element={<ForceChangePasswordPage />} />
 
-          {/* ── Shared routes (any authenticated user) ── */}
           <Route element={<AppLayout />}>
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/employee/notifications" element={<Notifications />} />
             <Route path="/pip/past-plans" element={<PipPastPlansPage />} />
           </Route>
 
-          {/* ── Admin ── */}
           <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
             <Route element={<AppLayout />}>
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -87,7 +90,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* ── Employee ── */}
           <Route element={<ProtectedRoute allowedRoles={['Employee']} />}>
             <Route element={<AppLayout />}>
               <Route path="/employee/dashboard" element={<EmployeeMyDashboard />} />
@@ -102,7 +104,8 @@ function App() {
                 }
               />
 
-              <Route path="/employee/appraisals" element={<EmployeeAssessmentScoresPage />} />
+              <Route path="/employee/appraisals" element={<AppraisalHistoryListPage role="employee" />} />
+              <Route path="/employee/assessment-scores" element={<EmployeeAssessmentScoresPage />} />
               <Route path="/employee/self-assessment" element={<EmployeeSelfAssessmentPage />} />
 
               <Route
@@ -129,20 +132,11 @@ function App() {
             </Route>
           </Route>
 
-          {/* ── Manager ── */}
           <Route element={<ProtectedRoute allowedRoles={['Manager']} />}>
             <Route element={<AppLayout />}>
               <Route path="/manager/dashboard" element={<ManagerDashboard />} />
-
-              <Route
-                path="/manager/appraisals"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Team Appraisals"
-                    description="Manager appraisal workflow placeholder."
-                  />
-                }
-              />
+              <Route path="/manager/appraisals" element={<EmployeePerformanceReviewPage />} />
+              <Route path="/manager/appraisals/history" element={<AppraisalHistoryListPage role="pm" />} />
 
               <Route
                 path="/manager/reports"
@@ -158,7 +152,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* ── Executive ── */}
           <Route element={<ProtectedRoute allowedRoles={['Executive']} />}>
             <Route element={<AppLayout />}>
               <Route path="/executive/dashboard" element={<CeoDashboard />} />
@@ -175,11 +168,12 @@ function App() {
             </Route>
           </Route>
 
-          {/* ── Department Head ── */}
           <Route element={<ProtectedRoute allowedRoles={['DepartmentHead']} />}>
             <Route element={<AppLayout />}>
               <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
               <Route path="/department-head/assessment-scores" element={<AssessmentScoreTablePage />} />
+              <Route path="/department-head/appraisals/review" element={<AppraisalReviewQueuePage mode="dept-head" />} />
+              <Route path="/department-head/appraisals/history" element={<AppraisalHistoryListPage role="dept-head" />} />
 
               <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
               <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
@@ -188,7 +182,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* ── HR ── */}
           <Route element={<ProtectedRoute allowedRoles={['HR']} />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -201,16 +194,16 @@ function App() {
 
               <Route path="/hr/team" element={<TeamManagement />} />
               <Route path="/hr/team/create" element={<TeamCreate />} />
+              <Route path="/hr/team/history" element={<TeamHistoryPage />} />
               <Route path="/hr/department" element={<DepartmentManagement />} />
+              <Route path="/hr/department-comparison" element={<DepartmentComparisonPage />} />
 
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
               <Route path="/hr/assessment-forms" element={<AssessmentFormBuilderPage />} />
 
-              {/* 360 Feedback */}
               <Route path="/hr/feedback/dashboard" element={<HrFeedbackDashboard />} />
               <Route path="/hr/feedback/*" element={<FeedbackLayoutPage />} />
 
-              {/* Appraisal forms */}
               {appraisalRoutes}
 
               <Route path="/permissions" element={<Permissions />} />

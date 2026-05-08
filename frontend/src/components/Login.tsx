@@ -33,7 +33,6 @@ function Login() {
         return '/employee/dashboard';
 
       case 'MANAGER_DASHBOARD':
-      case 'PROJECT_MANAGER_DASHBOARD':
         return '/manager/dashboard';
 
       case 'DEPARTMENT_HEAD_DASHBOARD':
@@ -57,11 +56,7 @@ function Login() {
           return '/department-head/dashboard';
         }
 
-        if (
-          normalizedRoles.includes('PROJECT_MANAGER') ||
-          normalizedRoles.includes('PROJECTMANAGER') ||
-          normalizedRoles.includes('MANAGER')
-        ) {
+        if (normalizedRoles.includes('MANAGER')) {
           return '/manager/dashboard';
         }
 
