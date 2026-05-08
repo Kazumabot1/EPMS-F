@@ -1,7 +1,5 @@
 package com.epms.entity;
 
-import com.epms.entity.enums.AppraisalDecision;
-import com.epms.entity.enums.AppraisalReviewStage;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,16 +9,16 @@ import java.util.Date;
 
 @Entity
 @Table(
-    name = "appraisal_review",
+    name = "employee_appraisal_criteria_rating",
     uniqueConstraints = @UniqueConstraint(
-        name = "uk_appraisal_review_form_stage",
-        columnNames = {"employee_appraisal_form_id", "review_stage"}
+        name = "uk_employee_appraisal_criteria_rating",
+        columnNames = {"employee_appraisal_form_id", "criteria_id"}
     )
 )
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class AppraisalReview {
+public class EmployeeAppraisalCriteriaRating {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -30,26 +28,16 @@ public class AppraisalReview {
     @JoinColumn(name = "employee_appraisal_form_id", nullable = false)
     private EmployeeAppraisalForm employeeAppraisalForm;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "review_stage", nullable = false, length = 30)
-    private AppraisalReviewStage reviewStage;
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "reviewer_user_id", nullable = false)
-    private User reviewerUser;
+    @JoinColumn(name = "criteria_id", nullable = false)
+    private AppraisalFormCriteria criteria;
 
-    @Column(columnDefinition = "TEXT")
-    private String recommendation;
+    /** PM selected rating value. Valid range is 1..criteria.maxRating. */
+    @Column(nullable = false)
+    private Integer ratingValue;
 
     @Column(columnDefinition = "TEXT")
     private String comment;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
-    private AppraisalDecision decision = AppraisalDecision.SUBMITTED;
-
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date submittedAt;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(nullable = false, updatable = false)
@@ -63,9 +51,6 @@ public class AppraisalReview {
         Date now = new Date();
         this.createdAt = now;
         this.updatedAt = now;
-        if (this.decision == null) {
-            this.decision = AppraisalDecision.SUBMITTED;
-        }
     }
 
     @PreUpdate

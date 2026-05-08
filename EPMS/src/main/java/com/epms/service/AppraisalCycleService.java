@@ -1,20 +1,30 @@
 package com.epms.service;
 
-import com.epms.dto.AppraisalCycleRequestDto;
-import com.epms.dto.AppraisalCycleResponseDto;
+import com.epms.dto.appraisal.AppraisalCycleRequest;
+import com.epms.dto.appraisal.AppraisalCycleResponse;
+import com.epms.dto.appraisal.AppraisalTemplateCycleRequest;
+import com.epms.entity.enums.AppraisalCycleStatus;
 
 import java.util.List;
 
 public interface AppraisalCycleService {
 
-    AppraisalCycleResponseDto createAppraisalCycle(AppraisalCycleRequestDto requestDto);
+    AppraisalCycleResponse createCycle(AppraisalCycleRequest request, Integer createdByUserId);
 
-    List<AppraisalCycleResponseDto> getAllAppraisalCycles();
+    AppraisalCycleResponse createTemplateAndCycle(AppraisalTemplateCycleRequest request, Integer createdByUserId);
 
-    AppraisalCycleResponseDto getAppraisalCycleById(Integer id);
+    AppraisalCycleResponse getCycle(Integer cycleId);
 
-    AppraisalCycleResponseDto updateAppraisalCycle(Integer id, AppraisalCycleRequestDto requestDto);
+    AppraisalCycleResponse updateDraftCycle(Integer cycleId, AppraisalCycleRequest request);
 
-    void deleteAppraisalCycle(Integer id);
+    List<AppraisalCycleResponse> getCycles(AppraisalCycleStatus status);
+
+    AppraisalCycleResponse activateCycle(Integer cycleId);
+
+    AppraisalCycleResponse lockCycle(Integer cycleId);
+
+    AppraisalCycleResponse completeCycle(Integer cycleId);
+
+    AppraisalCycleResponse reuseCycle(Integer cycleId, AppraisalCycleRequest overrideRequest, Integer createdByUserId);
+
 }
-
