@@ -59,8 +59,7 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
         );
 
         return assignments.stream()
-                .filter(assignment -> assignment.getStatus() != AssignmentStatus.CANCELLED)
-                .filter(assignment -> assignment.getFeedbackRequest().getCampaign().getStatus() != FeedbackCampaignStatus.CANCELLED)
+                .filter(this::isVisibleInEvaluatorWorkspace)
                 .sorted(Comparator
                         .comparing(this::resolveEffectiveDeadline, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(FeedbackEvaluatorAssignment::getId))
@@ -71,11 +70,17 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
                             .assignmentId(assignment.getId())
                             .campaignId(assignment.getFeedbackRequest().getCampaign().getId())
                             .campaignName(assignment.getFeedbackRequest().getCampaign().getName())
+                            .campaignStatus(assignment.getFeedbackRequest().getCampaign().getStatus().name())
+                            .campaignStartAt(assignment.getFeedbackRequest().getCampaign().getStartAt())
                             .targetEmployeeId(targetEmployeeId)
                             .targetEmployeeName(targetNames.getOrDefault(targetEmployeeId, "Employee #" + targetEmployeeId))
                             .relationshipType(assignment.getRelationshipType().name())
                             .anonymous(Boolean.TRUE.equals(assignment.getIsAnonymous()))
                             .status(assignment.getStatus().name())
+                            .canSubmit(canSubmit(assignment, response))
+                            .lifecycleMessage(lifecycleMessage(assignment, response))
+                            .autoSubmitCompletedDraftsOnClose(isAutoSubmitCompletedDraftsOnClose(assignment))
+                            .autoSubmitNotice(autoSubmitNotice(assignment))
                             .dueAt(resolveEffectiveDeadline(assignment))
                             .submittedAt(response != null ? response.getSubmittedAt() : null)
                             .build();
@@ -106,20 +111,50 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
             throw new UnauthorizedActionException("You are not authorized to access this feedback assignment.");
         }
 
+        FeedbackResponse response = feedbackResponseRepository.findByEvaluatorAssignmentId(assignmentId).orElse(null);
+        ensureAssignmentVisibleToEvaluator(assignment, response);
+
         FeedbackForm form = loadFormWithSectionsAndQuestions(
                 assignment.getFeedbackRequest().getForm().getId()
         );
-        FeedbackResponse response = feedbackResponseRepository.findByEvaluatorAssignmentId(assignmentId).orElse(null);
         Map<Long, FeedbackResponseItem> existingItems = response == null
                 ? Map.of()
                 : response.getItems().stream()
                   .collect(Collectors.toMap(item -> item.getQuestion().getId(), Function.identity()));
+
+        int totalQuestionCount = form.getSections().stream()
+                .mapToInt(section -> section.getQuestions() == null ? 0 : section.getQuestions().size())
+                .sum();
+        int requiredQuestionCount = form.getSections().stream()
+                .flatMap(section -> section.getQuestions() == null ? java.util.stream.Stream.<FeedbackQuestion>empty() : section.getQuestions().stream())
+                .mapToInt(question -> Boolean.TRUE.equals(question.getIsRequired()) ? 1 : 0)
+                .sum();
+        int answeredQuestionCount = (int) existingItems.values().stream()
+                .filter(item -> item.getRatingValue() != null)
+                .count();
+        int answeredRequiredQuestionCount = (int) form.getSections().stream()
+                .flatMap(section -> section.getQuestions() == null ? java.util.stream.Stream.<FeedbackQuestion>empty() : section.getQuestions().stream())
+                .filter(question -> Boolean.TRUE.equals(question.getIsRequired()))
+                .filter(question -> {
+                    FeedbackResponseItem item = existingItems.get(question.getId());
+                    return item != null && item.getRatingValue() != null;
+                })
+                .count();
+        int completionPercent = requiredQuestionCount == 0
+                ? 100
+                : Math.min(100, Math.round((answeredRequiredQuestionCount * 100.0f) / requiredQuestionCount));
+        boolean submittedLocked = response != null && response.getSubmittedAt() != null;
+        boolean finalSubmissionReady = !submittedLocked
+                && canSubmit(assignment, response)
+                && answeredRequiredQuestionCount >= requiredQuestionCount;
 
         Long targetEmployeeId = assignment.getFeedbackRequest().getTargetEmployeeId();
         return FeedbackAssignmentDetailResponse.builder()
                 .assignmentId(assignment.getId())
                 .campaignId(assignment.getFeedbackRequest().getCampaign().getId())
                 .campaignName(assignment.getFeedbackRequest().getCampaign().getName())
+                .campaignStatus(assignment.getFeedbackRequest().getCampaign().getStatus().name())
+                .campaignStartAt(assignment.getFeedbackRequest().getCampaign().getStartAt())
                 .targetEmployeeId(targetEmployeeId)
                 .targetEmployeeName(loadEmployeeNames(List.of(targetEmployeeId))
                         .getOrDefault(targetEmployeeId, "Employee #" + targetEmployeeId))
@@ -129,7 +164,17 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
                 .dueAt(resolveEffectiveDeadline(assignment))
                 .submittedAt(response != null ? response.getSubmittedAt() : null)
                 .canSubmit(canSubmit(assignment, response))
+                .lifecycleMessage(lifecycleMessage(assignment, response))
+                .autoSubmitCompletedDraftsOnClose(isAutoSubmitCompletedDraftsOnClose(assignment))
+                .autoSubmitNotice(autoSubmitNotice(assignment))
                 .comments(response != null ? response.getComments() : null)
+                .totalQuestionCount(totalQuestionCount)
+                .requiredQuestionCount(requiredQuestionCount)
+                .answeredQuestionCount(answeredQuestionCount)
+                .answeredRequiredQuestionCount(answeredRequiredQuestionCount)
+                .completionPercent(completionPercent)
+                .finalSubmissionReady(finalSubmissionReady)
+                .submittedLocked(submittedLocked)
                 .sections(form.getSections().stream()
                         .sorted(Comparator.comparing(FeedbackSection::getOrderNo))
                         .map(section -> mapSection(section, existingItems))
@@ -164,6 +209,53 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
                 .build();
     }
 
+
+    private boolean isAutoSubmitCompletedDraftsOnClose(FeedbackEvaluatorAssignment assignment) {
+        return assignment != null
+                && assignment.getFeedbackRequest() != null
+                && assignment.getFeedbackRequest().getCampaign() != null
+                && Boolean.TRUE.equals(assignment.getFeedbackRequest().getCampaign().getAutoSubmitCompletedDraftsOnClose());
+    }
+
+    private String autoSubmitNotice(FeedbackEvaluatorAssignment assignment) {
+        if (!isAutoSubmitCompletedDraftsOnClose(assignment)) {
+            return null;
+        }
+        return "This campaign auto-submits completed drafts when HR closes the campaign. Only drafts with all required ratings answered will be submitted automatically.";
+    }
+
+    private boolean isVisibleInEvaluatorWorkspace(FeedbackEvaluatorAssignment assignment) {
+        FeedbackCampaignStatus campaignStatus = assignment.getFeedbackRequest().getCampaign().getStatus();
+        if (campaignStatus == FeedbackCampaignStatus.CANCELLED || campaignStatus == FeedbackCampaignStatus.DRAFT) {
+            return false;
+        }
+        if (assignment.getStatus() == AssignmentStatus.CANCELLED) {
+            return false;
+        }
+        if (campaignStatus == FeedbackCampaignStatus.ACTIVE) {
+            return true;
+        }
+        return assignment.getStatus() == AssignmentStatus.SUBMITTED || assignment.getResponse() != null;
+    }
+
+    private void ensureAssignmentVisibleToEvaluator(FeedbackEvaluatorAssignment assignment, FeedbackResponse response) {
+        FeedbackCampaignStatus campaignStatus = assignment.getFeedbackRequest().getCampaign().getStatus();
+        if (campaignStatus == FeedbackCampaignStatus.DRAFT) {
+            throw new BusinessValidationException("This feedback assignment is not available until HR activates the campaign.");
+        }
+        if (campaignStatus == FeedbackCampaignStatus.CANCELLED) {
+            throw new BusinessValidationException("This feedback campaign was cancelled.");
+        }
+        if (assignment.getStatus() == AssignmentStatus.CANCELLED) {
+            throw new BusinessValidationException("This evaluator assignment was cancelled.");
+        }
+        if (campaignStatus == FeedbackCampaignStatus.CLOSED
+                && assignment.getStatus() != AssignmentStatus.SUBMITTED
+                && response == null) {
+            throw new BusinessValidationException("This campaign is closed and this assignment was not submitted before the deadline.");
+        }
+    }
+
     private boolean canSubmit(FeedbackEvaluatorAssignment assignment, FeedbackResponse response) {
         if (response != null && response.getSubmittedAt() != null) {
             return false;
@@ -184,6 +276,41 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
         }
         LocalDateTime dueAt = resolveEffectiveDeadline(assignment);
         return dueAt == null || !now.isAfter(dueAt);
+    }
+
+
+    private String lifecycleMessage(FeedbackEvaluatorAssignment assignment, FeedbackResponse response) {
+        if (response != null && response.getSubmittedAt() != null) {
+            return "Submitted feedback is locked and can only be viewed.";
+        }
+        if (assignment.getStatus() == AssignmentStatus.CANCELLED) {
+            return "This evaluator assignment was cancelled.";
+        }
+        if (assignment.getFeedbackRequest().getStatus() == FeedbackRequestStatus.CANCELLED) {
+            return "This feedback request was cancelled.";
+        }
+
+        FeedbackCampaignStatus campaignStatus = assignment.getFeedbackRequest().getCampaign().getStatus();
+        if (campaignStatus == FeedbackCampaignStatus.DRAFT) {
+            return "This campaign is still in HR setup and is not open to evaluators yet.";
+        }
+        if (campaignStatus == FeedbackCampaignStatus.CLOSED) {
+            return "This campaign is closed. Feedback can no longer be edited or submitted.";
+        }
+        if (campaignStatus == FeedbackCampaignStatus.CANCELLED) {
+            return "This campaign was cancelled.";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startAt = assignment.getFeedbackRequest().getCampaign().getStartAt();
+        if (startAt != null && now.isBefore(startAt)) {
+            return "This campaign is active but the submission window has not started yet.";
+        }
+        LocalDateTime dueAt = resolveEffectiveDeadline(assignment);
+        if (dueAt != null && now.isAfter(dueAt)) {
+            return "The feedback submission deadline has passed.";
+        }
+        return "Open for draft saving and final submission.";
     }
 
     private Map<Long, String> loadEmployeeNames(List<Long> employeeIds) {

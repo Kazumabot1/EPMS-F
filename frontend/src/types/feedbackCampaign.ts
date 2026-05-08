@@ -7,6 +7,7 @@ export type ApiEnvelope<T> = {
 
 export type FeedbackCampaignStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED' | 'CANCELLED';
 export type FeedbackCampaignRound = 'ANNUAL' | 'FIRST_HALF' | 'SECOND_HALF' | 'SPECIAL';
+export type FeedbackCampaignEarlyCloseStatus = 'NONE' | 'REQUESTED' | 'APPROVED' | 'REJECTED';
 
 export interface FeedbackFormOption {
   id: number;
@@ -39,6 +40,18 @@ export interface FeedbackCampaign {
   instructions?: string | null;
   status: FeedbackCampaignStatus;
   formId: number;
+  autoSubmitCompletedDraftsOnClose?: boolean;
+  earlyCloseRequestStatus?: FeedbackCampaignEarlyCloseStatus | string;
+  earlyCloseRequestedAt?: string | null;
+  earlyCloseRequestedByUserId?: number | null;
+  earlyCloseRequestReason?: string | null;
+  earlyCloseReviewedAt?: string | null;
+  earlyCloseReviewedByUserId?: number | null;
+  earlyCloseReviewReason?: string | null;
+  closedAt?: string | null;
+  closedByUserId?: number | null;
+  closeReason?: string | null;
+  closedEarly?: boolean;
   createdBy: number;
   createdAt: string;
   targetCount: number;
@@ -57,6 +70,7 @@ export interface CreateFeedbackCampaignInput {
   formId: number;
   description?: string;
   instructions?: string;
+  autoSubmitCompletedDraftsOnClose?: boolean;
 }
 
 export interface FeedbackCampaignTargetsInput {
@@ -74,17 +88,19 @@ export interface EvaluatorConfigInput {
   peerCount: number;
 }
 
-export type FeedbackRelationshipType = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF';
-export type EvaluatorSelectionMethod = 'AUTO_RANDOM' | 'MANUAL';
+export type FeedbackRelationshipType = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF' | 'PROJECT_STAKEHOLDER';
+export type EvaluatorSelectionMethod = 'AUTO_RANDOM' | 'AUTO_RELATIONSHIP' | 'MANUAL';
 export type AssignmentStatus = 'PENDING' | 'IN_PROGRESS' | 'SUBMITTED' | 'DECLINED' | 'CANCELLED';
 
 export interface FeedbackAssignmentPreviewItem {
   requestId: number;
   targetEmployeeId: number;
+  targetEmployeeName?: string | null;
   managerAssignments: number;
   selfAssignments: number;
   subordinateAssignments: number;
   peerAssignments: number;
+  projectStakeholderAssignments?: number;
   totalAssignments: number;
   autoAssignments: number;
   manualAssignments: number;

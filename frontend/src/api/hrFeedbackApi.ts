@@ -67,7 +67,8 @@ export interface RatingScaleOption {
   scales?: number;
   description?: string;
   performanceLevel?: string;
-  promotionEligibility?: string;
+  /** Deprecated: feedback ratings do not decide promotion eligibility. */
+  promotionEligibility?: string | null;
   scaleName?: string;
   minScore?: number;
   maxScore?: number;
@@ -101,6 +102,18 @@ const normalizeCampaign = (campaign: ApiFeedbackCampaign): FeedbackCampaign => (
   instructions: campaign.instructions ?? null,
   status: campaign.status as FeedbackCampaignStatus,
   formId: campaign.formId ?? 0,
+  autoSubmitCompletedDraftsOnClose: Boolean(campaign.autoSubmitCompletedDraftsOnClose),
+  earlyCloseRequestStatus: campaign.earlyCloseRequestStatus ?? 'NONE',
+  earlyCloseRequestedAt: campaign.earlyCloseRequestedAt ?? null,
+  earlyCloseRequestedByUserId: campaign.earlyCloseRequestedByUserId ?? null,
+  earlyCloseRequestReason: campaign.earlyCloseRequestReason ?? null,
+  earlyCloseReviewedAt: campaign.earlyCloseReviewedAt ?? null,
+  earlyCloseReviewedByUserId: campaign.earlyCloseReviewedByUserId ?? null,
+  earlyCloseReviewReason: campaign.earlyCloseReviewReason ?? null,
+  closedAt: campaign.closedAt ?? null,
+  closedByUserId: campaign.closedByUserId ?? null,
+  closeReason: campaign.closeReason ?? null,
+  closedEarly: Boolean(campaign.closedEarly),
   createdBy: campaign.createdBy ?? campaign.createdByUserId ?? 0,
   createdAt: campaign.createdAt ?? '',
   targetCount: campaign.targetCount ?? campaign.targetEmployeeIds?.length ?? 0,
@@ -123,6 +136,7 @@ export interface CreateCampaignPayload {
   formId: number;
   description?: string;
   instructions?: string;
+  autoSubmitCompletedDraftsOnClose?: boolean;
 }
 
 export interface CampaignTargetPayload {
@@ -277,6 +291,15 @@ export const hrFeedbackApi = {
     }
   },
 
+  async getPendingEarlyCloseRequests(): Promise<FeedbackCampaign[]> {
+    try {
+      const res = await api.get<ApiEnvelope<ApiFeedbackCampaign[]>>(`${BASE}/campaigns/early-close/requests`);
+      return normalizeCampaigns(unwrap(res));
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to load early close requests.'));
+    }
+  },
+
   async createCampaign(payload: CreateCampaignPayload): Promise<FeedbackCampaign> {
     try {
       const res = await api.post<ApiEnvelope<ApiFeedbackCampaign>>(`${BASE}/campaigns`, payload);
@@ -326,6 +349,33 @@ export const hrFeedbackApi = {
       return normalizeCampaign(unwrap(res));
     } catch (e) {
       throw new Error(extractApiErrorMessage(e, 'Failed to close campaign.'));
+    }
+  },
+
+  async requestEarlyClose(campaignId: number, reason: string): Promise<FeedbackCampaign> {
+    try {
+      const res = await api.post<ApiEnvelope<ApiFeedbackCampaign>>(`${BASE}/campaigns/${campaignId}/early-close/request`, { reason });
+      return normalizeCampaign(unwrap(res));
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to request early close.'));
+    }
+  },
+
+  async approveEarlyClose(campaignId: number, reviewNote?: string): Promise<FeedbackCampaign> {
+    try {
+      const res = await api.post<ApiEnvelope<ApiFeedbackCampaign>>(`${BASE}/campaigns/${campaignId}/early-close/approve`, { reviewNote });
+      return normalizeCampaign(unwrap(res));
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to approve early close.'));
+    }
+  },
+
+  async rejectEarlyClose(campaignId: number, reviewNote?: string): Promise<FeedbackCampaign> {
+    try {
+      const res = await api.post<ApiEnvelope<ApiFeedbackCampaign>>(`${BASE}/campaigns/${campaignId}/early-close/reject`, { reviewNote });
+      return normalizeCampaign(unwrap(res));
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to reject early close.'));
     }
   },
 

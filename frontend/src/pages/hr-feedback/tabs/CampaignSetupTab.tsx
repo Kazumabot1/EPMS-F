@@ -86,6 +86,7 @@ export default function CampaignSetupTab({ onCampaignCreated }: Props) {
   const [formId, setFormId] = useState<number | ''>('');
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('Please provide honest and constructive 360-degree feedback before the deadline.');
+  const [autoSubmitCompletedDraftsOnClose, setAutoSubmitCompletedDraftsOnClose] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
@@ -192,6 +193,7 @@ export default function CampaignSetupTab({ onCampaignCreated }: Props) {
         formId: formId as number,
         description: description.trim(),
         instructions: instructions.trim(),
+        autoSubmitCompletedDraftsOnClose,
       });
       setSuccess(`Campaign "${campaign.name}" created successfully. Continue with target selection when ready.`);
       onCampaignCreated(campaign);
@@ -199,6 +201,7 @@ export default function CampaignSetupTab({ onCampaignCreated }: Props) {
       setNameTouched(false);
       setName(defaultCampaignName(reviewYear, reviewRound));
       setDescription('');
+      setAutoSubmitCompletedDraftsOnClose(false);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -372,6 +375,22 @@ export default function CampaignSetupTab({ onCampaignCreated }: Props) {
               />
               {errors.instructions && <p className="hfd-error-msg">{errors.instructions}</p>}
             </div>
+          </div>
+
+
+
+          <div className="hfd-helper-card hfd-auto-submit-card">
+            <label className="hfd-checkbox-row">
+              <input
+                  type="checkbox"
+                  checked={autoSubmitCompletedDraftsOnClose}
+                  onChange={e => setAutoSubmitCompletedDraftsOnClose(e.target.checked)}
+              />
+              <span>
+                <strong>Auto-submit completed drafts when campaign closes</strong>
+                <small>When enabled, drafts with all required ratings answered become final submissions when HR closes this campaign. Incomplete drafts stay unsubmitted.</small>
+              </span>
+            </label>
           </div>
 
           {!loadingCampaigns && campaigns.length > 0 && (

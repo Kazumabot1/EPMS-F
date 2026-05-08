@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   hrFeedbackApi,
-  ratingScaleLabel,
   type CreateFormPayload,
   type FormDetail,
   type FormOptionItem,
@@ -17,6 +16,8 @@ type BuilderMode = 'create' | 'edit' | 'version' | 'view';
 
 type QuestionDetail = FormSectionDetail['questions'][0];
 
+const DEFAULT_FEEDBACK_SECTION_TITLE = 'Evaluation';
+
 const emptyQuestion = (): QuestionDetail => ({
   id: null,
   questionText: '',
@@ -28,7 +29,7 @@ const emptyQuestion = (): QuestionDetail => ({
 
 const emptySection = (orderNo: number): FormSectionDetail => ({
   id: null,
-  title: '',
+  title: DEFAULT_FEEDBACK_SECTION_TITLE,
   orderNo,
   questions: [emptyQuestion()],
 });
@@ -92,6 +93,24 @@ export default function FormManagementTab({ onFormCreated }: Props) {
   const [sections, setSections] = useState<FormSectionDetail[]>([emptySection(1)]);
 
   const fixedScale = useMemo(() => getFixedFivePointScale(scales), [scales]);
+  const visualScaleOptions = useMemo(() => {
+    const defaultLabels: Record<number, string> = {
+      1: 'Unsatisfactory',
+      2: 'Needs improvement',
+      3: 'Meet requirement',
+      4: 'Good',
+      5: 'Outstanding',
+    };
+
+    return [1, 2, 3, 4, 5].map(value => {
+      const scale = scales.find(item => (item.scales ?? item.maxScore) === value);
+      return {
+        value,
+        label: scale?.description ?? defaultLabels[value],
+        detail: scale?.performanceLevel ?? '',
+      };
+    });
+  }, [scales]);
   const readOnly = builderMode === 'view';
 
   const loadInitialData = async () => {
@@ -147,21 +166,21 @@ export default function FormManagementTab({ onFormCreated }: Props) {
   const applyFormToBuilder = (detail: FormDetail) => {
     setFormName(detail.formName ?? '');
     setAnonAllowed(detail.anonymousAllowed ?? true);
-    setSections(
-        (detail.sections?.length ? detail.sections : [emptySection(1)]).map((section, sectionIndex) => ({
-          id: section.id ?? null,
-          title: section.title ?? '',
-          orderNo: section.orderNo ?? sectionIndex + 1,
-          questions: (section.questions?.length ? section.questions : [emptyQuestion()]).map((question, questionIndex) => ({
-            id: question.id ?? null,
-            questionText: question.questionText ?? '',
-            questionOrder: question.questionOrder ?? questionIndex + 1,
-            ratingScaleId: fixedScale?.id ?? question.ratingScaleId ?? null,
-            weight: question.weight ?? 1,
-            isRequired: question.isRequired ?? true,
-          })),
-        })),
-    );
+
+    const loadedSections = detail.sections?.length ? detail.sections : [emptySection(1)];
+    const loadedQuestions = loadedSections.flatMap(section => section.questions ?? []);
+    const questions = (loadedQuestions.length ? loadedQuestions : [emptyQuestion()]).map((question, questionIndex) => ({
+      id: question.id ?? null,
+      questionText: question.questionText ?? '',
+      questionOrder: question.questionOrder ?? questionIndex + 1,
+      ratingScaleId: fixedScale?.id ?? question.ratingScaleId ?? null,
+      weight: 1,
+      isRequired: question.isRequired ?? true,
+    }));
+
+    // Client requirement shows one Evaluation criteria table, not user-defined question sections.
+    // Keep one backend-compatible section internally, but do not expose section management in the UI.
+    setSections([{ id: loadedSections[0]?.id ?? null, title: DEFAULT_FEEDBACK_SECTION_TITLE, orderNo: 1, questions }]);
   };
 
   const loadFormForBuilder = async (form: FormOptionItem, mode: BuilderMode) => {
@@ -194,21 +213,6 @@ export default function FormManagementTab({ onFormCreated }: Props) {
 
   const startViewForm = (form: FormOptionItem) => {
     loadFormForBuilder(form, 'view');
-  };
-
-  const addSection = () => {
-    if (readOnly) return;
-    setSections(prev => [...prev, emptySection(prev.length + 1)]);
-  };
-
-  const removeSection = (sectionIndex: number) => {
-    if (readOnly) return;
-    setSections(prev => prev.filter((_, index) => index !== sectionIndex));
-  };
-
-  const updateSectionTitle = (sectionIndex: number, title: string) => {
-    if (readOnly) return;
-    setSections(prev => prev.map((section, index) => index === sectionIndex ? { ...section, title } : section));
   };
 
   const addQuestion = (sectionIndex: number) => {
@@ -251,10 +255,9 @@ export default function FormManagementTab({ onFormCreated }: Props) {
   const validateForm = (): string | null => {
     if (!formName.trim()) return 'Form name is required.';
     if (!fixedScale) return 'A 1-5 rating scale is required. Please create/enable the 1-5 rating scale before saving feedback forms.';
-    if (sections.length === 0) return 'At least one section is required.';
-    if (sections.some(section => !section.title.trim())) return 'All section titles are required.';
-    if (sections.some(section => (section.questions ?? []).length === 0)) return 'Every section must have at least one question.';
-    if (sections.some(section => (section.questions ?? []).some(question => !question.questionText.trim()))) return 'All question texts are required.';
+    const questions = sections.flatMap(section => section.questions ?? []);
+    if (questions.length === 0) return 'At least one question is required.';
+    if (sections.flatMap(section => section.questions ?? []).some(question => !question.questionText.trim())) return 'All question texts are required.';
     return null;
   };
 
@@ -263,17 +266,17 @@ export default function FormManagementTab({ onFormCreated }: Props) {
     return {
       formName: formName.trim(),
       anonymousAllowed: anonAllowed,
-      sections: sections.map((section, sectionIndex) => ({
-        title: section.title.trim(),
-        orderNo: sectionIndex + 1,
-        questions: (section.questions ?? []).map((question, questionIndex) => ({
+      sections: [{
+        title: DEFAULT_FEEDBACK_SECTION_TITLE,
+        orderNo: 1,
+        questions: sections.flatMap(section => section.questions ?? []).map((question, questionIndex) => ({
           questionText: question.questionText.trim(),
           questionOrder: questionIndex + 1,
           ratingScaleId,
-          weight: Number(question.weight) || 1,
+          weight: 1,
           isRequired: question.isRequired,
         })),
-      })),
+      }],
     };
   };
 
@@ -394,7 +397,7 @@ export default function FormManagementTab({ onFormCreated }: Props) {
             <i className="bi bi-ui-checks" />
             <div>
               <h2>Feedback Form Management</h2>
-              <p>Create versioned 360 forms. Every question uses fixed 1-5 rating plus one optional comment.</p>
+              <p>Create versioned 360 feedback forms. Each question uses the client-defined 1-5 rating and one optional comment.</p>
             </div>
           </div>
           <button className="hfd-btn hfd-btn-primary" onClick={showBuilder ? closeBuilder : openNewBuilder}>
@@ -433,16 +436,6 @@ export default function FormManagementTab({ onFormCreated }: Props) {
                   </div>
               )}
 
-              <div className="hfd-fixed-scale-box">
-                <div>
-                  <strong>Fixed rating scale</strong>
-                  <span>Client rule: all 360 questions use 1-5 rating. The dropdown is hidden and applied automatically.</span>
-                </div>
-                <span className="hfd-fixed-scale-pill">
-              {fixedScale ? ratingScaleLabel(fixedScale) : '1-5 scale missing'}
-            </span>
-              </div>
-
               <div className="hfd-grid-2" style={{ marginBottom: 14 }}>
                 <div className="hfd-field">
                   <label className="hfd-label">Form Name <span>*</span></label>
@@ -462,76 +455,64 @@ export default function FormManagementTab({ onFormCreated }: Props) {
                 </div>
               </div>
 
-              {sections.map((section, sectionIndex) => (
-                  <div key={sectionIndex} className="hfd-section-block">
-                    <div className="hfd-section-header">
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', whiteSpace: 'nowrap' }}>Section {sectionIndex + 1}</span>
-                      <input
-                          placeholder="Section title..."
-                          value={section.title}
-                          onChange={e => updateSectionTitle(sectionIndex, e.target.value)}
-                          disabled={readOnly}
-                      />
-                      {!readOnly && sections.length > 1 && (
-                          <button className="hfd-btn hfd-btn-danger hfd-btn-sm hfd-btn-icon" onClick={() => removeSection(sectionIndex)}>
-                            <i className="bi bi-trash" />
-                          </button>
-                      )}
-                    </div>
-                    <div className="hfd-section-body">
-                      {(section.questions ?? []).map((question, questionIndex) => (
-                          <div key={questionIndex} className="hfd-question-row hfd-question-row-form">
-                            <input
-                                className="hfd-input"
-                                placeholder={`Question ${questionIndex + 1}...`}
-                                value={question.questionText}
-                                onChange={e => updateQuestion(sectionIndex, questionIndex, { questionText: e.target.value })}
-                                disabled={readOnly}
-                            />
-                            <input
-                                className="hfd-input"
-                                type="number"
-                                min="0.1"
-                                step="0.1"
-                                value={question.weight}
-                                onChange={e => updateQuestion(sectionIndex, questionIndex, { weight: Number(e.target.value) })}
-                                disabled={readOnly}
-                                title="Question weight"
-                                style={{ width: 88 }}
-                            />
-                            <span className="hfd-comment-chip" title="Evaluator response screen shows a comment box for this question.">
-                      <i className="bi bi-chat-left-text" /> Comment
-                    </span>
-                            <label className="hfd-checkbox-label">
-                              <input
-                                  type="checkbox"
-                                  checked={question.isRequired}
-                                  onChange={e => updateQuestion(sectionIndex, questionIndex, { isRequired: e.target.checked })}
-                                  disabled={readOnly}
-                              />
-                              Required
-                            </label>
-                            {!readOnly && (section.questions ?? []).length > 1 && (
-                                <button className="hfd-btn hfd-btn-danger hfd-btn-sm hfd-btn-icon" onClick={() => removeQuestion(sectionIndex, questionIndex)}>
-                                  <i className="bi bi-x" />
-                                </button>
-                            )}
-                          </div>
-                      ))}
-                      {!readOnly && (
-                          <button className="hfd-btn hfd-btn-secondary hfd-btn-sm" style={{ marginTop: 4 }} onClick={() => addQuestion(sectionIndex)}>
-                            <i className="bi bi-plus" /> Add Question
-                          </button>
-                      )}
-                    </div>
+              <div className="hfd-question-list-card">
+                <div className="hfd-question-list-header">
+                  <div>
+                    <h4>Evaluation Criteria</h4>
+                    <p>Add the criteria/questions evaluators will rate. The saved form keeps one internal Evaluation group for backend compatibility.</p>
                   </div>
-              ))}
+                </div>
+                <div className="hfd-section-body">
+                  {(sections[0]?.questions ?? []).map((question, questionIndex) => (
+                      <div key={questionIndex} className="hfd-question-row hfd-question-row-form">
+                        <input
+                            className="hfd-input"
+                            placeholder={`Criteria / Question ${questionIndex + 1}...`}
+                            value={question.questionText}
+                            onChange={e => updateQuestion(0, questionIndex, { questionText: e.target.value })}
+                            disabled={readOnly}
+                        />
+                        <div className="hfd-question-rating-control" title="This question uses the normalized 1-5 rating scale.">
+                          <div className="hfd-question-rating-title">
+                            <i className="bi bi-ui-checks-grid" /> Rating scale
+                          </div>
+                          <div className="hfd-question-rating-options" aria-label="Applied 1 to 5 rating scale">
+                            {visualScaleOptions.map(option => (
+                                <span key={option.value} title={`${option.value} - ${option.label}`}>
+                                  {option.value}
+                                </span>
+                            ))}
+                          </div>
+                        </div>
+                        <span className="hfd-comment-chip" title="Evaluator response screen shows a comment box for this question.">
+                          <i className="bi bi-chat-left-text" /> Comment
+                        </span>
+                        <label className="hfd-checkbox-label">
+                          <input
+                              type="checkbox"
+                              checked={question.isRequired}
+                              onChange={e => updateQuestion(0, questionIndex, { isRequired: e.target.checked })}
+                              disabled={readOnly}
+                          />
+                          Required
+                        </label>
+                        {!readOnly && (sections[0]?.questions ?? []).length > 1 && (
+                            <button className="hfd-btn hfd-btn-danger hfd-btn-sm hfd-btn-icon" onClick={() => removeQuestion(0, questionIndex)}>
+                              <i className="bi bi-x" />
+                            </button>
+                        )}
+                      </div>
+                  ))}
+                  {!readOnly && (
+                      <button className="hfd-btn hfd-btn-secondary hfd-btn-sm" style={{ marginTop: 4 }} onClick={() => addQuestion(0)}>
+                        <i className="bi bi-plus" /> Add Question
+                      </button>
+                  )}
+                </div>
+              </div>
 
               {!readOnly && (
                   <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-                    <button className="hfd-btn hfd-btn-secondary hfd-btn-sm" onClick={addSection}>
-                      <i className="bi bi-plus-circle" /> Add Section
-                    </button>
                     <button className="hfd-btn hfd-btn-primary" onClick={handleSave} disabled={saving || !fixedScale}>
                       {saving ? <><i className="bi bi-arrow-repeat hfd-spinner-icon" /> Saving...</> : <><i className="bi bi-floppy" /> {saveButtonLabel()}</>}
                     </button>

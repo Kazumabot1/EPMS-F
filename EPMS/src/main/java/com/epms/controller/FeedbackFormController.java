@@ -198,19 +198,24 @@ public class FeedbackFormController {
         List<String> roles = SecurityUtils.currentUser().getRoles();
         boolean authorized = roles != null && roles.stream()
                 .filter(role -> role != null && !role.isBlank())
-                .map(role -> role.trim().toUpperCase(Locale.ROOT))
+                .map(this::normalizeRole)
                 .anyMatch(role -> role.equals("HR")
                         || role.equals("ADMIN")
-                        || role.equals("ROLE_HR")
-                        || role.equals("ROLE_ADMIN")
                         || role.equals("HR_ADMIN")
-                        || role.equals("ROLE_HR_ADMIN")
                         || role.equals("HR_MANAGER")
-                        || role.equals("ROLE_HR_MANAGER")
                         || role.equals("HUMAN_RESOURCES")
-                        || role.equals("ROLE_HUMAN_RESOURCES"));
+                        || role.equals("HUMAN_RESOURCE"));
         if (!authorized) {
             throw new UnauthorizedActionException("Only HR/Admin can manage feedback forms.");
         }
+    }
+
+    private String normalizeRole(String role) {
+        return role
+                .replaceFirst("(?i)^ROLE_", "")
+                .trim()
+                .replaceAll("[^A-Za-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "")
+                .toUpperCase(Locale.ROOT);
     }
 }

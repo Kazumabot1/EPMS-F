@@ -12,11 +12,20 @@ public class FeedbackCampaignSummaryResponse {
     Long campaignId;
     String campaignName;
     String status;
-    /** Normalized 0-100 percentage score. */
+    /** Normalized 0-100 average across target feedback summaries. */
     Double overallAverageScore;
     String overallScoreCategory;
     Long totalEmployees;
     Long totalResponses;
+    Long assignedEvaluatorCount;
+    Long submittedEvaluatorCount;
+    Long pendingEvaluatorCount;
+    Double completionRate;
+    Long insufficientFeedbackCount;
+    String visibilityStatus;
+    LocalDateTime publishedAt;
+    Long publishedByUserId;
+    String publishNote;
     LocalDateTime summarizedAt;
     List<FeedbackResultItemResponse> items;
 }

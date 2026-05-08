@@ -23,6 +23,18 @@ public class FeedbackCampaignResponse {
     String instructions;
     String status;
     Long formId;
+    Boolean autoSubmitCompletedDraftsOnClose;
+    String earlyCloseRequestStatus;
+    LocalDateTime earlyCloseRequestedAt;
+    Long earlyCloseRequestedByUserId;
+    String earlyCloseRequestReason;
+    LocalDateTime earlyCloseReviewedAt;
+    Long earlyCloseReviewedByUserId;
+    String earlyCloseReviewReason;
+    LocalDateTime closedAt;
+    Long closedByUserId;
+    String closeReason;
+    Boolean closedEarly;
     Long createdBy;
     LocalDateTime createdAt;
     int targetCount;

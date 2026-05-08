@@ -1,7 +1,7 @@
 import { useFeedbackTeamSummary } from '../../hooks/useFeedbackAnalytics';
 import './feedback-analytics.css';
 
-const formatScore = (value: number) => `${value.toFixed(1)}%`;
+const formatScore = (value?: number | null) => (value == null ? '—' : `${value.toFixed(1)}%`);
 
 const ManagerSummaryPage = () => {
     const summaryQuery = useFeedbackTeamSummary();
@@ -11,7 +11,7 @@ const ManagerSummaryPage = () => {
         <div className="feedback-results-stack">
             <section className="feedback-results-hero">
                 <h1>Team feedback summary</h1>
-                <p>Direct-report results from closed campaigns only, with anonymous aggregation by relationship group.</p>
+                <p>Direct-report results from published closed campaigns only, with anonymous aggregation by relationship group.</p>
             </section>
 
             {summaryQuery.isLoading ? (
@@ -19,7 +19,7 @@ const ManagerSummaryPage = () => {
             ) : summaryQuery.error instanceof Error ? (
                 <div className="feedback-results-banner error">{summaryQuery.error.message}</div>
             ) : !summary || summary.items.length === 0 ? (
-                <div className="feedback-results-empty">No closed-campaign feedback summaries are available for your direct reports.</div>
+                <div className="feedback-results-empty">No published closed-campaign feedback summaries are available for your direct reports.</div>
             ) : (
                 <section className="feedback-results-card">
                     <div className="feedback-results-summary-grid">

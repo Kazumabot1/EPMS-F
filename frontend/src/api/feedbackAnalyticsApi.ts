@@ -3,6 +3,7 @@ import { extractApiErrorMessage } from '../services/apiError';
 import type {
   ApiEnvelope,
   FeedbackCampaignSummary,
+  FeedbackIntegrationScore,
   FeedbackMyResult,
   FeedbackTeamSummary,
 } from '../types/feedbackAnalytics';
@@ -20,6 +21,62 @@ export const feedbackAnalyticsApi = {
       return unwrap(response);
     } catch (error) {
       throw new Error(extractApiErrorMessage(error, 'Failed to load feedback campaign summary.'));
+    }
+  },
+
+  async recalculateCampaignSummary(campaignId: number): Promise<FeedbackCampaignSummary> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackCampaignSummary>>(
+          `${FEEDBACK_BASE}/campaigns/${campaignId}/summary/recalculate`,
+      );
+      return unwrap(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to recalculate feedback campaign summary.'));
+    }
+  },
+
+  async publishCampaignSummary(campaignId: number): Promise<FeedbackCampaignSummary> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackCampaignSummary>>(
+          `${FEEDBACK_BASE}/campaigns/${campaignId}/summary/publish`,
+      );
+      return unwrap(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to publish feedback campaign summary.'));
+    }
+  },
+
+  async unpublishCampaignSummary(campaignId: number): Promise<FeedbackCampaignSummary> {
+    try {
+      const response = await api.post<ApiEnvelope<FeedbackCampaignSummary>>(
+          `${FEEDBACK_BASE}/campaigns/${campaignId}/summary/unpublish`,
+      );
+      return unwrap(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to unpublish feedback campaign summary.'));
+    }
+  },
+
+  async getIntegrationScores(campaignId: number): Promise<FeedbackIntegrationScore[]> {
+    try {
+      const response = await api.get<ApiEnvelope<FeedbackIntegrationScore[]>>(
+          `${FEEDBACK_BASE}/integration/scores`,
+          { params: { campaignId } },
+      );
+      return unwrap(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to load 360 feedback integration scores.'));
+    }
+  },
+
+  async getIntegrationScoresForEmployee(employeeId: number): Promise<FeedbackIntegrationScore[]> {
+    try {
+      const response = await api.get<ApiEnvelope<FeedbackIntegrationScore[]>>(
+          `${FEEDBACK_BASE}/integration/scores/employee/${employeeId}`,
+      );
+      return unwrap(response);
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Failed to load employee 360 feedback integration scores.'));
     }
   },
 

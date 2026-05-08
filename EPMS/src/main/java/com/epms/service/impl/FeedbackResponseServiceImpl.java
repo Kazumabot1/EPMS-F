@@ -11,6 +11,7 @@ import com.epms.entity.User;
 import com.epms.entity.enums.AssignmentStatus;
 import com.epms.entity.enums.FeedbackCampaignStatus;
 import com.epms.entity.enums.FeedbackRequestStatus;
+import com.epms.entity.enums.FeedbackSummaryVisibilityStatus;
 import com.epms.entity.enums.ResponseStatus;
 import com.epms.exception.BusinessValidationException;
 import com.epms.exception.ResourceNotFoundException;
@@ -20,10 +21,14 @@ import com.epms.repository.FeedbackFormRepository;
 import com.epms.repository.FeedbackQuestionRepository;
 import com.epms.repository.FeedbackRequestRepository;
 import com.epms.repository.FeedbackResponseRepository;
+import com.epms.repository.FeedbackSummaryRepository;
 import com.epms.repository.RatingScaleRepository;
 import com.epms.repository.UserRepository;
-import com.epms.service.AuditLogService;
+import com.epms.service.FeedbackOperationalService;
+import com.epms.util.FeedbackPrivacyUtil;
+import com.epms.util.FeedbackScoreUtil;
 import com.epms.service.FeedbackResponseService;
+import com.epms.service.FeedbackSummaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -48,13 +53,15 @@ import java.util.stream.Stream;
 public class FeedbackResponseServiceImpl implements FeedbackResponseService {
 
     private final FeedbackResponseRepository responseRepository;
+    private final FeedbackSummaryRepository feedbackSummaryRepository;
     private final FeedbackEvaluatorAssignmentRepository assignmentRepository;
     private final FeedbackRequestRepository feedbackRequestRepository;
     private final FeedbackFormRepository feedbackFormRepository;
     private final FeedbackQuestionRepository questionRepository;
     private final RatingScaleRepository ratingScaleRepository;
     private final UserRepository userRepository;
-    private final AuditLogService auditLogService;
+    private final FeedbackOperationalService feedbackOperationalService;
+    private final FeedbackSummaryService feedbackSummaryService;
 
     @Override
     @Transactional
@@ -65,6 +72,10 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         Long submittingEmployeeId = resolveEmployeeIdForUser(submittingUserId);
         if (!assignment.getEvaluatorEmployeeId().equals(submittingEmployeeId)) {
             throw new UnauthorizedActionException("You are not authorized to edit this feedback.");
+        }
+
+        if (assignment.getStatus() == AssignmentStatus.SUBMITTED) {
+            throw new BusinessValidationException("Submitted feedback cannot be edited.");
         }
 
         ensureCampaignAcceptsFeedback(assignment, "saved as draft");
@@ -93,9 +104,7 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         response.setFinalStatus(ResponseStatus.DRAFT);
         response.setSubmittedAt(null);
 
-        response.getItems().clear();
-        items.forEach(item -> item.setResponse(response));
-        response.getItems().addAll(items);
+        syncResponseItems(response, items, assignmentQuestions);
 
         FeedbackResponse saved = responseRepository.save(response);
         if (AssignmentStatus.PENDING.equals(assignment.getStatus())) {
@@ -103,11 +112,11 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
             assignmentRepository.save(assignment);
         }
         markRequestInProgress(assignment);
-        auditLogService.log(
-                submittingUserId.intValue(),
-                "SAVE_DRAFT",
-                "FEEDBACK_RESPONSE",
-                saved.getId().intValue(),
+        feedbackOperationalService.audit(
+                submittingUserId,
+                FeedbackOperationalService.DRAFT_SAVED,
+                FeedbackOperationalService.ENTITY_RESPONSE,
+                saved.getId(),
                 null,
                 "assignmentId=" + evaluatorAssignmentId + ",score=" + overallScore,
                 "Feedback draft saved"
@@ -127,6 +136,10 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         if (!assignment.getEvaluatorEmployeeId().equals(submittingEmployeeId)) {
             log.error("Unauthorized submission attempt by User ID: {}", submittingUserId);
             throw new UnauthorizedActionException("You are not authorized to submit this feedback.");
+        }
+
+        if (assignment.getStatus() == AssignmentStatus.SUBMITTED) {
+            throw new BusinessValidationException("A response has already been submitted for this assignment.");
         }
 
         ensureCampaignAcceptsFeedback(assignment, "submitted");
@@ -155,19 +168,18 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         response.setComments(comments);
         response.setFinalStatus(ResponseStatus.SUBMITTED);
 
-        response.getItems().clear();
-        items.forEach(item -> item.setResponse(response));
-        response.getItems().addAll(items);
+        syncResponseItems(response, items, assignmentQuestions);
 
         FeedbackResponse savedResponse = responseRepository.save(response);
         assignment.setStatus(AssignmentStatus.SUBMITTED);
         assignmentRepository.save(assignment);
         refreshRequestStatus(assignment);
-        auditLogService.log(
-                submittingUserId.intValue(),
-                "SUBMIT",
-                "FEEDBACK_RESPONSE",
-                savedResponse.getId().intValue(),
+        feedbackSummaryService.recalculateCampaignSummary(assignment.getFeedbackRequest().getCampaign().getId());
+        feedbackOperationalService.audit(
+                submittingUserId,
+                FeedbackOperationalService.SUBMITTED,
+                FeedbackOperationalService.ENTITY_RESPONSE,
+                savedResponse.getId(),
                 "status=" + response.getFinalStatus(),
                 "status=SUBMITTED,score=" + overallScore,
                 "Feedback submitted"
@@ -191,14 +203,15 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
                 && assignment.getFeedbackRequest().getTargetEmployeeId().equals(requestingEmployeeId);
         boolean isManager = requestingEmployeeId != null
                 && isManagerOfTarget(assignment.getFeedbackRequest().getTargetEmployeeId(), requestingEmployeeId);
-        boolean visibilityReached = hasVisibilityReached(assignment.getFeedbackRequest());
+        boolean visibilityReached = isTargetResultPublished(assignment.getFeedbackRequest());
 
         if (!isSubmitter && !isTargetEmployee && !isManager && !isPrivileged) {
             throw new UnauthorizedActionException("You are not authorized to view this feedback response.");
         }
 
-        if ((isTargetEmployee || isManager) && !visibilityReached) {
-            throw new BusinessValidationException("Feedback is visible only after deadline or campaign completion.");
+        boolean privilegedInternalView = isPrivileged && !isTargetEmployee;
+        if (!isSubmitter && (isTargetEmployee || isManager) && !visibilityReached && !privilegedInternalView) {
+            throw new BusinessValidationException("Feedback is visible only after the campaign is CLOSED and HR publishes the summary.");
         }
 
         if (shouldHideEvaluatorIdentity(assignment, requestingEmployeeId)) {
@@ -214,16 +227,25 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         Long evaluatorEmployeeId = resolveEmployeeIdForUser(evaluatorUserId);
         return assignmentRepository.findByEvaluatorEmployeeId(evaluatorEmployeeId).stream()
                 .filter(assignment -> assignment.getStatus() != AssignmentStatus.CANCELLED)
-                .filter(assignment -> assignment.getFeedbackRequest().getCampaign().getStatus() != FeedbackCampaignStatus.CANCELLED)
+                .filter(assignment -> assignment.getFeedbackRequest().getCampaign().getStatus() == FeedbackCampaignStatus.ACTIVE
+                        || assignment.getStatus() == AssignmentStatus.SUBMITTED)
                 .sorted(Comparator.comparing(this::resolveEffectiveDeadline, Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(assignment -> FeedbackSubmissionStatusResponse.builder()
                         .evaluatorAssignmentId(assignment.getId())
                         .requestId(assignment.getFeedbackRequest().getId())
                         .campaignId(assignment.getFeedbackRequest().getCampaign().getId())
                         .campaignName(assignment.getFeedbackRequest().getCampaign().getName())
+                        .campaignStatus(assignment.getFeedbackRequest().getCampaign().getStatus().name())
                         .targetEmployeeId(assignment.getFeedbackRequest().getTargetEmployeeId())
+                        .targetEmployeeName(resolveEmployeeName(assignment.getFeedbackRequest().getTargetEmployeeId()))
                         .relationshipType(assignment.getRelationshipType().name())
                         .status(assignment.getStatus().name())
+                        .canSubmit(assignment.getFeedbackRequest().getCampaign().getStatus() == FeedbackCampaignStatus.ACTIVE
+                                && assignment.getStatus() != AssignmentStatus.SUBMITTED
+                                && assignment.getStatus() != AssignmentStatus.CANCELLED)
+                        .lifecycleMessage(assignment.getStatus() == AssignmentStatus.SUBMITTED
+                                ? "Submitted feedback is locked and can only be viewed."
+                                : "Open for draft saving and final submission.")
                         .dueAt(resolveEffectiveDeadline(assignment))
                         .build())
                 .toList();
@@ -244,32 +266,70 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         List<FeedbackResponse> submittedResponses = responseRepository.findByTargetEmployeeIdAndStatus(targetEmployeeId, ResponseStatus.SUBMITTED);
 
         return submittedResponses.stream()
-                .filter(response -> privileged || hasVisibilityReached(response.getEvaluatorAssignment().getFeedbackRequest()))
+                .filter(response -> (privileged && !isTargetEmployee) || isTargetResultPublished(response.getEvaluatorAssignment().getFeedbackRequest()))
                 .map(response -> {
                     FeedbackEvaluatorAssignment assignment = response.getEvaluatorAssignment();
-                    boolean hideIdentity = shouldHideEvaluatorIdentity(assignment, requestingEmployeeId);
+                    boolean identityVisible = FeedbackPrivacyUtil.canViewerSeeEvaluatorIdentity(assignment, requestingEmployeeId);
                     return FeedbackReceivedItemResponse.builder()
                             .responseId(response.getId())
                             .requestId(assignment.getFeedbackRequest().getId())
                             .campaignId(assignment.getFeedbackRequest().getCampaign().getId())
                             .campaignName(assignment.getFeedbackRequest().getCampaign().getName())
+                            .campaignStatus(assignment.getFeedbackRequest().getCampaign().getStatus().name())
                             .targetEmployeeId(assignment.getFeedbackRequest().getTargetEmployeeId())
+                            .targetEmployeeName(resolveEmployeeName(assignment.getFeedbackRequest().getTargetEmployeeId()))
                             .overallScore(response.getOverallScore())
+                            .scoreCategory(FeedbackScoreUtil.category(response.getOverallScore()))
                             .comments(response.getComments())
                             .submittedAt(response.getSubmittedAt())
                             .relationshipType(assignment.getRelationshipType().name())
-                            .anonymous(Boolean.TRUE.equals(assignment.getIsAnonymous()))
-                            .evaluatorEmployeeId(hideIdentity ? null : assignment.getEvaluatorEmployeeId())
+                            .anonymous(FeedbackPrivacyUtil.isIdentityProtected(assignment))
+                            .evaluatorEmployeeId(identityVisible ? assignment.getEvaluatorEmployeeId() : null)
+                            .evaluatorDisplayName(identityVisible
+                                    ? resolveEmployeeName(assignment.getEvaluatorEmployeeId())
+                                    : FeedbackPrivacyUtil.maskedEvaluatorLabel(assignment.getRelationshipType()))
+                            .evaluatorIdentityVisible(identityVisible)
+                            .evaluatorSourceLabel(FeedbackPrivacyUtil.relationshipLabel(assignment.getRelationshipType()))
+                            .identityProtectionReason(FeedbackPrivacyUtil.identityProtectionReason(assignment))
+                            .visibilityReason(visibilityReason(assignment.getFeedbackRequest()))
                             .build();
                 })
                 .toList();
     }
 
 
+    private String resolveEmployeeName(Long employeeId) {
+        if (employeeId == null) {
+            return "Unknown employee";
+        }
+        return userRepository.findActiveByEmployeeId(employeeId.intValue())
+                .map(this::displayUser)
+                .orElse("Employee #" + employeeId);
+    }
+
+    private String displayUser(User user) {
+        if (user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName();
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            return user.getEmail();
+        }
+        return "Employee #" + user.getEmployeeId();
+    }
+
+    private String anonymousEvaluatorLabel(String relationshipType) {
+        String label = relationshipType == null ? "Evaluator" : relationshipType.replace('_', ' ').toLowerCase();
+        return "Anonymous " + label.substring(0, 1).toUpperCase() + label.substring(1);
+    }
+
+    private String visibilityReason(com.epms.entity.FeedbackRequest request) {
+        return isTargetResultPublished(request)
+                ? "Campaign closed and HR published the summary"
+                : "Visible by HR/Admin role permission";
+    }
+
     private boolean shouldHideEvaluatorIdentity(FeedbackEvaluatorAssignment assignment, Long requestingEmployeeId) {
-        boolean isSubmitter = requestingEmployeeId != null
-                && Objects.equals(assignment.getEvaluatorEmployeeId(), requestingEmployeeId);
-        return Boolean.TRUE.equals(assignment.getIsAnonymous()) && !isSubmitter;
+        return !FeedbackPrivacyUtil.canViewerSeeEvaluatorIdentity(assignment, requestingEmployeeId);
     }
 
     private FeedbackResponse maskedAnonymousResponse(FeedbackResponse original) {
@@ -317,18 +377,13 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         }
     }
 
-    private boolean hasVisibilityReached(com.epms.entity.FeedbackRequest request) {
-        if (request.getCampaign().getStatus() == FeedbackCampaignStatus.CLOSED) {
-            return true;
-        }
-        Long requestId = request.getId();
-        LocalDateTime dueAt = resolveEffectiveDeadline(request);
-        if (dueAt != null && LocalDateTime.now().isAfter(dueAt)) {
-            return true;
-        }
-        long totalAssignments = assignmentRepository.countByFeedbackRequestId(requestId);
-        long submittedAssignments = assignmentRepository.countByFeedbackRequestIdAndStatus(requestId, AssignmentStatus.SUBMITTED);
-        return totalAssignments > 0 && totalAssignments == submittedAssignments;
+    private boolean isTargetResultPublished(com.epms.entity.FeedbackRequest request) {
+        return request.getCampaign().getStatus() == FeedbackCampaignStatus.CLOSED
+                && feedbackSummaryRepository.existsByCampaign_IdAndTargetEmployeeIdAndVisibilityStatus(
+                request.getCampaign().getId(),
+                request.getTargetEmployeeId(),
+                FeedbackSummaryVisibilityStatus.PUBLISHED
+        );
     }
 
     private boolean hasPrivilegedRole(List<String> roles) {
@@ -385,14 +440,23 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
                 .map(item -> item.getQuestion().getId())
                 .collect(Collectors.toSet());
 
-        List<Long> missingRequiredIds = assignmentQuestions.values().stream()
+        List<FeedbackQuestion> missingRequiredQuestions = assignmentQuestions.values().stream()
                 .filter(question -> Boolean.TRUE.equals(question.getIsRequired()))
-                .map(FeedbackQuestion::getId)
-                .filter(questionId -> !answeredQuestionIds.contains(questionId))
+                .filter(question -> !answeredQuestionIds.contains(question.getId()))
+                .sorted(Comparator.comparing(FeedbackQuestion::getQuestionOrder, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
 
-        if (!missingRequiredIds.isEmpty()) {
-            throw new BusinessValidationException("All required feedback questions must have a rating before submission.");
+        if (!missingRequiredQuestions.isEmpty()) {
+            String missingLabels = missingRequiredQuestions.stream()
+                    .limit(5)
+                    .map(question -> {
+                        Integer order = question.getQuestionOrder();
+                        return order != null ? "Q" + order : "question " + question.getId();
+                    })
+                    .collect(Collectors.joining(", "));
+            throw new BusinessValidationException(
+                    "Please rate all required feedback questions before final submission. Missing: " + missingLabels + "."
+            );
         }
     }
 
@@ -432,6 +496,63 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
                 );
             }
         }
+    }
+
+    /**
+     * Synchronizes response items by question ID instead of clearing the collection and inserting new rows.
+     *
+     * Draft responses already have one feedback_response_items row per question. When the evaluator later
+     * submits the final response, MySQL enforces the unique key (response_id, question_id). Clearing an
+     * orphan-removal collection and then adding new child entities can make Hibernate insert the new rows
+     * before deleting the old rows, which causes duplicate-key errors such as "Duplicate entry '1-14'".
+     *
+     * Updating existing child rows in place makes draft -> final submission idempotent.
+     */
+    private void syncResponseItems(
+            FeedbackResponse response,
+            List<FeedbackResponseItem> incomingItems,
+            Map<Long, FeedbackQuestion> assignmentQuestions
+    ) {
+        Map<Long, FeedbackResponseItem> existingByQuestionId = response.getItems().stream()
+                .filter(item -> item.getQuestion() != null && item.getQuestion().getId() != null)
+                .collect(Collectors.toMap(
+                        item -> item.getQuestion().getId(),
+                        Function.identity(),
+                        (first, duplicate) -> first
+                ));
+
+        Set<Long> incomingQuestionIds = new HashSet<>();
+
+        for (FeedbackResponseItem incomingItem : incomingItems) {
+            Long questionId = incomingItem.getQuestion() != null ? incomingItem.getQuestion().getId() : null;
+            if (questionId == null) {
+                throw new BusinessValidationException("Question ID is required for each response item.");
+            }
+
+            incomingQuestionIds.add(questionId);
+            FeedbackQuestion question = assignmentQuestions.get(questionId);
+            if (question == null) {
+                throw new BusinessValidationException("Question " + questionId + " does not belong to the assigned feedback form.");
+            }
+
+            FeedbackResponseItem targetItem = existingByQuestionId.get(questionId);
+            if (targetItem == null) {
+                targetItem = new FeedbackResponseItem();
+                targetItem.setResponse(response);
+                targetItem.setQuestion(question);
+                response.getItems().add(targetItem);
+            } else {
+                targetItem.setQuestion(question);
+            }
+
+            targetItem.setRatingValue(incomingItem.getRatingValue());
+            targetItem.setComment(incomingItem.getComment());
+        }
+
+        response.getItems().removeIf(existingItem -> {
+            Long questionId = existingItem.getQuestion() != null ? existingItem.getQuestion().getId() : null;
+            return questionId == null || !incomingQuestionIds.contains(questionId);
+        });
     }
 
     private Double calculateOverallScore(List<FeedbackResponseItem> items, Map<Long, FeedbackQuestion> assignmentQuestions) {

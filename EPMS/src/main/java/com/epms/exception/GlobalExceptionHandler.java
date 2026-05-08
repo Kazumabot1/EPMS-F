@@ -1,6 +1,7 @@
 package com.epms.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -184,5 +185,27 @@ public class GlobalExceptionHandler {
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolationException(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String message = "Could not save because a duplicate or invalid database record already exists.";
+
+        if (path != null && path.matches(".*/api/v1/feedback/campaigns/\\d+/targets$")) {
+            message = "Could not save campaign targets because one or more selected employees are already stored for this campaign. Refresh the campaign and try again.";
+        }
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error(HttpStatus.CONFLICT.getReasonPhrase())
+                .message(message)
+                .path(path)
+                .build();
+
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 }

@@ -238,3 +238,11 @@
   color: #6b7280;
   font-size: 0.95rem;
 }
+
+.notif-card-link-hint {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.75rem;
+  color: #2563eb;
+  font-weight: 700;
+}

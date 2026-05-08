@@ -119,7 +119,8 @@ class FeedbackEvaluationServiceImplTest {
         when(teamMemberRepository.findByMemberUserId(10)).thenReturn(List.of(targetMember));
         when(teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(10, "Active")).thenReturn(List.of());
 
-        FeedbackAssignmentGenerationResponse response = service.generateAssignments(5L, config);
+        FeedbackAssignmentGenerationResponse response = service
+                .generateAssignments(5L, config);
 
         ArgumentCaptor<List<FeedbackEvaluatorAssignment>> captor = ArgumentCaptor.forClass(List.class);
         verify(assignmentRepository).saveAll(captor.capture());

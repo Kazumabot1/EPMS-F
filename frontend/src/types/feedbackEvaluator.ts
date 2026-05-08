@@ -5,15 +5,25 @@ export type ApiEnvelope<T> = {
   timestamp: string;
 };
 
+export type FeedbackRelationshipType = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF' | 'PROJECT_STAKEHOLDER';
+export type FeedbackAssignmentStatus = 'PENDING' | 'IN_PROGRESS' | 'SUBMITTED' | 'DECLINED' | 'CANCELLED';
+export type FeedbackCampaignLifecycleStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED' | 'CANCELLED';
+
 export interface FeedbackEvaluatorTask {
   assignmentId: number;
   campaignId: number;
   campaignName: string;
+  campaignStatus: FeedbackCampaignLifecycleStatus;
+  campaignStartAt: string | null;
   targetEmployeeId: number;
   targetEmployeeName: string;
-  relationshipType: 'MANAGER' | 'PEER' | 'SUBORDINATE';
+  relationshipType: FeedbackRelationshipType;
   anonymous: boolean;
-  status: 'PENDING' | 'IN_PROGRESS' | 'SUBMITTED' | 'DECLINED';
+  status: FeedbackAssignmentStatus;
+  canSubmit: boolean;
+  lifecycleMessage: string | null;
+  autoSubmitCompletedDraftsOnClose?: boolean;
+  autoSubmitNotice?: string | null;
   dueAt: string | null;
   submittedAt: string | null;
 }
@@ -40,15 +50,27 @@ export interface FeedbackAssignmentDetail {
   assignmentId: number;
   campaignId: number;
   campaignName: string;
+  campaignStatus: FeedbackCampaignLifecycleStatus;
+  campaignStartAt: string | null;
   targetEmployeeId: number;
   targetEmployeeName: string;
-  relationshipType: 'MANAGER' | 'PEER' | 'SUBORDINATE';
+  relationshipType: FeedbackRelationshipType;
   anonymous: boolean;
-  status: 'PENDING' | 'IN_PROGRESS' | 'SUBMITTED' | 'DECLINED';
+  status: FeedbackAssignmentStatus;
+  canSubmit: boolean;
+  lifecycleMessage: string | null;
+  autoSubmitCompletedDraftsOnClose?: boolean;
+  autoSubmitNotice?: string | null;
   dueAt: string | null;
   submittedAt: string | null;
-  canSubmit: boolean;
   comments: string | null;
+  totalQuestionCount: number;
+  requiredQuestionCount: number;
+  answeredQuestionCount: number;
+  answeredRequiredQuestionCount: number;
+  completionPercent: number;
+  finalSubmissionReady: boolean;
+  submittedLocked: boolean;
   sections: FeedbackAssignmentSectionDetail[];
 }
 
@@ -58,6 +80,16 @@ export interface SubmitFeedbackResponsePayload {
   responses: Array<{
     questionId: number;
     ratingValue: number;
+    comment?: string;
+  }>;
+}
+
+export interface SaveFeedbackDraftPayload {
+  evaluatorAssignmentId: number;
+  comments?: string;
+  responses: Array<{
+    questionId: number;
+    ratingValue?: number | null;
     comment?: string;
   }>;
 }

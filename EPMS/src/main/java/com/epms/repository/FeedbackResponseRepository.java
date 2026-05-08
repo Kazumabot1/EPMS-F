@@ -28,29 +28,50 @@ public interface FeedbackResponseRepository extends JpaRepository<FeedbackRespon
      * Get submitted responses specifically for a feedback request.
      */
     @Query("SELECT r FROM FeedbackResponse r " +
-           "JOIN r.evaluatorAssignment a " +
-           "WHERE a.feedbackRequest.id = :requestId AND r.finalStatus = :status")
+            "JOIN r.evaluatorAssignment a " +
+            "WHERE a.feedbackRequest.id = :requestId AND r.finalStatus = :status")
     List<FeedbackResponse> findResponsesByRequestIdAndStatus(@Param("requestId") Long requestId, @Param("status") ResponseStatus status);
 
     @Query("SELECT r FROM FeedbackResponse r " +
-           "JOIN r.evaluatorAssignment a " +
-           "JOIN a.feedbackRequest req " +
+            "JOIN r.evaluatorAssignment a " +
+            "JOIN a.feedbackRequest req " +
             "WHERE req.targetEmployeeId = :targetEmployeeId " +
-           "AND r.finalStatus = :status")
+            "AND r.finalStatus = :status")
     List<FeedbackResponse> findByTargetEmployeeIdAndStatus(@Param("targetEmployeeId") Long targetEmployeeId,
                                                            @Param("status") ResponseStatus status);
 
-    @Query("SELECT r FROM FeedbackResponse r " +
-           "JOIN r.evaluatorAssignment a " +
-           "JOIN a.feedbackRequest req " +
-           "WHERE req.campaign.id = :campaignId AND r.finalStatus = :status")
-    List<FeedbackResponse> findByCampaignIdAndStatus(@Param("campaignId") Long campaignId, @Param("status") ResponseStatus status);
+    @Query("SELECT DISTINCT r FROM FeedbackResponse r " +
+            "JOIN FETCH r.evaluatorAssignment a " +
+            "JOIN FETCH a.feedbackRequest req " +
+            "JOIN FETCH req.campaign c " +
+            "LEFT JOIN FETCH r.items item " +
+            "LEFT JOIN FETCH item.question q " +
+            "LEFT JOIN FETCH q.section s " +
+            "WHERE req.targetEmployeeId = :targetEmployeeId " +
+            "AND r.finalStatus = :status")
+    List<FeedbackResponse> findByTargetEmployeeIdAndStatusWithItems(@Param("targetEmployeeId") Long targetEmployeeId,
+                                                                    @Param("status") ResponseStatus status);
 
     @Query("SELECT r FROM FeedbackResponse r " +
-           "JOIN r.evaluatorAssignment a " +
-           "JOIN a.feedbackRequest req " +
-           "WHERE req.targetEmployeeId IN :targetEmployeeIds " +
-           "AND r.finalStatus = :status")
+            "JOIN r.evaluatorAssignment a " +
+            "JOIN a.feedbackRequest req " +
+            "WHERE req.campaign.id = :campaignId AND r.finalStatus = :status")
+    List<FeedbackResponse> findByCampaignIdAndStatus(@Param("campaignId") Long campaignId, @Param("status") ResponseStatus status);
+
+    @Query("SELECT DISTINCT r FROM FeedbackResponse r " +
+            "JOIN FETCH r.evaluatorAssignment a " +
+            "JOIN FETCH a.feedbackRequest req " +
+            "LEFT JOIN FETCH r.items item " +
+            "LEFT JOIN FETCH item.question q " +
+            "WHERE req.campaign.id = :campaignId AND r.finalStatus = :status")
+    List<FeedbackResponse> findByCampaignIdAndStatusWithItems(@Param("campaignId") Long campaignId,
+                                                              @Param("status") ResponseStatus status);
+
+    @Query("SELECT r FROM FeedbackResponse r " +
+            "JOIN r.evaluatorAssignment a " +
+            "JOIN a.feedbackRequest req " +
+            "WHERE req.targetEmployeeId IN :targetEmployeeIds " +
+            "AND r.finalStatus = :status")
     List<FeedbackResponse> findByTargetEmployeeIdsAndStatus(@Param("targetEmployeeIds") List<Long> targetEmployeeIds,
                                                             @Param("status") ResponseStatus status);
 

@@ -4,5 +4,6 @@ public enum FeedbackRelationshipType {
     MANAGER,
     PEER,
     SUBORDINATE,
-    SELF
+    SELF,
+    PROJECT_STAKEHOLDER
 }

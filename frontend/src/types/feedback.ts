@@ -94,10 +94,26 @@ export interface FeedbackSubmissionStatus {
   requestId: number;
   campaignId: number;
   campaignName: string;
+  campaignStatus?: FeedbackCampaignStatus;
   targetEmployeeId: number;
-  evaluatorType: string;
+  targetEmployeeName?: string;
+  evaluatorType?: string;
+  relationshipType?: string;
   status: string;
+  canSubmit?: boolean;
+  lifecycleMessage?: string | null;
   dueAt: string;
+}
+
+export interface FeedbackReceivedQuestionItem {
+  questionId: number;
+  questionText: string;
+  questionOrder?: number | null;
+  sectionTitle?: string | null;
+  sectionOrder?: number | null;
+  required?: boolean | null;
+  ratingValue?: number | null;
+  comment?: string | null;
 }
 
 export interface FeedbackReceivedItem {
@@ -105,13 +121,23 @@ export interface FeedbackReceivedItem {
   requestId: number;
   campaignId: number;
   campaignName: string;
+  campaignStatus?: FeedbackCampaignStatus;
   targetEmployeeId: number;
+  targetEmployeeName?: string;
   overallScore: number | null;
+  scoreCategory?: string | null;
   comments: string | null;
   submittedAt: string;
-  sourceType: string;
+  sourceType?: string;
+  relationshipType?: string;
   anonymous: boolean;
   evaluatorEmployeeId: number | null;
+  evaluatorDisplayName?: string | null;
+  evaluatorIdentityVisible?: boolean | null;
+  evaluatorSourceLabel?: string | null;
+  identityProtectionReason?: string | null;
+  visibilityReason?: string | null;
+  questionItems?: FeedbackReceivedQuestionItem[];
 }
 
 export interface FeedbackSummary {
@@ -128,20 +154,60 @@ export interface PendingEvaluator {
 export interface FeedbackCompletionItem {
   requestId: number;
   targetEmployeeId: number;
+  targetEmployeeName?: string | null;
+  targetEmployeeEmail?: string | null;
+  requestStatus?: string | null;
+  dueAt?: string | null;
+  effectiveDeadline?: string | null;
   totalEvaluators: number;
   submittedEvaluators: number;
   pendingEvaluators: number;
+  inProgressEvaluators?: number;
+  notStartedEvaluators?: number;
+  overdueEvaluators?: number;
+  declinedEvaluators?: number;
+  cancelledEvaluators?: number;
+  managerEvaluators?: number;
+  peerEvaluators?: number;
+  subordinateEvaluators?: number;
+  selfEvaluators?: number;
+  projectStakeholderEvaluators?: number;
   completionPercent: number;
+  averageScore?: number | null;
+  scoreCategory?: string | null;
+  statusLabel?: string | null;
+  actionNeeded?: string | null;
 }
 
 export interface FeedbackCompletionDashboard {
   campaignId: number;
   campaignName: string;
+  campaignStatus?: FeedbackCampaignStatus | string;
+  campaignStartAt?: string | null;
+  campaignEndAt?: string | null;
   totalRequests: number;
+  totalTargets?: number;
   totalAssignments: number;
   submittedAssignments: number;
-  completionPercent: number;
+  pendingAssignments?: number;
   pendingUsers: number;
+  inProgressAssignments?: number;
+  notStartedAssignments?: number;
+  overdueAssignments?: number;
+  declinedAssignments?: number;
+  cancelledAssignments?: number;
+  completedTargets?: number;
+  targetsWithPending?: number;
+  targetsWithOverdue?: number;
+  managerAssignments?: number;
+  peerAssignments?: number;
+  subordinateAssignments?: number;
+  selfAssignments?: number;
+  projectStakeholderAssignments?: number;
+  completionPercent: number;
+  healthStatus?: string | null;
+  healthMessage?: string | null;
+  generatedAt?: string | null;
   requests: FeedbackCompletionItem[];
 }
 
