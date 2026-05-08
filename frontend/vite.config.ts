@@ -5,12 +5,11 @@ import tailwindcss from '@tailwindcss/vite';
 const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8081';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   // sockjs-client references Node's `global`; browsers only have `globalThis` / `window`.
   define: {
     global: 'globalThis',
   },
-  plugins: [react(), tailwindcss()],
   server: {
     proxy: {
       '/api': {
