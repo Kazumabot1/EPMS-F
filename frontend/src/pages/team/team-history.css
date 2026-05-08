@@ -1,0 +1,238 @@
+/*
+team-history.css file:*/
+
+.team-history-page {
+  padding: 28px;
+  min-height: 100%;
+  background: #f6f8fc;
+  color: #0f172a;
+}
+
+.team-history-header {
+  margin-bottom: 22px;
+}
+
+.team-history-eyebrow {
+  margin: 0 0 6px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-history-header h1 {
+  margin: 0;
+  color: #111827;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.team-history-header p {
+  margin: 8px 0 0;
+  max-width: 820px;
+  color: #64748b;
+  font-size: 15px;
+}
+
+.team-history-filter-card,
+.team-history-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.team-history-filter-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.team-history-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.team-history-field label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.team-history-field input,
+.team-history-field select {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  outline: none;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+}
+
+.team-history-field input:focus,
+.team-history-field select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.team-history-field input:disabled,
+.team-history-field select:disabled {
+  cursor: not-allowed;
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.team-history-error {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.team-history-card {
+  padding: 18px;
+}
+
+.team-history-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.team-history-card-head h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.team-history-card-head p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.team-history-empty {
+  padding: 32px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.team-history-table-wrap {
+  overflow-x: auto;
+}
+
+.team-history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.team-history-table th {
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.team-history-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #eef2f7;
+  color: #334155;
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.team-history-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.team-history-action {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.team-history-action.is-positive {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.team-history-action.is-danger {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.team-history-action.is-warning {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.team-history-action.is-neutral {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.team-history-value {
+  display: inline-block;
+  max-width: 220px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  word-break: break-word;
+}
+
+.team-history-value.old {
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.team-history-value.new {
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.team-history-reason {
+  min-width: 220px;
+  max-width: 360px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+@media (max-width: 1100px) {
+  .team-history-filter-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .team-history-page {
+    padding: 18px;
+  }
+
+  .team-history-filter-card {
+    grid-template-columns: 1fr;
+  }
+
+  .team-history-header h1 {
+    font-size: 24px;
+  }
+}

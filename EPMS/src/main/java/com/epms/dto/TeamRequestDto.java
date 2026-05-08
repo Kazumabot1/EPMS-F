@@ -1,3 +1,4 @@
+/*
 package com.epms.dto;
 
 import lombok.AllArgsConstructor;
@@ -28,6 +29,61 @@ public class TeamRequestDto {
         if (memberUserIds != null) {
             return memberUserIds;
         }
+        return memberEmployeeIds;
+    }
+}
+*/
+
+
+
+
+package com.epms.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class TeamRequestDto {
+    private String teamName;
+    private Integer departmentId;
+    private Integer teamLeaderId;
+
+    /**
+     * Optional Project Manager.
+     */
+    private Integer projectManagerId;
+
+    private Integer createdById;
+    private String teamGoal;
+    private String status;
+
+    /**
+     * Required only for edit.
+     * Create Team uses default reason: "Initial team creation".
+     */
+    private String reason;
+
+    /**
+     * Preferred field: these are USER ids from the users table.
+     */
+    private List<Integer> memberUserIds;
+
+    /**
+     * Backward-compatible field for your current frontend.
+     * Despite the old name, TeamMember.memberUser points to users.id, not employee.id.
+     */
+    private List<Integer> memberEmployeeIds;
+
+    public List<Integer> getEffectiveMemberUserIds() {
+        if (memberUserIds != null) {
+            return memberUserIds;
+        }
+
         return memberEmployeeIds;
     }
 }

@@ -111,7 +111,7 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
     const hrNavItems: NavItem[] = [
       { to: '/dashboard', label: 'Dashboard', icon: 'bi bi-grid-1x2' },
 
-      {
+     /*  {
         to: '/hr/team',
         label: 'Team Management',
         icon: 'bi bi-people',
@@ -119,8 +119,19 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
           { to: '/hr/team', label: 'Teams', icon: 'bi bi-people', end: true },
           { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-circle' },
         ],
-      },
+      }, */
+  {
+    to: '/hr/team',
+    label: 'Teams',
+    icon: 'bi bi-people-fill',
+    children: [
+      { to: '/hr/team', label: 'Teams', icon: 'bi bi-people-fill', end: true },
+      { to: '/hr/team/create', label: 'Create Team', icon: 'bi bi-plus-square', end: true },
+      { to: '/hr/team/history', label: 'Team History', icon: 'bi bi-clock-history', end: true },
+    ],
+  },
 
+/*
       {
         to: '/hr/organization',
         label: 'Organization',
@@ -136,7 +147,33 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
           },
           { to: '/hr/employee/import', label: 'Import Employees', icon: 'bi bi-upload' },
         ],
-      },
+      }, */
+{
+  to: '/hr/organization',
+  label: 'Organization',
+  icon: 'bi bi-building',
+  children: [
+    { to: '/hr/department', label: 'Departments', icon: 'bi bi-building' },
+    {
+      to: '/hr/department-comparison',
+      label: 'Departments Comparison',
+      icon: 'bi bi-columns-gap',
+      end: true,
+    },
+    { to: '/hr/employee', label: 'Employee', icon: 'bi bi-people', end: true },
+    {
+      to: '/hr/employee/workforce',
+      label: 'Workforce overview',
+      icon: 'bi bi-person-badge',
+      end: true,
+    },
+  ],
+},
+
+
+
+
+
 
       { to: '/hr/assessment-scores', label: 'Assessment Scores', icon: 'bi bi-clipboard-data' },
       { to: '/hr/assessment-forms', label: 'Assessment Forms', icon: 'bi bi-ui-checks-grid' },
