@@ -40,10 +40,116 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
+
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+
                         .requestMatchers("/api/auth/me", "/api/auth/change-password").authenticated()
+
+                        .requestMatchers(
+                                "/api/notifications",
+                                "/api/notifications/**"
+                        ).authenticated()
+
+                        /*
+                         * Admin-only account and access-control endpoints.
+                         * Needed for Admin Dashboard user edit.
+                         */
+                        .requestMatchers(
+                                "/api/users",
+                                "/api/users/**",
+                                "/api/roles",
+                                "/api/roles/**",
+                                "/api/permissions",
+                                "/api/permissions/**",
+                                "/api/role-permissions",
+                                "/api/role-permissions/**"
+                        ).hasAnyAuthority(ADMIN_AUTHORITIES)
+
+                        /*
+                         * HR/Admin dashboard and management endpoints.
+                         */
+                        .requestMatchers(
+                                "/api/dashboard",
+                                "/api/dashboard/**",
+                                "/api/employees",
+                                "/api/employees/**",
+                                "/api/hr/employee-accounts",
+                                "/api/hr/employee-accounts/**",
+                                "/api/appraisal-forms",
+                                "/api/appraisal-forms/**",
+                                "/api/assessment-forms",
+                                "/api/assessment-forms/**",
+                                "/api/kpis",
+                                "/api/kpis/**",
+                                "/api/positions",
+                                "/api/positions/**",
+                                "/api/departments",
+                                "/api/departments/**",
+                                "/api/teams",
+                                "/api/teams/**"
+                        ).hasAnyAuthority(HR_AUTHORITIES)
+
+                        .requestMatchers(
+                                "/api/manager",
+                                "/api/manager/**"
+                        ).hasAnyAuthority(MANAGER_AUTHORITIES)
+
+                        .requestMatchers(
+                                "/api/department-head",
+                                "/api/department-head/**"
+                        ).hasAnyAuthority(DEPARTMENT_HEAD_AUTHORITIES)
+
+                        .requestMatchers(
+                                "/api/executive",
+                                "/api/executive/**"
+                        ).hasAnyAuthority(EXECUTIVE_AUTHORITIES)
+
+                        /*
+                         * IMPORTANT:
+                         * These exact employee assessment routes must come BEFORE
+                         * "/api/employee-assessments/{id}".
+                         */
+                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/template")
+                        .authenticated()
+
+                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/my-latest-draft")
+                        .authenticated()
+
+                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/my-scores")
+                        .authenticated()
+
+                        .requestMatchers(HttpMethod.POST, "/api/employee-assessments")
+                        .authenticated()
+
+                        .requestMatchers(HttpMethod.PUT, "/api/employee-assessments/{id}")
+                        .authenticated()
+
+                        .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/submit")
+                        .authenticated()
+
+                        /*
+                         * HR/Admin/Department Head assessment score table.
+                         */
+                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/score-table")
+                        .hasAnyAuthority(SCORE_TABLE_AUTHORITIES)
+
+                        /*
+                         * Generic ID route must stay AFTER all exact routes above.
+                         */
+                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/{id}")
+                        .hasAnyAuthority(SCORE_TABLE_AUTHORITIES)
+
+                        .requestMatchers(
+                                "/api/pip",
+                                "/api/pip/**",
+                                "/api/one-on-one-meetings",
+                                "/api/one-on-one-meetings/**",
+                                "/api/one-on-one-action-items",
+                                "/api/one-on-one-action-items/**"
+                        ).authenticated()
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

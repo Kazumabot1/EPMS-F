@@ -33,10 +33,8 @@ function Login() {
         return '/employee/dashboard';
 
       case 'MANAGER_DASHBOARD':
-        return '/manager/dashboard';
-
       case 'PROJECT_MANAGER_DASHBOARD':
-        return '/project-manager/dashboard';
+        return '/manager/dashboard';
 
       case 'DEPARTMENT_HEAD_DASHBOARD':
         return '/department-head/dashboard';
@@ -61,12 +59,9 @@ function Login() {
 
         if (
           normalizedRoles.includes('PROJECT_MANAGER') ||
-          normalizedRoles.includes('PROJECTMANAGER')
+          normalizedRoles.includes('PROJECTMANAGER') ||
+          normalizedRoles.includes('MANAGER')
         ) {
-          return '/project-manager/dashboard';
-        }
-
-        if (normalizedRoles.includes('MANAGER')) {
           return '/manager/dashboard';
         }
 
@@ -98,14 +93,14 @@ function Login() {
         payload.mustChangePassword
           ? '/change-password'
           : resolveRoute(payload.dashboard, payload.roles ?? []),
-        { replace: true }
+        { replace: true },
       );
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
           err?.message ||
-          'Login failed. Please check your email/password.'
+          'Login failed. Please check your email/password.',
       );
     } finally {
       setIsSubmitting(false);

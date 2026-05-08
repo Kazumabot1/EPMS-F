@@ -756,7 +756,7 @@ const normalizeRoleName = (role: string) =>
 const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const user = authStorage.getUser();
 
   const dashboard = user?.dashboard ?? '';
   const normalizedRoles = (user?.roles ?? []).map(normalizeRoleName);
@@ -862,6 +862,8 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
       },
 
       { to: '/hr/assessment-scores', label: 'Assessment Scores', icon: 'bi bi-clipboard-data' },
+    { to: '/hr/assessment-scores', label: 'Assessment Scores', icon: 'bi bi-clipboard-data' },
+    { to: '/hr/assessment-forms', label: 'Assessment Forms', icon: 'bi bi-ui-checks-grid' },
 
       { to: '/hr/feedback', label: '360 Feedback', icon: 'bi bi-chat-square-dots' },
 
