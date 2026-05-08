@@ -29,6 +29,52 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    private static final String[] ADMIN_AUTHORITIES = {
+            "ADMIN",
+            "ROLE_ADMIN"
+    };
+
+    private static final String[] HR_AUTHORITIES = {
+            "HR",
+            "ROLE_HR",
+            "ADMIN",
+            "ROLE_ADMIN"
+    };
+
+    private static final String[] MANAGER_AUTHORITIES = {
+            "MANAGER",
+            "ROLE_MANAGER",
+            "PROJECT_MANAGER",
+            "ROLE_PROJECT_MANAGER",
+            "PROJECTMANAGER",
+            "ROLE_PROJECTMANAGER"
+    };
+
+    private static final String[] DEPARTMENT_HEAD_AUTHORITIES = {
+            "DEPARTMENT_HEAD",
+            "ROLE_DEPARTMENT_HEAD",
+            "DEPARTMENTHEAD",
+            "ROLE_DEPARTMENTHEAD"
+    };
+
+    private static final String[] EXECUTIVE_AUTHORITIES = {
+            "CEO",
+            "ROLE_CEO",
+            "EXECUTIVE",
+            "ROLE_EXECUTIVE"
+    };
+
+    private static final String[] SCORE_TABLE_AUTHORITIES = {
+            "HR",
+            "ROLE_HR",
+            "ADMIN",
+            "ROLE_ADMIN",
+            "DEPARTMENT_HEAD",
+            "ROLE_DEPARTMENT_HEAD",
+            "DEPARTMENTHEAD",
+            "ROLE_DEPARTMENTHEAD"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -39,7 +85,6 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/ws/**").permitAll()
 
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
