@@ -29,6 +29,11 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    private static final String[] ADMIN_AUTHORITIES = {
+            "ADMIN",
+            "ROLE_ADMIN"
+    };
+
     private static final String[] HR_AUTHORITIES = {
             "HR",
             "ROLE_HR",
@@ -36,11 +41,38 @@ public class SecurityConfig {
             "ROLE_ADMIN"
     };
 
-    private static final String[] EMPLOYEE_AUTHORITIES = {
-            "Employee",
-            "ROLE_Employee",
-            "EMPLOYEE",
-            "ROLE_EMPLOYEE"
+    private static final String[] MANAGER_AUTHORITIES = {
+            "MANAGER",
+            "ROLE_MANAGER",
+            "PROJECT_MANAGER",
+            "ROLE_PROJECT_MANAGER",
+            "PROJECTMANAGER",
+            "ROLE_PROJECTMANAGER"
+    };
+
+    private static final String[] DEPARTMENT_HEAD_AUTHORITIES = {
+            "DEPARTMENT_HEAD",
+            "ROLE_DEPARTMENT_HEAD",
+            "DEPARTMENTHEAD",
+            "ROLE_DEPARTMENTHEAD"
+    };
+
+    private static final String[] EXECUTIVE_AUTHORITIES = {
+            "CEO",
+            "ROLE_CEO",
+            "EXECUTIVE",
+            "ROLE_EXECUTIVE"
+    };
+
+    private static final String[] SCORE_TABLE_AUTHORITIES = {
+            "HR",
+            "ROLE_HR",
+            "ADMIN",
+            "ROLE_ADMIN",
+            "DEPARTMENT_HEAD",
+            "ROLE_DEPARTMENT_HEAD",
+            "DEPARTMENTHEAD",
+            "ROLE_DEPARTMENTHEAD"
     };
 
     @Bean
@@ -60,15 +92,36 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/auth/me", "/api/auth/change-password").authenticated()
 
+                        .requestMatchers(
+                                "/api/notifications",
+                                "/api/notifications/**"
+                        ).authenticated()
+
+                        /*
+                         * Admin-only account and access-control endpoints.
+                         * Needed for Admin Dashboard user edit.
+                         */
+                        .requestMatchers(
+                                "/api/users",
+                                "/api/users/**",
+                                "/api/roles",
+                                "/api/roles/**",
+                                "/api/permissions",
+                                "/api/permissions/**",
+                                "/api/role-permissions",
+                                "/api/role-permissions/**"
+                        ).hasAnyAuthority(ADMIN_AUTHORITIES)
+
                         /*
                          * HR/Admin dashboard and management endpoints.
-                         * Include both exact path and wildcard path.
                          */
                         .requestMatchers(
                                 "/api/dashboard",
                                 "/api/dashboard/**",
                                 "/api/employees",
                                 "/api/employees/**",
+                                "/api/hr/employee-accounts",
+                                "/api/hr/employee-accounts/**",
                                 "/api/appraisal-forms",
                                 "/api/appraisal-forms/**",
                                 "/api/assessment-forms",
@@ -78,39 +131,69 @@ public class SecurityConfig {
                                 "/api/positions",
                                 "/api/positions/**",
                                 "/api/departments",
-                                "/api/departments/**"
+                                "/api/departments/**",
+                                "/api/teams",
+                                "/api/teams/**"
                         ).hasAnyAuthority(HR_AUTHORITIES)
 
-                        /*
-                         * HR/Admin assessment score table.
-                         * This must be before the general employee assessment rules.
-                         */
-                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/score-table")
-                        .hasAnyAuthority(HR_AUTHORITIES)
+                        .requestMatchers(
+                                "/api/manager",
+                                "/api/manager/**"
+                        ).hasAnyAuthority(MANAGER_AUTHORITIES)
 
-                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/{id}")
-                        .hasAnyAuthority(HR_AUTHORITIES)
+                        .requestMatchers(
+                                "/api/department-head",
+                                "/api/department-head/**"
+                        ).hasAnyAuthority(DEPARTMENT_HEAD_AUTHORITIES)
+
+                        .requestMatchers(
+                                "/api/executive",
+                                "/api/executive/**"
+                        ).hasAnyAuthority(EXECUTIVE_AUTHORITIES)
 
                         /*
-                         * Employee self-assessment endpoints.
+                         * IMPORTANT:
+                         * These exact employee assessment routes must come BEFORE
+                         * "/api/employee-assessments/{id}".
                          */
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/template")
-                        .hasAnyAuthority(EMPLOYEE_AUTHORITIES)
+                        .authenticated()
 
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/my-latest-draft")
-                        .hasAnyAuthority(EMPLOYEE_AUTHORITIES)
+                        .authenticated()
 
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/my-scores")
-                        .hasAnyAuthority(EMPLOYEE_AUTHORITIES)
+                        .authenticated()
 
                         .requestMatchers(HttpMethod.POST, "/api/employee-assessments")
-                        .hasAnyAuthority(EMPLOYEE_AUTHORITIES)
+                        .authenticated()
 
                         .requestMatchers(HttpMethod.PUT, "/api/employee-assessments/{id}")
-                        .hasAnyAuthority(EMPLOYEE_AUTHORITIES)
+                        .authenticated()
 
                         .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/submit")
-                        .hasAnyAuthority(EMPLOYEE_AUTHORITIES)
+                        .authenticated()
+
+                        /*
+                         * HR/Admin/Department Head assessment score table.
+                         */
+                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/score-table")
+                        .hasAnyAuthority(SCORE_TABLE_AUTHORITIES)
+
+                        /*
+                         * Generic ID route must stay AFTER all exact routes above.
+                         */
+                        .requestMatchers(HttpMethod.GET, "/api/employee-assessments/{id}")
+                        .hasAnyAuthority(SCORE_TABLE_AUTHORITIES)
+
+                        .requestMatchers(
+                                "/api/pip",
+                                "/api/pip/**",
+                                "/api/one-on-one-meetings",
+                                "/api/one-on-one-meetings/**",
+                                "/api/one-on-one-action-items",
+                                "/api/one-on-one-action-items/**"
+                        ).authenticated()
 
                         .anyRequest().authenticated()
                 )

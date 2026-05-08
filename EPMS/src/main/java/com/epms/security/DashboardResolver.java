@@ -30,11 +30,11 @@ public class DashboardResolver {
             return "DEPARTMENT_HEAD_DASHBOARD";
         }
 
-        if (hasRole(normalizedRoles, "PROJECT_MANAGER") || hasRole(normalizedRoles, "PROJECTMANAGER")) {
-            return "PROJECT_MANAGER_DASHBOARD";
-        }
-
-        if (hasRole(normalizedRoles, "MANAGER")) {
+        if (
+                hasRole(normalizedRoles, "MANAGER") ||
+                        hasRole(normalizedRoles, "PROJECT_MANAGER") ||
+                        hasRole(normalizedRoles, "PROJECTMANAGER")
+        ) {
             return "MANAGER_DASHBOARD";
         }
 
@@ -45,16 +45,24 @@ public class DashboardResolver {
         if (normalizedPosition.contains("HR")) {
             return "HR_DASHBOARD";
         }
+
         if (normalizedPosition.contains("CEO") || normalizedPosition.contains("EXECUTIVE")) {
             return "EXECUTIVE_DASHBOARD";
         }
-        if (normalizedPosition.contains("DEPARTMENT_HEAD") || normalizedPosition.contains("DEPARTMENTHEAD") || normalizedPosition.contains("HEAD")) {
+
+        if (
+                normalizedPosition.contains("DEPARTMENT_HEAD") ||
+                        normalizedPosition.contains("DEPARTMENTHEAD") ||
+                        normalizedPosition.contains("HEAD")
+        ) {
             return "DEPARTMENT_HEAD_DASHBOARD";
         }
-        if (normalizedPosition.contains("PROJECT_MANAGER") || normalizedPosition.contains("PROJECTMANAGER")) {
-            return "PROJECT_MANAGER_DASHBOARD";
-        }
-        if (normalizedPosition.contains("MANAGER")) {
+
+        if (
+                normalizedPosition.contains("MANAGER") ||
+                        normalizedPosition.contains("PROJECT_MANAGER") ||
+                        normalizedPosition.contains("PROJECTMANAGER")
+        ) {
             return "MANAGER_DASHBOARD";
         }
 
@@ -63,6 +71,7 @@ public class DashboardResolver {
 
     private String normalizeRoleName(String value) {
         if (value == null) return "";
+
         return value
                 .replaceFirst("(?i)^ROLE_", "")
                 .trim()

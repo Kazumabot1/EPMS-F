@@ -29,7 +29,6 @@ import DepartmentManagement from './pages/department/DepartmentManagement';
 import ManagerDashboard from './pages/manager/ManagerDashboard';
 import CeoDashboard from './pages/ceo/CeoDashboard';
 import DepartmentHeadDashboard from './pages/department-head/DepartmentHeadDashboard';
-import ProjectManagerDashboard from './pages/project-manager/ProjectManagerDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 
 import AssessmentFormBuilderPage from './pages/hr/assessment-form/AssessmentFormBuilderPage';
@@ -63,14 +62,12 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/change-password" element={<ForceChangePasswordPage />} />
 
-          {/* Shared logged-in routes */}
           <Route element={<AppLayout />}>
-            <Route path="/pip/past-plans" element={<PipPastPlansPage />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/employee/notifications" element={<Notifications />} />
+            <Route path="/pip/past-plans" element={<PipPastPlansPage />} />
           </Route>
 
-          {/* Admin */}
           <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
             <Route element={<AppLayout />}>
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -83,7 +80,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* Employee */}
           <Route element={<ProtectedRoute allowedRoles={['Employee']} />}>
             <Route element={<AppLayout />}>
               <Route path="/employee/dashboard" element={<EmployeeMyDashboard />} />
@@ -125,7 +121,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* Manager */}
           <Route element={<ProtectedRoute allowedRoles={['Manager']} />}>
             <Route element={<AppLayout />}>
               <Route path="/manager/dashboard" element={<ManagerDashboard />} />
@@ -154,7 +149,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* Executive / CEO */}
           <Route element={<ProtectedRoute allowedRoles={['Executive']} />}>
             <Route element={<AppLayout />}>
               <Route path="/executive/dashboard" element={<CeoDashboard />} />
@@ -171,8 +165,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* Department Head */}
-          {/* Department Head */}
           <Route element={<ProtectedRoute allowedRoles={['DepartmentHead']} />}>
             <Route element={<AppLayout />}>
               <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
@@ -181,44 +173,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* Project Manager */}
-          <Route element={<ProtectedRoute allowedRoles={['ProjectManager']} />}>
-            <Route element={<AppLayout />}>
-              <Route path="/project-manager/dashboard" element={<ProjectManagerDashboard />} />
-
-              <Route
-                path="/project-manager/performance"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Project Performance"
-                    description="Track KPI metrics and performance data across your projects."
-                  />
-                }
-              />
-
-              <Route
-                path="/project-manager/feedback"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Stakeholder Feedback"
-                    description="Collect and review stakeholder feedback for your projects."
-                  />
-                }
-              />
-
-              <Route
-                path="/project-manager/reports"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="Project Reports"
-                    description="Generate and export project performance reports."
-                  />
-                }
-              />
-            </Route>
-          </Route>
-
-          {/* HR */}
           <Route element={<ProtectedRoute allowedRoles={['HR']} />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -240,9 +194,7 @@ function App() {
               <Route path="/user-roles" element={<UserRoles />} />
               <Route path="/role-permissions" element={<RolePermissions />} />
 
-              {/* Kept only for old direct URL compatibility. Removed from sidebar. */}
               <Route path="/pip-updates" element={<PipUpdates />} />
-
               <Route path="/notification-templates" element={<NotificationTemplates />} />
 
               <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />

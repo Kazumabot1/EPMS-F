@@ -1,24 +1,15 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import type { UserRole } from '../config/roleNavigation';
-import { resolveUserRole } from '../config/roleNavigation';
+import { dashboardPathByRole, resolveUserRole } from '../config/roleNavigation';
 
 interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
 }
 
-const fallbackByRole: Record<UserRole, string> = {
-  Employee: '/employee/dashboard',
-  Admin: '/admin/dashboard',
-  HR: '/dashboard',
-  DepartmentHead: '/department-head/dashboard',
-  Manager: '/manager/dashboard',
-  ProjectManager: '/project-manager/dashboard',
-  Executive: '/executive/dashboard',
-};
-
 const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
   const { isAuthenticated, loading, user } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return <div>Loading...</div>;
@@ -28,15 +19,15 @@ const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.mustChangePassword && window.location.pathname !== '/change-password') {
+  if (user?.mustChangePassword && location.pathname !== '/change-password') {
     return <Navigate to="/change-password" replace />;
   }
 
   if (allowedRoles?.length) {
-    const role = resolveUserRole(user);
+    const currentRole = resolveUserRole(user);
 
-    if (!allowedRoles.includes(role)) {
-      return <Navigate to={fallbackByRole[role]} replace />;
+    if (!allowedRoles.includes(currentRole)) {
+      return <Navigate to={dashboardPathByRole[currentRole]} replace />;
     }
   }
 

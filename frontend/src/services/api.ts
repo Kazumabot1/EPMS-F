@@ -9,18 +9,16 @@ api.interceptors.request.use((config) => {
   const token = authStorage.getAccessToken();
 
   /*
-    This project's API instance already has baseURL '/api'.
-
-    Correct:
-      api.get('/department-head/dashboard')
-      -> /api/department-head/dashboard
-
-    Old components sometimes do:
-      api.get('/api/permissions')
-      -> /api/api/permissions
-
-    This fixes old calls without forcing you to edit every component now.
-  */
+   * This project API instance already has baseURL '/api'.
+   *
+   * Correct:
+   *   api.get('/employees') -> /api/employees
+   *
+   * Old code sometimes calls:
+   *   api.get('/api/employees') -> /api/api/employees
+   *
+   * This fixes old calls safely.
+   */
   if (typeof config.url === 'string' && config.url.startsWith('/api/')) {
     config.url = config.url.substring('/api'.length);
   }
@@ -37,13 +35,18 @@ api.interceptors.response.use(
   (error) => {
     const status = error?.response?.status;
 
+    /*
+     * 401 definitely means unauthenticated.
+     * 403 can mean either invalid auth OR wrong role,
+     * so AuthContext verifies /auth/me separately.
+     */
     if (status === 401) {
       authStorage.clearSession();
       window.location.href = '/login';
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

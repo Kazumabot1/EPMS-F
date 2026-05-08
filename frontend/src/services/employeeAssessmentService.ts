@@ -117,7 +117,10 @@ const normalizeScoreRow = (row: any): AssessmentScoreRow => ({
     'Unknown Employee',
   employeeCode: row.employeeCode ?? row.employee?.employeeCode ?? null,
   departmentName:
-    row.departmentName ?? row.employee?.departmentName ?? row.department?.name ?? null,
+    row.departmentName ??
+    row.employee?.departmentName ??
+    row.department?.name ??
+    null,
   period: row.period ?? currentPeriod(),
   status: row.status ?? 'DRAFT',
   totalScore: Number(row.totalScore ?? 0),
@@ -142,7 +145,12 @@ const normalizeList = <T,>(payload: any, fallback: T[]): T[] => {
 
 const isMissingDraft = (error: any) => {
   const status = error?.response?.status;
-  return status === 403 || status === 404 || status === 204;
+
+  /*
+   * Only these mean no draft exists.
+   * 403 means permission/role problem and should NOT fall back to template.
+   */
+  return status === 404 || status === 204;
 };
 
 export const employeeAssessmentService = {

@@ -3,8 +3,7 @@ import api from './api';
 export type AssessmentTargetRole =
   | 'Employee'
   | 'Manager'
-  | 'DepartmentHead'
-  | 'ProjectManager';
+  | 'DepartmentHead';
 
 export type AssessmentResponseType = 'RATING' | 'TEXT' | 'YES_NO';
 

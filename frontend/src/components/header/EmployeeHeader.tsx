@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { UserRole } from '../../config/roleNavigation';
-import { dashboardPathByRole, displayRoleName } from '../../config/roleNavigation';
+import {
+  dashboardPathByRole,
+  displayRoleName,
+} from '../../config/roleNavigation';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  notificationService,
+  type NotificationDto,
+} from '../../services/notificationService';
 
 interface UserLike {
   fullName?: string;
@@ -26,6 +33,18 @@ const getInitials = (name: string) => {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 };
 
+const formatDate = (value?: string | null) => {
+  if (!value) return '';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleString();
+};
+
 const EmployeeHeader = ({
   user,
   role = 'Employee',
@@ -33,8 +52,14 @@ const EmployeeHeader = ({
 }: EmployeeHeaderProps) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationDto[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationLoading, setNotificationLoading] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
   const navigate = useNavigate();
   const { logout } = useAuth();
 
@@ -49,18 +74,49 @@ const EmployeeHeader = ({
     setMenuOpen(false);
   }, []);
 
+  const loadNotifications = useCallback(async () => {
+    try {
+      setNotificationLoading(true);
+
+      const [list, count] = await Promise.all([
+        notificationService.list(),
+        notificationService.unreadCount(),
+      ]);
+
+      setNotifications(list);
+      setUnreadCount(count);
+    } catch (error) {
+      console.error('Failed to load notifications', error);
+      setNotifications([]);
+      setUnreadCount(0);
+    } finally {
+      setNotificationLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!menuOpen) return;
+    void loadNotifications();
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!menuOpen && !notificationOpen) return;
 
     const onDocMouseDown = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      if (menuRef.current && !menuRef.current.contains(target)) {
         setMenuOpen(false);
+      }
+
+      if (notificationRef.current && !notificationRef.current.contains(target)) {
+        setNotificationOpen(false);
       }
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpen(false);
+        setNotificationOpen(false);
       }
     };
 
@@ -71,7 +127,7 @@ const EmployeeHeader = ({
       document.removeEventListener('mousedown', onDocMouseDown);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [menuOpen]);
+  }, [menuOpen, notificationOpen]);
 
   const handleLogout = () => {
     closeMenu();
@@ -84,25 +140,147 @@ const EmployeeHeader = ({
     navigate(dashboardPathByRole[role] ?? '/employee/dashboard');
   };
 
+  const markAsRead = async (notification: NotificationDto) => {
+    try {
+      if (!notification.isRead) {
+        await notificationService.markAsRead(notification.id);
+        await loadNotifications();
+      }
+    } catch (error) {
+      console.error('Failed to mark notification as read', error);
+    }
+  };
+
   return (
     <header className={`employee-header ${collapsed ? 'collapsed' : ''}`}>
       <div className="employee-header-search">
         <i className="bi bi-search" />
-        <input
-          type="text"
-          placeholder="Search employees, KPIs, appraisals..."
-        />
+        <input type="text" placeholder="Search employees, KPIs, appraisals..." />
       </div>
 
       <div className="employee-header-actions">
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="employee-header-notification"
-        >
-          <i className="bi bi-bell" />
-          <span />
-        </button>
+        <div ref={notificationRef} style={{ position: 'relative' }}>
+          <button
+            type="button"
+            aria-label="Notifications"
+            className="employee-header-notification"
+            onClick={() => {
+              setNotificationOpen((prev) => !prev);
+              setMenuOpen(false);
+              void loadNotifications();
+            }}
+          >
+            <i className="bi bi-bell" />
+            {unreadCount > 0 && (
+              <span>{unreadCount > 99 ? '99+' : unreadCount}</span>
+            )}
+          </button>
+
+          {notificationOpen && (
+            <div
+              className="employee-user-dropdown"
+              role="menu"
+              style={{
+                right: 0,
+                left: 'auto',
+                width: 360,
+                maxWidth: 'calc(100vw - 24px)',
+                padding: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  padding: '14px 16px',
+                  borderBottom: '1px solid #e5e7eb',
+                }}
+              >
+                <strong style={{ display: 'block', color: '#0f172a' }}>
+                  Notifications
+                </strong>
+                <small style={{ color: '#64748b' }}>{unreadCount} unread</small>
+              </div>
+
+              <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                {notificationLoading ? (
+                  <div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>
+                    Loading...
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>
+                    No notifications.
+                  </div>
+                ) : (
+                  notifications.slice(0, 8).map((notification) => (
+                    <button
+                      key={notification.id}
+                      type="button"
+                      onClick={() => void markAsRead(notification)}
+                      style={{
+                        width: '100%',
+                        border: 0,
+                        borderBottom: '1px solid #f1f5f9',
+                        background: notification.isRead ? '#fff' : '#eff6ff',
+                        padding: '12px 16px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                        }}
+                      >
+                        <strong style={{ color: '#0f172a', fontSize: 13 }}>
+                          {notification.title}
+                        </strong>
+
+                        {!notification.isRead && (
+                          <span
+                            style={{
+                              color: '#2563eb',
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            New
+                          </span>
+                        )}
+                      </div>
+
+                      <p
+                        style={{
+                          margin: '5px 0',
+                          color: '#475569',
+                          fontSize: 12,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {notification.message}
+                      </p>
+
+                      <small style={{ color: '#94a3b8' }}>
+                        {formatDate(notification.createdAt)}
+                      </small>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <Link
+                to="/notifications"
+                className="employee-user-dropdown-item"
+                onClick={() => setNotificationOpen(false)}
+                style={{ borderTop: '1px solid #e5e7eb' }}
+              >
+                <i className="bi bi-list-check" />
+                View all notifications
+              </Link>
+            </div>
+          )}
+        </div>
 
         <div className="employee-header-divider" />
 
@@ -110,7 +288,10 @@ const EmployeeHeader = ({
           <button
             type="button"
             className="employee-user-chip"
-            onClick={() => setMenuOpen((prev) => !prev)}
+            onClick={() => {
+              setMenuOpen((prev) => !prev);
+              setNotificationOpen(false);
+            }}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             aria-controls="employee-user-dropdown"
@@ -228,10 +409,7 @@ const EmployeeHeader = ({
             </div>
 
             <div className="employee-profile-actions">
-              <button
-                type="button"
-                onClick={() => setProfileOpen(false)}
-              >
+              <button type="button" onClick={() => setProfileOpen(false)}>
                 Close
               </button>
             </div>

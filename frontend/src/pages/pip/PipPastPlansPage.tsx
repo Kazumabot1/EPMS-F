@@ -8,7 +8,7 @@
   - Clicking a card opens a full detail modal.
 */
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { pipService } from "../../services/pipService";
 import type { PipDetail, PipPhase, PipPhaseStatus } from "../../types/pip";
 import "./pip.css";
