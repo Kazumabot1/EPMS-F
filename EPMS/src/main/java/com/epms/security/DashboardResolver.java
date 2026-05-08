@@ -30,11 +30,7 @@ public class DashboardResolver {
             return "DEPARTMENT_HEAD_DASHBOARD";
         }
 
-        if (
-                hasRole(normalizedRoles, "MANAGER") ||
-                        hasRole(normalizedRoles, "PROJECT_MANAGER") ||
-                        hasRole(normalizedRoles, "PROJECTMANAGER")
-        ) {
+        if (hasRole(normalizedRoles, "MANAGER")) {
             return "MANAGER_DASHBOARD";
         }
 
@@ -58,11 +54,7 @@ public class DashboardResolver {
             return "DEPARTMENT_HEAD_DASHBOARD";
         }
 
-        if (
-                normalizedPosition.contains("MANAGER") ||
-                        normalizedPosition.contains("PROJECT_MANAGER") ||
-                        normalizedPosition.contains("PROJECTMANAGER")
-        ) {
+        if (normalizedPosition.contains("MANAGER")) {
             return "MANAGER_DASHBOARD";
         }
 

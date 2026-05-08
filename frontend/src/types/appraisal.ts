@@ -67,6 +67,7 @@ export interface AppraisalTemplateResponse {
 
 export interface AppraisalCycleRequest {
   cycleName: string;
+  description?: string | null;
   templateId: number;
   cycleType: AppraisalCycleType;
   cycleYear: number;

@@ -645,7 +645,7 @@ const EmployeeFeedbackDashboardPage = () => {
     };
 
 
-    const renderCampaign = (campaign: CampaignGroup, index: number) => {
+   const renderCampaign = (campaign: CampaignGroup) => {
         const expanded = Boolean(expandedCampaigns[campaign.key]);
         const campaignScoreKey = campaignAverageScoreKey(campaign.key);
         const campaignScoreVisible = Boolean(visibleScores[campaignScoreKey]);

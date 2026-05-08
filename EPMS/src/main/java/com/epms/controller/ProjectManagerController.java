@@ -6,36 +6,34 @@ import com.epms.service.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
- * Project Manager-scoped REST controller.
- * Project Managers can read all teams (cross-department visibility) to monitor
- * project-level performance, but they cannot create or delete teams.
+ * Manager-scoped REST controller.
+ * Managers can read team data for dashboard/reporting views.
  */
 @RestController
-@RequestMapping("/api/project-manager")
+@RequestMapping("/api/manager")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @PreAuthorize(
-        "hasRole('PROJECT_MANAGER') " +
-        "or hasRole('PROJECTMANAGER') " +
-        "or hasAuthority('ROLE_PROJECT_MANAGER') " +
-        "or hasAuthority('ROLE_PROJECTMANAGER') " +
-        "or authentication.principal.dashboard == 'PROJECT_MANAGER_DASHBOARD' " +
-        "or hasRole('HR') " +
-        "or hasRole('ADMIN')"
+        "hasRole('MANAGER') " +
+                "or hasAuthority('ROLE_MANAGER') " +
+                "or authentication.principal.dashboard == 'MANAGER_DASHBOARD' " +
+                "or hasRole('HR') " +
+                "or hasRole('ADMIN')"
 )
 public class ProjectManagerController {
 
     private final TeamService teamService;
 
-    /**
-     * Returns all teams across all departments.
-     * Project Managers need cross-department visibility to track project-level performance.
-     */
     @GetMapping("/teams")
     public ResponseEntity<GenericApiResponse<List<TeamResponseDto>>> getAllTeams() {
         return ResponseEntity.ok(
@@ -43,9 +41,6 @@ public class ProjectManagerController {
         );
     }
 
-    /**
-     * Get a specific team by ID.
-     */
     @GetMapping("/teams/{id}")
     public ResponseEntity<GenericApiResponse<TeamResponseDto>> getTeamById(@PathVariable Integer id) {
         return ResponseEntity.ok(
@@ -53,24 +48,20 @@ public class ProjectManagerController {
         );
     }
 
-    /**
-     * Dashboard summary endpoint — returns basic stats for Project Manager view.
-     * The frontend /project-manager/dashboard page calls the assessment score table directly;
-     * this endpoint is a convenience for future expansion.
-     */
     @GetMapping("/dashboard")
     public ResponseEntity<GenericApiResponse<Object>> dashboard() {
         List<TeamResponseDto> allTeams = teamService.getAllTeams();
         long activeTeams = allTeams.stream()
-                .filter(t -> "Active".equalsIgnoreCase(t.getStatus()))
+                .filter(team -> "Active".equalsIgnoreCase(team.getStatus()))
                 .count();
 
+        Map<String, Object> data = Map.of(
+                "totalTeams", allTeams.size(),
+                "activeTeams", activeTeams
+        );
+
         return ResponseEntity.ok(
-                GenericApiResponse.success("Project Manager dashboard fetched",
-                        java.util.Map.of(
-                                "totalTeams", allTeams.size(),
-                                "activeTeams", activeTeams
-                        ))
+                GenericApiResponse.success("Manager dashboard fetched", data)
         );
     }
 }

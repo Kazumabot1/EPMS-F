@@ -83,12 +83,6 @@ public class CustomUserDetailsService implements UserDetailsService {
                 positionTitle
         );
 
-        /*
-         * Important fix:
-         * Some HR-created/imported employees have no user_roles row.
-         * Without this fallback, Spring creates a logged-in user with no
-         * ROLE_EMPLOYEE authority, and employee APIs return 403.
-         */
         if (roleNames.isEmpty()) {
             roleNames.add(roleFromDashboard(dashboard));
         }
@@ -117,7 +111,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         return switch (dashboard) {
             case "ADMIN_DASHBOARD" -> "ADMIN";
             case "HR_DASHBOARD" -> "HR";
-            case "MANAGER_DASHBOARD", "PROJECT_MANAGER_DASHBOARD" -> "MANAGER";
+            case "MANAGER_DASHBOARD" -> "MANAGER";
             case "DEPARTMENT_HEAD_DASHBOARD" -> "DEPARTMENT_HEAD";
             case "EXECUTIVE_DASHBOARD" -> "EXECUTIVE";
             case "EMPLOYEE_DASHBOARD" -> "EMPLOYEE";
@@ -136,10 +130,6 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .replaceAll("[^A-Za-z0-9]+", "_")
                 .replaceAll("^_+|_+$", "")
                 .toUpperCase();
-
-        if (normalized.equals("PROJECT_MANAGER") || normalized.equals("PROJECTMANAGER")) {
-            return "MANAGER";
-        }
 
         if (normalized.equals("DEPARTMENTHEAD")) {
             return "DEPARTMENT_HEAD";

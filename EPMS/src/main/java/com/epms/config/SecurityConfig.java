@@ -43,11 +43,7 @@ public class SecurityConfig {
 
     private static final String[] MANAGER_AUTHORITIES = {
             "MANAGER",
-            "ROLE_MANAGER",
-            "PROJECT_MANAGER",
-            "ROLE_PROJECT_MANAGER",
-            "PROJECTMANAGER",
-            "ROLE_PROJECTMANAGER"
+            "ROLE_MANAGER"
     };
 
     private static final String[] DEPARTMENT_HEAD_AUTHORITIES = {
@@ -97,10 +93,6 @@ public class SecurityConfig {
                                 "/api/notifications/**"
                         ).authenticated()
 
-                        /*
-                         * Admin-only account and access-control endpoints.
-                         * Needed for Admin Dashboard user edit.
-                         */
                         .requestMatchers(
                                 "/api/users",
                                 "/api/users/**",
@@ -112,9 +104,6 @@ public class SecurityConfig {
                                 "/api/role-permissions/**"
                         ).hasAnyAuthority(ADMIN_AUTHORITIES)
 
-                        /*
-                         * HR/Admin dashboard and management endpoints.
-                         */
                         .requestMatchers(
                                 "/api/dashboard",
                                 "/api/dashboard/**",
@@ -124,6 +113,10 @@ public class SecurityConfig {
                                 "/api/hr/employee-accounts/**",
                                 "/api/appraisal-forms",
                                 "/api/appraisal-forms/**",
+                                "/api/appraisal/templates",
+                                "/api/appraisal/templates/**",
+                                "/api/appraisal/cycles",
+                                "/api/appraisal/cycles/**",
                                 "/api/assessment-forms",
                                 "/api/assessment-forms/**",
                                 "/api/kpis",
@@ -131,10 +124,13 @@ public class SecurityConfig {
                                 "/api/positions",
                                 "/api/positions/**",
                                 "/api/departments",
-                                "/api/departments/**",
+                                "/api/departments/**"
+                        ).hasAnyAuthority(HR_AUTHORITIES)
+
+                        .requestMatchers(
                                 "/api/teams",
                                 "/api/teams/**"
-                        ).hasAnyAuthority(HR_AUTHORITIES)
+                        ).authenticated()
 
                         .requestMatchers(
                                 "/api/manager",
@@ -151,11 +147,6 @@ public class SecurityConfig {
                                 "/api/executive/**"
                         ).hasAnyAuthority(EXECUTIVE_AUTHORITIES)
 
-                        /*
-                         * IMPORTANT:
-                         * These exact employee assessment routes must come BEFORE
-                         * "/api/employee-assessments/{id}".
-                         */
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/template")
                         .authenticated()
 
@@ -174,19 +165,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/submit")
                         .authenticated()
 
-                        /*
-                         * HR/Admin/Department Head assessment score table.
-                         */
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/score-table")
                         .hasAnyAuthority(SCORE_TABLE_AUTHORITIES)
 
-                        /*
-                         * Generic ID route must stay AFTER all exact routes above.
-                         */
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/{id}")
                         .hasAnyAuthority(SCORE_TABLE_AUTHORITIES)
 
                         .requestMatchers(
+                                "/api/appraisal/workflow",
+                                "/api/appraisal/workflow/**",
                                 "/api/pip",
                                 "/api/pip/**",
                                 "/api/one-on-one-meetings",
