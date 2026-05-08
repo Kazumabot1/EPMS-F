@@ -1,90 +1,174 @@
-export type RatingValue = 1 | 2 | 3 | 4 | 5;
+export type AppraisalCycleType = 'ANNUAL' | 'SEMI_ANNUAL';
+export type AppraisalTemplateStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+export type AppraisalCycleStatus = 'DRAFT' | 'ACTIVE' | 'LOCKED' | 'COMPLETED';
+export type EmployeeAppraisalStatus =
+  | 'PM_DRAFT'
+  | 'DEPT_HEAD_PENDING'
+  | 'HR_PENDING'
+  | 'COMPLETED'
+  | 'REJECTED'
+  | 'RETURNED';
+export type AppraisalReviewStage = 'PM' | 'DEPT_HEAD' | 'HR';
+export type AppraisalDecision = 'APPROVED' | 'REJECTED' | 'RETURNED';
 
-export interface AppraisalQuestion {
-  id: string;
-  itemNo: number;
-  text: string;
-  rating: RatingValue | null;
+export interface AppraisalCriterionRequest {
+  id?: number;
+  criteriaText: string;
+  description?: string;
+  sortOrder: number;
+  maxRating: number;
+  ratingRequired: boolean;
+  active: boolean;
 }
 
-export interface AppraisalSection {
-  id: string;
-  title: string;
-  questions: AppraisalQuestion[];
+export interface AppraisalSectionRequest {
+  id?: number;
+  sectionName: string;
+  description?: string;
+  sortOrder: number;
+  active: boolean;
+  criteria: AppraisalCriterionRequest[];
 }
 
-export interface AppraisalMeta {
-  employeeName: string;
-  employeeId: string;
-  currentPosition: string;
-  department: string;
-  assessmentDate: string;
-  effectiveDate: string;
+export interface AppraisalTemplateRequest {
+  templateName: string;
+  description?: string;
+  formType: AppraisalCycleType;
+  targetAllDepartments: boolean;
+  departmentIds: number[];
+  sections: AppraisalSectionRequest[];
 }
 
-export interface AppraisalRemarks {
-  otherRemarks: string;
-  appraiserComment: string;
-  appraiseeSignature: string;
-  appraiseeSignedDate: string;
-  appraiserSignature: string;
-  appraiserSignedDate: string;
-  reviewedBy: string;
-  hrSignature: string;
-  hrSignedDate: string;
-  hrDesignation: string;
+export interface AppraisalCriterionResponse extends AppraisalCriterionRequest {
+  id: number;
+  ratingValue?: number | null;
+  ratingComment?: string | null;
 }
 
-export interface AppraisalForm {
-  id: string;
-  meta: AppraisalMeta;
-  sections: AppraisalSection[];
-  remarks: AppraisalRemarks;
+export interface AppraisalSectionResponse extends AppraisalSectionRequest {
+  id: number;
+  criteria: AppraisalCriterionResponse[];
+}
+
+export interface AppraisalTemplateResponse {
+  id: number;
+  templateName: string;
+  description?: string | null;
+  formType: AppraisalCycleType;
+  targetAllDepartments: boolean;
+  departmentIds: number[];
+  departmentNames: string[];
+  status: AppraisalTemplateStatus;
+  versionNo: number;
   createdAt?: string;
   updatedAt?: string;
+  sections: AppraisalSectionResponse[];
 }
 
-export type AppraisalFormPayload = Omit<AppraisalForm, 'id' | 'createdAt' | 'updatedAt'>;
+export interface AppraisalCycleRequest {
+  cycleName: string;
+  templateId: number;
+  cycleType: AppraisalCycleType;
+  cycleYear: number;
+  periodNo?: number | null;
+  startDate?: string | null;
+  submissionDeadline: string;
+  departmentIds: number[];
+}
 
-export interface AppraisalListItem {
-  id: string;
+export interface AppraisalTemplateCycleRequest {
+  template: AppraisalTemplateRequest;
+  cycle: AppraisalCycleRequest;
+}
+
+export interface AppraisalCycleResponse {
+  id: number;
+  cycleName: string;
+  description?: string | null;
+  templateId: number;
+  templateName: string;
+  cycleType: AppraisalCycleType;
+  cycleYear: number;
+  periodNo?: number | null;
+  startDate: string;
+  endDate: string;
+  submissionDeadline: string;
+  status: AppraisalCycleStatus;
+  locked: boolean;
+  departmentIds: number[];
+  departmentNames: string[];
+  activatedAt?: string | null;
+  completedAt?: string | null;
+}
+
+export interface AppraisalRatingInput {
+  criteriaId: number;
+  ratingValue: number;
+  comment?: string;
+}
+
+export interface PmAppraisalSubmitRequest {
+  ratings: AppraisalRatingInput[];
+  recommendation: string;
+  comment: string;
+}
+
+export interface AppraisalReviewSubmitRequest {
+  recommendation: string;
+  comment: string;
+}
+
+export interface AppraisalReturnRequest {
+  note: string;
+}
+
+export interface AppraisalReviewResponse {
+  id: number;
+  reviewStage: AppraisalReviewStage;
+  reviewerUserId?: number | null;
+  reviewerName?: string | null;
+  recommendation?: string | null;
+  comment?: string | null;
+  decision?: AppraisalDecision | null;
+  submittedAt?: string | null;
+}
+
+export interface EmployeeAppraisalFormResponse {
+  id: number;
+  cycleId: number;
+  cycleName: string;
+  employeeId: number;
   employeeName: string;
-  employeeId: string;
-  department: string;
-  assessmentDate: string;
-  score: number;
-  performanceLabel: string;
-  updatedAt?: string;
+  employeeCode?: string | null;
+  departmentId: number;
+  departmentName: string;
+  positionName?: string | null;
+  assessmentDate?: string | null;
+  effectiveDate?: string | null;
+  status: EmployeeAppraisalStatus;
+  totalPoints?: number | null;
+  answeredCriteriaCount?: number | null;
+  scorePercent?: number | null;
+  performanceLabel?: string | null;
+  visibleToEmployee: boolean;
+  locked: boolean;
+  pmSubmittedAt?: string | null;
+  deptHeadSubmittedAt?: string | null;
+  hrApprovedAt?: string | null;
+  sections: AppraisalSectionResponse[];
+  reviews: AppraisalReviewResponse[];
 }
 
-export interface ScoreSummaryData {
-  totalPoints: number;
-  answeredQuestions: number;
-  scorePercent: number;
-  performanceLabel: string;
-}
-
-export interface PerformanceBand {
-  min: number;
-  max: number;
+export interface AppraisalScoreBandRequest {
+  id?: number;
+  minScore: number;
+  maxScore: number;
   label: string;
+  description?: string;
+  sortOrder: number;
+  active: boolean;
 }
 
-export const DEFAULT_SECTION_TITLES = [
-  'Job Knowledge / Technical Skills',
-  'Accountability',
-  'Problem Solving & Supervision',
-  'Innovative',
-  'Team Work',
-  'Quality Work',
-  'Loyalty',
-  'Attendance / Rule and Regulations / Compliance',
-] as const;
-
-export const PERFORMANCE_BANDS: PerformanceBand[] = [
-  { min: 86, max: 100, label: 'Outstanding' },
-  { min: 71, max: 85, label: 'Good' },
-  { min: 60, max: 70, label: 'Meet Requirement' },
-  { min: 40, max: 59, label: 'Need Improvement' },
-  { min: 0, max: 39, label: 'Unsatisfactory' },
-];
+export interface AppraisalScoreBandResponse extends AppraisalScoreBandRequest {
+  id: number;
+}

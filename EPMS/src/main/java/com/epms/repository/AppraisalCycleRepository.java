@@ -1,8 +1,38 @@
 package com.epms.repository;
 
 import com.epms.entity.AppraisalCycle;
+import com.epms.entity.enums.AppraisalCycleStatus;
+import com.epms.entity.enums.AppraisalCycleType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
+import java.util.List;
+import java.util.Optional;
+
+@Repository
 public interface AppraisalCycleRepository extends JpaRepository<AppraisalCycle, Integer> {
-}
 
+    boolean existsByCycleTypeAndCycleYearAndPeriodNo(AppraisalCycleType cycleType, Integer cycleYear, Integer periodNo);
+
+    Optional<AppraisalCycle> findByCycleTypeAndCycleYearAndPeriodNo(AppraisalCycleType cycleType, Integer cycleYear, Integer periodNo);
+
+    List<AppraisalCycle> findByStatus(AppraisalCycleStatus status);
+
+    List<AppraisalCycle> findByCycleYearOrderByStartDateAsc(Integer cycleYear);
+
+    @EntityGraph(attributePaths = {"template"})
+    List<AppraisalCycle> findByStatusOrderByStartDateDesc(AppraisalCycleStatus status);
+
+    @Query("""
+        SELECT DISTINCT c
+        FROM AppraisalCycle c
+        LEFT JOIN FETCH c.template
+        LEFT JOIN FETCH c.cycleDepartments cd
+        LEFT JOIN FETCH cd.department
+        WHERE c.id = :cycleId
+        """)
+    Optional<AppraisalCycle> findByIdWithTemplateAndDepartments(@Param("cycleId") Integer cycleId);
+}

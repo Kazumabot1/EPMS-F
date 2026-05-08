@@ -1,14 +1,15 @@
 package com.epms.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import java.time.LocalDateTime;
+
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "appraisal_sections")
+@Table(name = "appraisal_section")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,18 +17,35 @@ public class AppraisalSection {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Integer id;
 
-    @ManyToOne
-    @JoinColumn(name = "form_id")
-    private AppraisalForm form;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "template_id", nullable = false)
+    private AppraisalFormTemplate template;
 
-    private String title;
-    private Integer orderNo;
+    @Column(nullable = false, length = 180)
+    private String sectionName;
 
-    @Temporal(TemporalType.TIMESTAMP)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
-    @OneToMany(mappedBy = "section", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<AppraisalQuestion> questions;
+    @Column(nullable = false)
+    private Integer sortOrder = 0;
+
+    @Column(nullable = false)
+    private Boolean active = true;
+
+    @OneToMany(mappedBy = "section", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("sortOrder ASC")
+    private List<AppraisalFormCriteria> criteria = new ArrayList<>();
+
+    @PrePersist
+    public void prePersist() {
+        if (this.sortOrder == null) {
+            this.sortOrder = 0;
+        }
+        if (this.active == null) {
+            this.active = true;
+        }
+    }
 }

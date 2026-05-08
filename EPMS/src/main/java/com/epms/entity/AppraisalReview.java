@@ -1,14 +1,22 @@
 package com.epms.entity;
 
+import com.epms.entity.enums.AppraisalDecision;
+import com.epms.entity.enums.AppraisalReviewStage;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
-import java.util.List;
+import java.util.Date;
 
 @Entity
-@Table(name = "appraisal_reviews")
+@Table(
+    name = "appraisal_review",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_appraisal_review_form_stage",
+        columnNames = {"employee_appraisal_form_id", "review_stage"}
+    )
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,23 +24,52 @@ public class AppraisalReview {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer Id;
+    private Integer id;
 
-    @ManyToOne
-    @JoinColumn(name = "appraisal_id")
-    private Appraisal appraisal;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "employee_appraisal_form_id", nullable = false)
+    private EmployeeAppraisalForm employeeAppraisalForm;
 
-    @ManyToOne
-    @JoinColumn(name = "reviewer_employee_id")
-    private Employee reviewer;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_stage", nullable = false, length = 30)
+    private AppraisalReviewStage reviewStage;
 
-    private String reviewType;     // self, manager, peer
-    private String reviewStatus;   // pending, submitted
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "reviewer_user_id", nullable = false)
+    private User reviewerUser;
 
-    private Double totalScore;
+    @Column(columnDefinition = "TEXT")
+    private String recommendation;
 
-    private String comments; // Added for manager review comments
+    @Column(columnDefinition = "TEXT")
+    private String comment;
 
-    @OneToMany(mappedBy = "review")
-    private List<AppraisalAnswer> answers;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private AppraisalDecision decision = AppraisalDecision.SUBMITTED;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date submittedAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(nullable = false, updatable = false)
+    private Date createdAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date updatedAt;
+
+    @PrePersist
+    public void prePersist() {
+        Date now = new Date();
+        this.createdAt = now;
+        this.updatedAt = now;
+        if (this.decision == null) {
+            this.decision = AppraisalDecision.SUBMITTED;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = new Date();
+    }
 }

@@ -67,6 +67,7 @@ function App() {
                 }
               />
               <Route path="/employee/appraisals" element={<EmployeeAssessmentScoresPage />} />
+              <Route path="/employee/performance-appraisal-cycle" element={<AppraisalHistoryListPage role="employee" />} />
               <Route path="/employee/self-assessment" element={<EmployeeSelfAssessmentPage />} />
               <Route
                 path="/employee/feedback"
@@ -150,12 +151,16 @@ function App() {
             <Route element={<AppLayout />}>
               <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
+              <Route path="/department-head/performance-review/check" element={<AppraisalReviewQueuePage mode="dept-head" />} />
+              <Route path="/department-head/performance-review/records" element={<AppraisalHistoryListPage role="dept-head" />} />
             </Route>
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={['ProjectManager']} />}>
             <Route element={<AppLayout />}>
               <Route path="/project-manager/dashboard" element={<ProjectManagerDashboard />} />
+              <Route path="/project-manager/performance-review/employees" element={<EmployeePerformanceReviewPage />} />
+              <Route path="/project-manager/performance-review/history" element={<AppraisalHistoryListPage role="pm" />} />
               <Route
                 path="/project-manager/performance"
                 element={
@@ -443,6 +448,7 @@ function App() {
                 }
               />
               <Route path="/employee/appraisals" element={<EmployeeAssessmentScoresPage />} />
+              <Route path="/employee/performance-appraisal-cycle" element={<AppraisalHistoryListPage role="employee" />} />
               <Route path="/employee/self-assessment" element={<EmployeeSelfAssessmentPage />} />
               <Route
                 path="/employee/feedback"
@@ -532,6 +538,8 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['ProjectManager']} />}>
             <Route element={<AppLayout />}>
               <Route path="/project-manager/dashboard" element={<ProjectManagerDashboard />} />
+              <Route path="/project-manager/performance-review/employees" element={<EmployeePerformanceReviewPage />} />
+              <Route path="/project-manager/performance-review/history" element={<AppraisalHistoryListPage role="pm" />} />
               <Route
                 path="/project-manager/performance"
                 element={
@@ -694,6 +702,7 @@ function App() {
                 }
               />
               <Route path="/employee/appraisals" element={<EmployeeAssessmentScoresPage />} />
+              <Route path="/employee/performance-appraisal-cycle" element={<AppraisalHistoryListPage role="employee" />} />
               <Route path="/employee/self-assessment" element={<EmployeeSelfAssessmentPage />} />
               <Route
                 path="/employee/feedback"
@@ -779,6 +788,8 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['ProjectManager']} />}>
             <Route element={<AppLayout />}>
               <Route path="/project-manager/dashboard" element={<ProjectManagerDashboard />} />
+              <Route path="/project-manager/performance-review/employees" element={<EmployeePerformanceReviewPage />} />
+              <Route path="/project-manager/performance-review/history" element={<AppraisalHistoryListPage role="pm" />} />
               <Route
                 path="/project-manager/performance"
                 element={
@@ -924,6 +935,13 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import PipCreatePage from './pages/pip/PipCreatePage';
 import PipPastPlansPage from './pages/pip/PipPastPlansPage';
 import HrFeedbackDashboard from './pages/hr-feedback/HrFeedbackDashboard';
+import AppraisalTemplateCreatePage from './pages/appraisal/AppraisalTemplateCreatePage';
+import AppraisalTemplateRecordsPage from './pages/appraisal/AppraisalTemplateRecordsPage';
+import AppraisalCreatePage from './pages/appraisal/AppraisalCreatePage';
+import AppraisalCreateRecordsPage from './pages/appraisal/AppraisalCreateRecordsPage';
+import EmployeePerformanceReviewPage from './pages/appraisal/EmployeePerformanceReviewPage';
+import AppraisalReviewQueuePage from './pages/appraisal/AppraisalReviewQueuePage';
+import AppraisalHistoryListPage from './pages/appraisal/AppraisalHistoryListPage';
 
 function App() {
   return (
@@ -969,6 +987,7 @@ function App() {
                 }
               />
               <Route path="/employee/appraisals" element={<EmployeeAssessmentScoresPage />} />
+              <Route path="/employee/performance-appraisal-cycle" element={<AppraisalHistoryListPage role="employee" />} />
               <Route path="/employee/self-assessment" element={<EmployeeSelfAssessmentPage />} />
               <Route
                 path="/employee/feedback"
@@ -1037,6 +1056,8 @@ function App() {
             <Route element={<AppLayout />}>
               <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
+              <Route path="/department-head/performance-review/check" element={<AppraisalReviewQueuePage mode="dept-head" />} />
+              <Route path="/department-head/performance-review/records" element={<AppraisalHistoryListPage role="dept-head" />} />
 
               <Route path="/pip/create" element={<PipCreatePage />} />
             </Route>
@@ -1045,6 +1066,8 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['ProjectManager']} />}>
             <Route element={<AppLayout />}>
               <Route path="/project-manager/dashboard" element={<ProjectManagerDashboard />} />
+              <Route path="/project-manager/performance-review/employees" element={<EmployeePerformanceReviewPage />} />
+              <Route path="/project-manager/performance-review/history" element={<AppraisalHistoryListPage role="pm" />} />
               <Route
                 path="/project-manager/performance"
                 element={
@@ -1088,6 +1111,12 @@ function App() {
               <Route path="/hr/team/create" element={<TeamCreate />} />
               <Route path="/hr/department" element={<DepartmentManagement />} />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
+              <Route path="/hr/appraisal/templates" element={<AppraisalTemplateCreatePage />} />
+              <Route path="/hr/appraisal/template-records" element={<AppraisalTemplateRecordsPage />} />
+              <Route path="/hr/appraisal/create" element={<AppraisalCreatePage />} />
+              <Route path="/hr/appraisal/create-records" element={<AppraisalCreateRecordsPage />} />
+              <Route path="/hr/appraisal/cycles" element={<Navigate to="/hr/appraisal/create-records" replace />} />
+              <Route path="/hr/appraisal/review-check" element={<AppraisalReviewQueuePage mode="hr" />} />
 
               {/* 360 Feedback — single page with internal tabs */}
               <Route path="/hr/feedback" element={<HrFeedbackDashboard />} />
