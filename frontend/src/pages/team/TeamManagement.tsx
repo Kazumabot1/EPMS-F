@@ -161,6 +161,13 @@
 // };
 // export default TeamManagement;
 
+
+
+
+
+
+
+/*
 import { useEffect, useState } from "react";
 import { fetchTeams, type TeamResponse } from "../../services/teamService";
 import TeamEditModal from "./TeamEditModal";
@@ -353,6 +360,414 @@ const TeamManagement = () => {
                   loadTeams();
                 }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TeamManagement; */
+
+
+
+
+
+
+
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  deleteTeam,
+  fetchDepartments,
+  fetchMyDepartmentTeams,
+  fetchTeams,
+  type Department,
+  type TeamResponse,
+} from '../../services/teamService';
+import { useAuth } from '../../contexts/AuthContext';
+import TeamEditModal from './TeamEditModal';
+import './team-ui.css';
+
+const normalizeRole = (role?: string | null) =>
+  String(role ?? '')
+    .replace(/^ROLE_/i, '')
+    .replace(/[\s_-]+/g, '')
+    .toUpperCase();
+
+const isDepartmentHeadUser = (user: any) => {
+  const dashboard = String(user?.dashboard ?? '').toUpperCase();
+
+  if (dashboard === 'DEPARTMENT_HEAD_DASHBOARD') {
+    return true;
+  }
+
+  return (user?.roles ?? []).some((role: string) => {
+    const normalized = normalizeRole(role);
+    return normalized === 'DEPARTMENTHEAD';
+  });
+};
+
+const getApiErrorMessage = (err: any) => {
+  return (
+    err?.response?.data?.message ||
+    err?.response?.data?.error ||
+    err?.message ||
+    'Request failed.'
+  );
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  });
+};
+
+const TeamManagement: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const isDepartmentHead = isDepartmentHeadUser(user);
+
+  const [teams, setTeams] = useState<TeamResponse[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [search, setSearch] = useState('');
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const [editingTeam, setEditingTeam] = useState<TeamResponse | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<TeamResponse | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const loadTeams = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const data = isDepartmentHead ? await fetchMyDepartmentTeams() : await fetchTeams();
+      setTeams(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      setTeams([]);
+      setError(getApiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [isDepartmentHead]);
+
+  const loadDepartments = useCallback(async () => {
+    if (isDepartmentHead) {
+      setDepartments([]);
+      return;
+    }
+
+    try {
+      const data = await fetchDepartments();
+      setDepartments(Array.isArray(data) ? data : []);
+    } catch {
+      setDepartments([]);
+    }
+  }, [isDepartmentHead]);
+
+  useEffect(() => {
+    loadTeams();
+    loadDepartments();
+  }, [loadTeams, loadDepartments]);
+
+  const filteredTeams = useMemo(() => {
+    const cleanSearch = search.trim().toLowerCase();
+
+    return teams.filter((team) => {
+      const matchesSearch =
+        !cleanSearch ||
+        team.teamName?.toLowerCase().includes(cleanSearch) ||
+        team.departmentName?.toLowerCase().includes(cleanSearch) ||
+        team.teamLeaderName?.toLowerCase().includes(cleanSearch) ||
+        team.projectManagerName?.toLowerCase().includes(cleanSearch);
+
+      const matchesDepartment =
+        isDepartmentHead ||
+        !selectedDepartmentId ||
+        Number(team.departmentId) === Number(selectedDepartmentId);
+
+      return matchesSearch && matchesDepartment;
+    });
+  }, [teams, search, selectedDepartmentId, isDepartmentHead]);
+
+  const activeCount = useMemo(
+    () => teams.filter((team) => team.status?.toLowerCase() === 'active').length,
+    [teams]
+  );
+
+  const inactiveCount = useMemo(
+    () => teams.filter((team) => team.status?.toLowerCase() === 'inactive').length,
+    [teams]
+  );
+
+  const createPath = isDepartmentHead ? '/department-head/teams/create' : '/hr/team/create';
+  const historyPath = isDepartmentHead ? '/department-head/team-history' : '/hr/team/history';
+
+  const handleDelete = async () => {
+    if (!showDeleteConfirm) {
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      await deleteTeam(showDeleteConfirm.id);
+      setShowDeleteConfirm(null);
+      await loadTeams();
+    } catch (err: any) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+
+
+
+
+
+
+
+
+  return (
+    <div className="team-page">
+      <div className="team-header">
+        <div>
+          <p className="team-eyebrow">Team Organization</p>
+          <h1>Team Management</h1>
+          <p>
+            Manage teams, leaders, project managers, members, and team status.
+          </p>
+        </div>
+
+        <div className="team-header-actions">
+          <button
+            type="button"
+            className="team-btn team-btn-secondary"
+            onClick={() => navigate(historyPath)}
+          >
+            Team History
+          </button>
+
+          <button
+            type="button"
+            className="team-btn team-btn-primary"
+            onClick={() => navigate(createPath)}
+          >
+            Create Team
+          </button>
+        </div>
+      </div>
+
+      <div className="team-stat-grid">
+        <div className="team-stat-card">
+          <span>Total Teams</span>
+          <strong>{teams.length}</strong>
+        </div>
+
+        <div className="team-stat-card">
+          <span>Active Teams</span>
+          <strong>{activeCount}</strong>
+        </div>
+
+        <div className="team-stat-card">
+          <span>Inactive Teams</span>
+          <strong>{inactiveCount}</strong>
+        </div>
+      </div>
+
+      <div className="team-toolbar">
+        <input
+          type="text"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search team, department, leader, or project manager..."
+        />
+
+        {!isDepartmentHead && (
+          <select
+            value={selectedDepartmentId}
+            onChange={(event) => setSelectedDepartmentId(event.target.value)}
+          >
+            <option value="">All Departments</option>
+
+            {departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.departmentName || department.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {error && <div className="team-error">{error}</div>}
+
+      <div className="team-card">
+        {loading ? (
+          <div className="team-empty">Loading teams...</div>
+        ) : filteredTeams.length === 0 ? (
+          <div className="team-empty">No teams found.</div>
+        ) : (
+          <div className="team-table-wrap">
+            <table className="team-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Team</th>
+                  <th>Department</th>
+                  <th>Team Leader</th>
+                  <th>Project Manager</th>
+                  <th>Members</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredTeams.map((team, index) => (
+                  <tr key={team.id}>
+                    <td>{index + 1}</td>
+
+                    <td>
+                      <div className="team-name-cell">
+                        <strong>{team.teamName}</strong>
+                        {team.teamGoal && <small>{team.teamGoal}</small>}
+                      </div>
+                    </td>
+
+                    <td>{team.departmentName || '—'}</td>
+
+                    <td>{team.teamLeaderName || '—'}</td>
+
+                    <td>
+                      {team.projectManagerName ? (
+                        <div className="team-name-cell">
+                          <strong>{team.projectManagerName}</strong>
+                          {team.projectManagerTeams && (
+                            <small>Also PM in {team.projectManagerTeams}</small>
+                          )}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+
+                    <td>{team.members?.length ?? 0}</td>
+
+                    <td>
+                      <span
+                        className={`team-status ${
+                          team.status?.toLowerCase() === 'active'
+                            ? 'is-active'
+                            : 'is-inactive'
+                        }`}
+                      >
+                        {team.status || '—'}
+                      </span>
+                    </td>
+
+                    <td>{formatDate(team.createdDate)}</td>
+
+                    <td>
+                      <div className="team-row-actions">
+                        <button
+                          type="button"
+                          className="team-action-btn"
+                          onClick={() => setEditingTeam(team)}
+                        >
+                          Edit
+                        </button>
+
+                        {!isDepartmentHead && (
+                          <button
+                            type="button"
+                            className="team-action-btn danger"
+                            onClick={() => setShowDeleteConfirm(team)}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <TeamEditModal
+        open={Boolean(editingTeam)}
+        team={editingTeam}
+        departments={departments}
+        isDepartmentHead={isDepartmentHead}
+        onClose={() => setEditingTeam(null)}
+        onSaved={loadTeams}
+      />
+
+      {showDeleteConfirm && (
+        <div className="team-modal-overlay" onClick={() => setShowDeleteConfirm(null)}>
+          <div className="team-modal team-modal-small" onClick={(event) => event.stopPropagation()}>
+            <div className="team-modal-header">
+              <div>
+                <p className="team-eyebrow">Confirm Delete</p>
+                <h2>Delete Team</h2>
+              </div>
+
+              <button
+                type="button"
+                className="team-modal-close"
+                onClick={() => setShowDeleteConfirm(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="team-modal-body">
+              <p>
+                Are you sure you want to delete{' '}
+                <strong>{showDeleteConfirm.teamName}</strong>?
+              </p>
+
+              <div className="team-modal-footer">
+                <button
+                  type="button"
+                  className="team-btn team-btn-secondary"
+                  onClick={() => setShowDeleteConfirm(null)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  className="team-btn team-btn-danger"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

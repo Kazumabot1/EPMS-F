@@ -219,7 +219,6 @@ function App() {
               <Route path="/hr/department" element={<DepartmentManagement />} />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
 
-              {/* 360 Feedback — single page with internal tabs */}
               <Route path="/hr/feedback" element={<HrFeedbackDashboard />} />
 
               <Route path="/permissions" element={<Permissions />} />
@@ -543,7 +542,9 @@ import EmployeeSelfAssessmentPage from './pages/employee/EmployeeSelfAssessmentP
 import EmployeeAssessmentScoresPage from './pages/employee/EmployeeAssessmentScoresPage';
 import TeamManagement from './pages/team/TeamManagement';
 import TeamCreate from './pages/team/TeamCreate';
+import TeamHistoryPage from "./pages/team/TeamHistoryPage";
 import DepartmentManagement from './pages/department/DepartmentManagement';
+import DepartmentComparisonPage from './pages/department/DepartmentComparisonPage';
 import ManagerDashboard from './pages/manager/ManagerDashboard';
 import CeoDashboard from './pages/ceo/CeoDashboard';
 
@@ -674,6 +675,13 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['DepartmentHead']} />}>
             <Route element={<AppLayout />}>
               <Route path="/department-head/dashboard" element={<DepartmentHeadDashboard />} />
+
+              <Route path="/department-head/teams" element={<TeamManagement />} />
+              <Route path="/department-head/teams/create" element={<TeamCreate />} />
+              <Route path="/department-head/team-history" element={<TeamHistoryPage />} />
+
+
+
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
             </Route>
           </Route>
@@ -722,7 +730,9 @@ function App() {
               <Route path="/hr/employee/import" element={<HrEmployeeAccountImport />} />
               <Route path="/hr/team" element={<TeamManagement />} />
               <Route path="/hr/team/create" element={<TeamCreate />} />
+              <Route path="/hr/team/history" element={<TeamHistoryPage />} />
               <Route path="/hr/department" element={<DepartmentManagement />} />
+              <Route path="/hr/department-comparison" element={<DepartmentComparisonPage />} />
               <Route path="/hr/assessment-scores" element={<AssessmentScoreTablePage />} />
 
               <Route path="/permissions" element={<Permissions />} />

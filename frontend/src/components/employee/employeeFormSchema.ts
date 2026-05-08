@@ -1,3 +1,4 @@
+/*
 import { z } from 'zod';
 
 export const employeeFormSchema = z.object({
@@ -80,6 +81,140 @@ export function formValuesToPayload(values: EmployeeFormValues) {
       const n = Number.parseInt(values.departmentId, 10);
       return Number.isFinite(n) ? n : null;
     })(),
+    createLoginAccount: values.createLoginAccount ?? true,
+    sendTemporaryPasswordEmail: values.sendTemporaryPasswordEmail ?? true,
+  };
+}
+ */
+
+import { z } from 'zod';
+
+export const employeeFormSchema = z
+  .object({
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
+    phoneNumber: z.string().optional(),
+    email: z.string().email('Enter a valid email').or(z.literal('')),
+    staffNrc: z.string().optional(),
+    gender: z.string().optional(),
+    race: z.string().optional(),
+    religion: z.string().optional(),
+    dateOfBirth: z.string().optional(),
+    contactAddress: z.string().optional(),
+    permanentAddress: z.string().optional(),
+    maritalStatus: z.string().optional(),
+    spouseName: z.string().optional(),
+    spouseNrc: z.string().optional(),
+    fatherName: z.string().optional(),
+    fatherNrc: z.string().optional(),
+    positionId: z.string().optional(),
+
+    /**
+     * Legacy fallback.
+     */
+    departmentId: z.string().optional(),
+
+    /**
+     * Main/original department.
+     */
+    currentDepartmentId: z.string().min(1, 'Current Department is required'),
+
+    /**
+     * Working department.
+     * Blank means same as Current Department.
+     */
+    parentDepartmentId: z.string().optional(),
+
+    transferTeamId: z.string().optional(),
+    confirmDepartmentTransfer: z.boolean().optional(),
+
+    createLoginAccount: z.boolean().optional(),
+    sendTemporaryPasswordEmail: z.boolean().optional(),
+  })
+  .refine(
+    (values) =>
+      !values.parentDepartmentId ||
+      values.parentDepartmentId === '' ||
+      values.parentDepartmentId !== values.currentDepartmentId,
+    {
+      message: 'Parent Department cannot be the same as Current Department.',
+      path: ['parentDepartmentId'],
+    }
+  );
+
+export type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
+
+export const defaultEmployeeFormValues: EmployeeFormValues = {
+  firstName: '',
+  lastName: '',
+  phoneNumber: '',
+  email: '',
+  staffNrc: '',
+  gender: '',
+  race: '',
+  religion: '',
+  dateOfBirth: '',
+  contactAddress: '',
+  permanentAddress: '',
+  maritalStatus: '',
+  spouseName: '',
+  spouseNrc: '',
+  fatherName: '',
+  fatherNrc: '',
+  positionId: '',
+
+  departmentId: '',
+  currentDepartmentId: '',
+  parentDepartmentId: '',
+
+  transferTeamId: '',
+  confirmDepartmentTransfer: false,
+
+  createLoginAccount: true,
+  sendTemporaryPasswordEmail: true,
+};
+
+const stringToNullableNumber = (value?: string) => {
+  if (!value || value === '') {
+    return null;
+  }
+
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? n : null;
+};
+
+export function formValuesToPayload(values: EmployeeFormValues) {
+  const currentDepartmentId = stringToNullableNumber(values.currentDepartmentId);
+  const parentDepartmentId = stringToNullableNumber(values.parentDepartmentId);
+  const transferTeamId = stringToNullableNumber(values.transferTeamId);
+
+  return {
+    firstName: values.firstName,
+    lastName: values.lastName,
+    phoneNumber: values.phoneNumber,
+    email: values.email,
+    staffNrc: values.staffNrc,
+    gender: values.gender,
+    race: values.race,
+    religion: values.religion,
+    dateOfBirth: values.dateOfBirth,
+    contactAddress: values.contactAddress,
+    permanentAddress: values.permanentAddress,
+    maritalStatus: values.maritalStatus,
+    spouseName: values.spouseName,
+    spouseNrc: values.spouseNrc,
+    fatherName: values.fatherName,
+    fatherNrc: values.fatherNrc,
+
+    positionId: stringToNullableNumber(values.positionId),
+
+    departmentId: currentDepartmentId,
+    currentDepartmentId,
+    parentDepartmentId,
+
+    confirmDepartmentTransfer: values.confirmDepartmentTransfer ?? false,
+    transferTeamId,
+
     createLoginAccount: values.createLoginAccount ?? true,
     sendTemporaryPasswordEmail: values.sendTemporaryPasswordEmail ?? true,
   };

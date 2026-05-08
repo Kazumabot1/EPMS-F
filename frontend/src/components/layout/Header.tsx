@@ -41,7 +41,7 @@ function formatNotifTime(createdAt: NotifItem['createdAt']) {
     return '';
   }
 }
-
+/*
 function notifIconClass(type?: string | null) {
   const t = String(type ?? '')
     .trim()
@@ -50,7 +50,26 @@ function notifIconClass(type?: string | null) {
   if (t === 'PIP') return 'bi bi-clipboard2-pulse';
   if (t === 'APPRAISAL') return 'bi bi-exclamation-triangle';
   return 'bi bi-bell';
+} */
+function notifIconClass(type?: string | null) {
+  const t = String(type ?? '')
+    .trim()
+    .toUpperCase();
+
+  if (t === 'GENERAL') return 'bi bi-info-circle';
+  if (t === 'MEETING') return 'bi bi-calendar-event';
+  if (t === 'PIP') return 'bi bi-clipboard2-pulse';
+  if (t === 'APPRAISAL') return 'bi bi-exclamation-triangle';
+  if (t === 'KPI') return 'bi bi-bullseye';
+  if (t === 'FEEDBACK') return 'bi bi-chat-dots';
+
+  return 'bi bi-bell';
 }
+
+
+
+
+
 
 const Header = ({ collapsed }: HeaderProps) => {
   const navigate = useNavigate();
