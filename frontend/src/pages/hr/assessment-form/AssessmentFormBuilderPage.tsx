@@ -11,7 +11,6 @@ const TARGET_ROLES: { label: string; value: AssessmentTargetRole }[] = [
   { label: 'Employee', value: 'Employee' },
   { label: 'Manager', value: 'Manager' },
   { label: 'Department Head', value: 'DepartmentHead' },
-  { label: 'Project Manager', value: 'ProjectManager' },
 ];
 
 const RESPONSE_TYPES: AssessmentResponseType[] = ['RATING', 'TEXT', 'YES_NO'];
