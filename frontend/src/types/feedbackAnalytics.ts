@@ -32,6 +32,10 @@ export interface FeedbackResultItem {
   projectStakeholderAverageScore?: number | null;
   scoreCalculationMethod?: string;
   scoreCalculationNote?: string;
+  visibilityStatus?: 'HIDDEN' | 'READY_TO_PUBLISH' | 'PUBLISHED' | string;
+  publishedAt?: string | null;
+  publishedByUserId?: number | null;
+  publishNote?: string | null;
   summarizedAt: string;
 }
 
@@ -48,6 +52,10 @@ export interface FeedbackCampaignSummary {
   pendingEvaluatorCount?: number;
   completionRate?: number;
   insufficientFeedbackCount?: number;
+  visibilityStatus?: 'HIDDEN' | 'READY_TO_PUBLISH' | 'PUBLISHED' | string;
+  publishedAt?: string | null;
+  publishedByUserId?: number | null;
+  publishNote?: string | null;
   summarizedAt: string;
   items: FeedbackResultItem[];
 }
@@ -92,5 +100,9 @@ export interface FeedbackIntegrationScore {
   projectStakeholderResponses: number;
   scoreCalculationMethod: string;
   scoreCalculationNote?: string;
+  visibilityStatus?: 'HIDDEN' | 'READY_TO_PUBLISH' | 'PUBLISHED' | string;
+  publishedAt?: string | null;
+  publishedByUserId?: number | null;
+  publishNote?: string | null;
   summarizedAt: string;
 }

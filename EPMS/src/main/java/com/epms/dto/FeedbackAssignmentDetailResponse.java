@@ -23,6 +23,8 @@ public class FeedbackAssignmentDetailResponse {
     LocalDateTime submittedAt;
     Boolean canSubmit;
     String lifecycleMessage;
+    Boolean autoSubmitCompletedDraftsOnClose;
+    String autoSubmitNotice;
     String comments;
     Integer totalQuestionCount;
     Integer requiredQuestionCount;

@@ -15,6 +15,7 @@ import com.epms.entity.User;
 import com.epms.entity.enums.AssignmentStatus;
 import com.epms.entity.enums.FeedbackCampaignStatus;
 import com.epms.entity.enums.FeedbackRelationshipType;
+import com.epms.entity.enums.FeedbackSummaryVisibilityStatus;
 import com.epms.entity.enums.ResponseStatus;
 import com.epms.exception.BusinessValidationException;
 import com.epms.exception.ResourceNotFoundException;
@@ -25,6 +26,7 @@ import com.epms.repository.FeedbackRequestRepository;
 import com.epms.repository.FeedbackResponseRepository;
 import com.epms.repository.FeedbackSummaryRepository;
 import com.epms.repository.UserRepository;
+import com.epms.service.FeedbackOperationalService;
 import com.epms.service.FeedbackSummaryService;
 import com.epms.util.FeedbackScoreUtil;
 import lombok.RequiredArgsConstructor;
@@ -48,7 +50,6 @@ import java.util.stream.Collectors;
 public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
 
     private static final String SCORE_METHOD = "SUBMITTED_RESPONSE_AVERAGE";
-
     private final FeedbackCampaignRepository feedbackCampaignRepository;
     private final FeedbackRequestRepository feedbackRequestRepository;
     private final FeedbackEvaluatorAssignmentRepository feedbackEvaluatorAssignmentRepository;
@@ -56,6 +57,7 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
     private final FeedbackSummaryRepository feedbackSummaryRepository;
     private final UserRepository userRepository;
     private final EmployeeRepository employeeRepository;
+    private final FeedbackOperationalService feedbackOperationalService;
 
     @Override
     @Transactional
@@ -70,7 +72,94 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
     public FeedbackCampaignSummaryResponse recalculateCampaignSummary(Long campaignId) {
         FeedbackCampaign campaign = getCampaign(campaignId);
         List<FeedbackSummary> summaries = refreshCampaignSummary(campaign);
+        feedbackOperationalService.audit(
+                (Long) null,
+                FeedbackOperationalService.SUMMARY_CALCULATED,
+                FeedbackOperationalService.ENTITY_CAMPAIGN,
+                campaignId,
+                null,
+                "summaries=" + summaries.size(),
+                "360 feedback summary recalculated"
+        );
         return buildCampaignSummary(campaign, summaries);
+    }
+
+    @Override
+    @Transactional
+    public FeedbackCampaignSummaryResponse publishCampaignSummary(Long campaignId, Long userId) {
+        FeedbackCampaign campaign = getCampaign(campaignId);
+        validatePublishableCampaign(campaign);
+
+        List<FeedbackSummary> summaries = refreshCampaignSummary(campaign);
+        List<FeedbackSummary> publishableSummaries = summaries.stream()
+                .filter(summary -> safeLong(summary.getTotalResponses()) > 0)
+                .toList();
+
+        if (publishableSummaries.isEmpty()) {
+            throw new BusinessValidationException("Cannot publish feedback summary with zero submitted responses.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (FeedbackSummary summary : publishableSummaries) {
+            summary.setVisibilityStatus(FeedbackSummaryVisibilityStatus.PUBLISHED);
+            summary.setPublishedAt(now);
+            summary.setPublishedByUserId(userId);
+            summary.setPublishNote("Published by HR/Admin after campaign close.");
+            feedbackSummaryRepository.save(summary);
+        }
+
+        feedbackOperationalService.audit(
+                userId,
+                FeedbackOperationalService.SUMMARY_PUBLISHED,
+                FeedbackOperationalService.ENTITY_CAMPAIGN,
+                campaignId,
+                null,
+                "publishedSummaries=" + publishableSummaries.size(),
+                "360 feedback summaries published"
+        );
+        feedbackOperationalService.notifySummaryPublished(campaign, publishableSummaries);
+
+        return buildCampaignSummary(campaign, feedbackSummaryRepository.findByCampaignIdOrderByTargetEmployeeIdAsc(campaignId));
+    }
+
+    @Override
+    @Transactional
+    public FeedbackCampaignSummaryResponse unpublishCampaignSummary(Long campaignId, Long userId) {
+        FeedbackCampaign campaign = getCampaign(campaignId);
+        if (campaign.getStatus() != FeedbackCampaignStatus.CLOSED) {
+            throw new BusinessValidationException("Cannot unpublish feedback summary until the campaign is CLOSED.");
+        }
+
+        List<FeedbackSummary> summaries = feedbackSummaryRepository.findByCampaignIdOrderByTargetEmployeeIdAsc(campaignId);
+        if (summaries.isEmpty()) {
+            summaries = refreshCampaignSummary(campaign);
+        }
+
+        long previouslyPublished = summaries.stream()
+                .filter(summary -> summary.getVisibilityStatus() == FeedbackSummaryVisibilityStatus.PUBLISHED)
+                .count();
+
+        for (FeedbackSummary summary : summaries) {
+            summary.setVisibilityStatus(safeLong(summary.getTotalResponses()) > 0
+                    ? FeedbackSummaryVisibilityStatus.READY_TO_PUBLISH
+                    : FeedbackSummaryVisibilityStatus.HIDDEN);
+            summary.setPublishedAt(null);
+            summary.setPublishedByUserId(null);
+            summary.setPublishNote("Unpublished by HR/Admin.");
+            feedbackSummaryRepository.save(summary);
+        }
+
+        feedbackOperationalService.audit(
+                userId,
+                FeedbackOperationalService.SUMMARY_UNPUBLISHED,
+                FeedbackOperationalService.ENTITY_CAMPAIGN,
+                campaignId,
+                "previouslyPublished=" + previouslyPublished,
+                "visibilityStatus=READY_TO_PUBLISH",
+                "360 feedback summaries unpublished"
+        );
+
+        return buildCampaignSummary(campaign, feedbackSummaryRepository.findByCampaignIdOrderByTargetEmployeeIdAsc(campaignId));
     }
 
     @Override
@@ -82,7 +171,7 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
 
         List<FeedbackSummary> results = feedbackSummaryRepository.findByTargetEmployeeIdOrderByCampaignEndDateDesc(employeeId)
                 .stream()
-                .filter(summary -> summary.getCampaign().getStatus() == FeedbackCampaignStatus.CLOSED)
+                .filter(this::isPublishedClosedSummary)
                 .toList();
 
         String employeeName = loadEmployeeNames(List.of(employeeId)).getOrDefault(employeeId, "Employee #" + employeeId);
@@ -116,7 +205,7 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
         refreshClosedCampaignSummariesForEmployees(employeeIds);
         List<FeedbackSummary> summaries = feedbackSummaryRepository.findByTargetEmployeeIdInOrderByCampaignEndDateDesc(employeeIds)
                 .stream()
-                .filter(summary -> summary.getCampaign().getStatus() == FeedbackCampaignStatus.CLOSED)
+                .filter(this::isPublishedClosedSummary)
                 .toList();
 
         return FeedbackTeamSummaryResponse.builder()
@@ -183,6 +272,10 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
                 .pendingEvaluatorCount(pendingCount)
                 .completionRate(completionRate)
                 .insufficientFeedbackCount(insufficientCount)
+                .visibilityStatus(campaignVisibilityStatus(summaries).name())
+                .publishedAt(campaignPublishedAt(summaries))
+                .publishedByUserId(campaignPublishedByUserId(summaries))
+                .publishNote(campaignPublishNote(summaries))
                 .summarizedAt(summarizedAt)
                 .items(items)
                 .build();
@@ -312,6 +405,90 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
         summary.setSelfAverageScore(averageScoreByRelationship(responses, FeedbackRelationshipType.SELF));
         summary.setProjectStakeholderAverageScore(averageScoreByRelationship(responses, FeedbackRelationshipType.PROJECT_STAKEHOLDER));
         summary.setSummarizedAt(summarizedAt);
+        applyVisibilityStatusAfterRecalculation(summary, campaign, submittedCount);
+    }
+
+
+    private void validatePublishableCampaign(FeedbackCampaign campaign) {
+        if (campaign.getStatus() == FeedbackCampaignStatus.ACTIVE) {
+            throw new BusinessValidationException("Cannot publish active campaign summary. Close the campaign before publishing.");
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.DRAFT) {
+            throw new BusinessValidationException("Cannot publish draft campaign summary. Close the campaign before publishing.");
+        }
+        if (campaign.getStatus() == FeedbackCampaignStatus.CANCELLED) {
+            throw new BusinessValidationException("Cannot publish cancelled campaign summary.");
+        }
+        if (campaign.getStatus() != FeedbackCampaignStatus.CLOSED) {
+            throw new BusinessValidationException("Cannot publish feedback summary until the campaign is CLOSED.");
+        }
+    }
+
+    private void applyVisibilityStatusAfterRecalculation(
+            FeedbackSummary summary,
+            FeedbackCampaign campaign,
+            long submittedCount
+    ) {
+        if (campaign.getStatus() == FeedbackCampaignStatus.CLOSED && submittedCount > 0) {
+            if (summary.getVisibilityStatus() == FeedbackSummaryVisibilityStatus.PUBLISHED) {
+                return;
+            }
+            summary.setVisibilityStatus(FeedbackSummaryVisibilityStatus.READY_TO_PUBLISH);
+            summary.setPublishedAt(null);
+            summary.setPublishedByUserId(null);
+            summary.setPublishNote(null);
+            return;
+        }
+
+        summary.setVisibilityStatus(FeedbackSummaryVisibilityStatus.HIDDEN);
+        summary.setPublishedAt(null);
+        summary.setPublishedByUserId(null);
+        summary.setPublishNote(null);
+    }
+
+    private boolean isPublishedClosedSummary(FeedbackSummary summary) {
+        return summary.getCampaign().getStatus() == FeedbackCampaignStatus.CLOSED
+                && summary.getVisibilityStatus() == FeedbackSummaryVisibilityStatus.PUBLISHED;
+    }
+
+    private FeedbackSummaryVisibilityStatus campaignVisibilityStatus(List<FeedbackSummary> summaries) {
+        if (summaries.stream().anyMatch(summary -> summary.getVisibilityStatus() == FeedbackSummaryVisibilityStatus.PUBLISHED)) {
+            return FeedbackSummaryVisibilityStatus.PUBLISHED;
+        }
+        if (summaries.stream().anyMatch(summary -> summary.getVisibilityStatus() == FeedbackSummaryVisibilityStatus.READY_TO_PUBLISH)) {
+            return FeedbackSummaryVisibilityStatus.READY_TO_PUBLISH;
+        }
+        return FeedbackSummaryVisibilityStatus.HIDDEN;
+    }
+
+    private LocalDateTime campaignPublishedAt(List<FeedbackSummary> summaries) {
+        return summaries.stream()
+                .map(FeedbackSummary::getPublishedAt)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+    }
+
+    private Long campaignPublishedByUserId(List<FeedbackSummary> summaries) {
+        return summaries.stream()
+                .filter(summary -> summary.getPublishedAt() != null)
+                .max(Comparator.comparing(FeedbackSummary::getPublishedAt))
+                .map(FeedbackSummary::getPublishedByUserId)
+                .orElse(null);
+    }
+
+    private String campaignPublishNote(List<FeedbackSummary> summaries) {
+        return summaries.stream()
+                .filter(summary -> summary.getPublishedAt() != null)
+                .max(Comparator.comparing(FeedbackSummary::getPublishedAt))
+                .map(FeedbackSummary::getPublishNote)
+                .orElse(null);
+    }
+
+    private String visibilityStatusName(FeedbackSummary summary) {
+        return summary.getVisibilityStatus() == null
+                ? FeedbackSummaryVisibilityStatus.HIDDEN.name()
+                : summary.getVisibilityStatus().name();
     }
 
     private String buildScoreCalculationNote(long assignedCount, long submittedCount, boolean insufficientFeedback) {
@@ -404,6 +581,10 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
                         .projectStakeholderAverageScore(summary.getProjectStakeholderAverageScore())
                         .scoreCalculationMethod(summary.getScoreCalculationMethod())
                         .scoreCalculationNote(summary.getScoreCalculationNote())
+                        .visibilityStatus(visibilityStatusName(summary))
+                        .publishedAt(summary.getPublishedAt())
+                        .publishedByUserId(summary.getPublishedByUserId())
+                        .publishNote(summary.getPublishNote())
                         .summarizedAt(summary.getSummarizedAt())
                         .build())
                 .toList();
@@ -437,6 +618,10 @@ public class FeedbackSummaryServiceImpl implements FeedbackSummaryService {
                 .projectStakeholderResponses(safeLong(summary.getProjectStakeholderResponses()))
                 .scoreCalculationMethod(summary.getScoreCalculationMethod())
                 .scoreCalculationNote(summary.getScoreCalculationNote())
+                .visibilityStatus(visibilityStatusName(summary))
+                .publishedAt(summary.getPublishedAt())
+                .publishedByUserId(summary.getPublishedByUserId())
+                .publishNote(summary.getPublishNote())
                 .summarizedAt(summary.getSummarizedAt())
                 .build();
     }

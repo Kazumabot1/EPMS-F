@@ -71,4 +71,14 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     List<User> findByManagerIdAndActiveTrue(Integer managerId);
     List<User> findByDepartmentIdAndActiveTrue(Integer departmentId);
+
+    @Query(value = """
+            SELECT DISTINCT u.*
+            FROM users u
+            JOIN user_roles ur ON ur.user_id = u.id
+            JOIN roles r ON r.id = ur.role_id
+            WHERE (u.active IS NULL OR u.active = true)
+              AND UPPER(REPLACE(REPLACE(REPLACE(REPLACE(r.name, 'ROLE_', ''), ' ', '_'), '-', '_'), '/', '_')) IN :roleNames
+            """, nativeQuery = true)
+    List<User> findActiveUsersByNormalizedRoleNames(@Param("roleNames") List<String> roleNames);
 }

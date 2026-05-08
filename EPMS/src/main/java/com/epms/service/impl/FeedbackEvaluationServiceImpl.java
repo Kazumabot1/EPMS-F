@@ -25,6 +25,7 @@ import com.epms.repository.TeamRepository;
 import com.epms.repository.UserRepository;
 import com.epms.repository.projection.PendingEvaluatorProjection;
 import com.epms.service.FeedbackEvaluationService;
+import com.epms.service.FeedbackOperationalService;
 import com.epms.service.ProjectPeerDirectory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -53,10 +54,11 @@ public class FeedbackEvaluationServiceImpl implements FeedbackEvaluationService 
     private final TeamMemberRepository teamMemberRepository;
     private final TeamRepository teamRepository;
     private final ProjectPeerDirectory projectPeerDirectory;
+    private final FeedbackOperationalService feedbackOperationalService;
 
     @Override
     @Transactional
-    public FeedbackAssignmentGenerationResponse generateAssignments(Long campaignId, EvaluatorConfigDTO config) {
+    public FeedbackAssignmentGenerationResponse generateAssignments(Long campaignId, EvaluatorConfigDTO config, Long actorUserId) {
         validateConfig(config);
 
         FeedbackCampaign campaign = getCampaignOrThrow(campaignId);
@@ -198,6 +200,15 @@ public class FeedbackEvaluationServiceImpl implements FeedbackEvaluationService 
         }
 
         assignmentRepository.saveAll(assignmentsToSave);
+        feedbackOperationalService.audit(
+                actorUserId,
+                FeedbackOperationalService.ASSIGNMENTS_GENERATED,
+                FeedbackOperationalService.ENTITY_CAMPAIGN,
+                campaignId,
+                existingAssignments.isEmpty() ? null : "replacedAssignments=" + existingAssignments.size(),
+                "generatedAssignments=" + assignmentsToSave.size() + ", targets=" + requests.size(),
+                "360 feedback evaluator assignments generated"
+        );
         List<FeedbackAssignmentDetailItemResponse> details = buildAssignmentDetails(campaignId);
 
         return FeedbackAssignmentGenerationResponse.builder()
@@ -220,7 +231,7 @@ public class FeedbackEvaluationServiceImpl implements FeedbackEvaluationService 
 
     @Override
     @Transactional
-    public FeedbackAssignmentGenerationResponse addManualAssignment(Long campaignId, FeedbackManualAssignmentRequest request) {
+    public FeedbackAssignmentGenerationResponse addManualAssignment(Long campaignId, FeedbackManualAssignmentRequest request, Long actorUserId) {
         FeedbackCampaign campaign = getCampaignOrThrow(campaignId);
         ensureDraftCampaign(campaign, "Manual evaluator changes are allowed only while the campaign is DRAFT.");
 
@@ -244,7 +255,18 @@ public class FeedbackEvaluationServiceImpl implements FeedbackEvaluationService 
         if (request.getAnonymous() != null) {
             assignment.setIsAnonymous(request.getAnonymous());
         }
-        assignmentRepository.save(assignment);
+        FeedbackEvaluatorAssignment savedAssignment = assignmentRepository.save(assignment);
+        feedbackOperationalService.audit(
+                actorUserId,
+                FeedbackOperationalService.ASSIGNMENT_MANUAL_ADDED,
+                FeedbackOperationalService.ENTITY_ASSIGNMENT,
+                savedAssignment.getId(),
+                null,
+                "campaignId=" + campaignId + ",targetEmployeeId=" + request.getTargetEmployeeId()
+                        + ",evaluatorEmployeeId=" + request.getEvaluatorEmployeeId()
+                        + ",relationshipType=" + request.getRelationshipType(),
+                "Manual 360 feedback evaluator assignment added"
+        );
 
         return buildAssignmentResponse(campaignId, null, List.of(
                 "Manual evaluator #" + request.getEvaluatorEmployeeId()
@@ -254,7 +276,7 @@ public class FeedbackEvaluationServiceImpl implements FeedbackEvaluationService 
 
     @Override
     @Transactional
-    public FeedbackAssignmentGenerationResponse removeAssignment(Long campaignId, Long assignmentId) {
+    public FeedbackAssignmentGenerationResponse removeAssignment(Long campaignId, Long assignmentId, Long actorUserId) {
         FeedbackCampaign campaign = getCampaignOrThrow(campaignId);
         ensureDraftCampaign(campaign, "Evaluator assignments can be removed only while the campaign is DRAFT.");
 
@@ -272,6 +294,15 @@ public class FeedbackEvaluationServiceImpl implements FeedbackEvaluationService 
         Long targetEmployeeId = assignment.getFeedbackRequest().getTargetEmployeeId();
         Long evaluatorEmployeeId = assignment.getEvaluatorEmployeeId();
         assignmentRepository.delete(assignment);
+        feedbackOperationalService.audit(
+                actorUserId,
+                FeedbackOperationalService.ASSIGNMENT_REMOVED,
+                FeedbackOperationalService.ENTITY_ASSIGNMENT,
+                assignmentId,
+                "campaignId=" + campaignId + ",targetEmployeeId=" + targetEmployeeId + ",evaluatorEmployeeId=" + evaluatorEmployeeId,
+                null,
+                "360 feedback evaluator assignment removed"
+        );
 
         return buildAssignmentResponse(campaignId, null, List.of(
                 "Evaluator #" + evaluatorEmployeeId + " removed from target employee #" + targetEmployeeId + "."

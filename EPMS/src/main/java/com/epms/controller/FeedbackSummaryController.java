@@ -48,6 +48,28 @@ public class FeedbackSummaryController {
         ));
     }
 
+    @PostMapping("/campaigns/{campaignId}/summary/publish")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignSummaryResponse>> publishCampaignSummary(
+            @PathVariable Long campaignId
+    ) {
+        ensureHrOrAdmin();
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Feedback campaign summary published successfully",
+                feedbackSummaryService.publishCampaignSummary(campaignId, SecurityUtils.currentUserId().longValue())
+        ));
+    }
+
+    @PostMapping("/campaigns/{campaignId}/summary/unpublish")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignSummaryResponse>> unpublishCampaignSummary(
+            @PathVariable Long campaignId
+    ) {
+        ensureHrOrAdmin();
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Feedback campaign summary unpublished successfully",
+                feedbackSummaryService.unpublishCampaignSummary(campaignId, SecurityUtils.currentUserId().longValue())
+        ));
+    }
+
     @GetMapping("/integration/scores")
     public ResponseEntity<GenericApiResponse<List<FeedbackIntegrationScoreResponse>>> getIntegrationScores(
             @RequestParam Long campaignId

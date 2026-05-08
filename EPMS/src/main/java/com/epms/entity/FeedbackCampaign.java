@@ -1,5 +1,6 @@
 package com.epms.entity;
 
+import com.epms.entity.enums.FeedbackCampaignEarlyCloseStatus;
 import com.epms.entity.enums.FeedbackCampaignRound;
 import com.epms.entity.enums.FeedbackCampaignStatus;
 import jakarta.persistence.*;
@@ -55,6 +56,43 @@ public class FeedbackCampaign {
     @Column(name = "form_id", nullable = false)
     private Long formId;
 
+    @Column(name = "auto_submit_completed_drafts_on_close", nullable = false)
+    private Boolean autoSubmitCompletedDraftsOnClose = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "early_close_request_status", nullable = false)
+    private FeedbackCampaignEarlyCloseStatus earlyCloseRequestStatus = FeedbackCampaignEarlyCloseStatus.NONE;
+
+    @Column(name = "early_close_requested_at")
+    private LocalDateTime earlyCloseRequestedAt;
+
+    @Column(name = "early_close_requested_by_user_id")
+    private Long earlyCloseRequestedByUserId;
+
+    @Column(name = "early_close_request_reason", columnDefinition = "TEXT")
+    private String earlyCloseRequestReason;
+
+    @Column(name = "early_close_reviewed_at")
+    private LocalDateTime earlyCloseReviewedAt;
+
+    @Column(name = "early_close_reviewed_by_user_id")
+    private Long earlyCloseReviewedByUserId;
+
+    @Column(name = "early_close_review_reason", columnDefinition = "TEXT")
+    private String earlyCloseReviewReason;
+
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
+    @Column(name = "closed_by_user_id")
+    private Long closedByUserId;
+
+    @Column(name = "close_reason", columnDefinition = "TEXT")
+    private String closeReason;
+
+    @Column(name = "closed_early", nullable = false)
+    private Boolean closedEarly = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private FeedbackCampaignStatus status;
@@ -100,6 +138,15 @@ public class FeedbackCampaign {
         }
         if (this.reviewRound == null) {
             this.reviewRound = FeedbackCampaignRound.ANNUAL;
+        }
+        if (this.autoSubmitCompletedDraftsOnClose == null) {
+            this.autoSubmitCompletedDraftsOnClose = false;
+        }
+        if (this.earlyCloseRequestStatus == null) {
+            this.earlyCloseRequestStatus = FeedbackCampaignEarlyCloseStatus.NONE;
+        }
+        if (this.closedEarly == null) {
+            this.closedEarly = false;
         }
     }
 

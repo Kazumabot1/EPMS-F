@@ -22,6 +22,8 @@ export interface FeedbackEvaluatorTask {
   status: FeedbackAssignmentStatus;
   canSubmit: boolean;
   lifecycleMessage: string | null;
+  autoSubmitCompletedDraftsOnClose?: boolean;
+  autoSubmitNotice?: string | null;
   dueAt: string | null;
   submittedAt: string | null;
 }
@@ -57,6 +59,8 @@ export interface FeedbackAssignmentDetail {
   status: FeedbackAssignmentStatus;
   canSubmit: boolean;
   lifecycleMessage: string | null;
+  autoSubmitCompletedDraftsOnClose?: boolean;
+  autoSubmitNotice?: string | null;
   dueAt: string | null;
   submittedAt: string | null;
   comments: string | null;

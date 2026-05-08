@@ -105,6 +105,17 @@ export interface FeedbackSubmissionStatus {
   dueAt: string;
 }
 
+export interface FeedbackReceivedQuestionItem {
+  questionId: number;
+  questionText: string;
+  questionOrder?: number | null;
+  sectionTitle?: string | null;
+  sectionOrder?: number | null;
+  required?: boolean | null;
+  ratingValue?: number | null;
+  comment?: string | null;
+}
+
 export interface FeedbackReceivedItem {
   responseId: number;
   requestId: number;
@@ -126,6 +137,7 @@ export interface FeedbackReceivedItem {
   evaluatorSourceLabel?: string | null;
   identityProtectionReason?: string | null;
   visibilityReason?: string | null;
+  questionItems?: FeedbackReceivedQuestionItem[];
 }
 
 export interface FeedbackSummary {

@@ -22,6 +22,10 @@ public class FeedbackCampaignSummaryResponse {
     Long pendingEvaluatorCount;
     Double completionRate;
     Long insufficientFeedbackCount;
+    String visibilityStatus;
+    LocalDateTime publishedAt;
+    Long publishedByUserId;
+    String publishNote;
     LocalDateTime summarizedAt;
     List<FeedbackResultItemResponse> items;
 }

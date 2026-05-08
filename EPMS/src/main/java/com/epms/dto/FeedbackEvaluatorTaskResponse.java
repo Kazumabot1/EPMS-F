@@ -20,6 +20,8 @@ public class FeedbackEvaluatorTaskResponse {
     String status;
     Boolean canSubmit;
     String lifecycleMessage;
+    Boolean autoSubmitCompletedDraftsOnClose;
+    String autoSubmitNotice;
     LocalDateTime dueAt;
     LocalDateTime submittedAt;
 }

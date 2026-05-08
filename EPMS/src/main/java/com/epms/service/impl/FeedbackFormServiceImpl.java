@@ -8,7 +8,7 @@ import com.epms.exception.BusinessValidationException;
 import com.epms.exception.ResourceNotFoundException;
 import com.epms.repository.FeedbackFormRepository;
 import com.epms.repository.RatingScaleRepository;
-import com.epms.service.AuditLogService;
+import com.epms.service.FeedbackOperationalService;
 import com.epms.service.FeedbackFormService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +26,7 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
 
     private final RatingScaleRepository ratingScaleRepository;
     private final FeedbackFormRepository feedbackFormRepository;
-    private final AuditLogService auditLogService;
+    private final FeedbackOperationalService feedbackOperationalService;
 
     @Override
     @Transactional
@@ -44,11 +44,11 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
             savedForm.setRootFormId(savedForm.getId());
             savedForm = feedbackFormRepository.save(savedForm);
         }
-        auditLogService.log(
-                form.getCreatedByUserId() != null ? form.getCreatedByUserId().intValue() : null,
-                "CREATE_FORM",
-                "FEEDBACK_FORM",
-                savedForm.getId().intValue(),
+        feedbackOperationalService.audit(
+                form.getCreatedByUserId(),
+                FeedbackOperationalService.FORM_CREATED,
+                FeedbackOperationalService.ENTITY_FORM,
+                savedForm.getId(),
                 null,
                 "name=" + savedForm.getFormName() + ",version=" + savedForm.getVersionNumber(),
                 "Feedback form created"
@@ -89,11 +89,11 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
             existing.getSections().add(section);
         });
         FeedbackForm saved = feedbackFormRepository.save(existing);
-        auditLogService.log(
-                updatedForm.getCreatedByUserId() != null ? updatedForm.getCreatedByUserId().intValue() : null,
-                "UPDATE_CRITERIA",
-                "FEEDBACK_FORM",
-                saved.getId().intValue(),
+        feedbackOperationalService.audit(
+                updatedForm.getCreatedByUserId(),
+                FeedbackOperationalService.FORM_UPDATED,
+                FeedbackOperationalService.ENTITY_FORM,
+                saved.getId(),
                 null,
                 "criteria updated",
                 "Feedback criteria rows updated"
@@ -121,11 +121,11 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
             s.getQuestions().forEach(q -> q.setSection(s));
         });
         FeedbackForm savedVersion = feedbackFormRepository.save(newForm);
-        auditLogService.log(
-                newForm.getCreatedByUserId() != null ? newForm.getCreatedByUserId().intValue() : null,
-                "CREATE_VERSION",
-                "FEEDBACK_FORM",
-                savedVersion.getId().intValue(),
+        feedbackOperationalService.audit(
+                newForm.getCreatedByUserId(),
+                FeedbackOperationalService.FORM_UPDATED,
+                FeedbackOperationalService.ENTITY_FORM,
+                savedVersion.getId(),
                 "baseFormId=" + baseForm.getId() + ",version=" + baseForm.getVersionNumber(),
                 "newVersion=" + savedVersion.getVersionNumber(),
                 "New feedback form version created"
@@ -199,11 +199,11 @@ public class FeedbackFormServiceImpl implements FeedbackFormService {
         form.setStatus(newStatus);
         FeedbackForm saved = feedbackFormRepository.save(form);
 
-        auditLogService.log(
-                form.getCreatedByUserId() != null ? form.getCreatedByUserId().intValue() : null,
-                "CHANGE_FORM_STATUS",
-                "FEEDBACK_FORM",
-                saved.getId().intValue(),
+        feedbackOperationalService.audit(
+                form.getCreatedByUserId(),
+                FeedbackOperationalService.FORM_UPDATED,
+                FeedbackOperationalService.ENTITY_FORM,
+                saved.getId(),
                 "status=" + oldStatus.name(),
                 "status=" + newStatus.name(),
                 "Feedback form status changed from " + oldStatus.name() + " to " + newStatus.name()

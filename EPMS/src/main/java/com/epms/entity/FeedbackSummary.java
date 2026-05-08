@@ -1,6 +1,7 @@
 package com.epms.entity;
 
 import jakarta.persistence.*;
+import com.epms.entity.enums.FeedbackSummaryVisibilityStatus;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -80,6 +81,19 @@ public class FeedbackSummary {
     @Column(name = "score_calculation_note", length = 500)
     private String scoreCalculationNote;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visibility_status", nullable = false, length = 30)
+    private FeedbackSummaryVisibilityStatus visibilityStatus;
+
+    @Column(name = "published_at")
+    private LocalDateTime publishedAt;
+
+    @Column(name = "published_by_user_id")
+    private Long publishedByUserId;
+
+    @Column(name = "publish_note", columnDefinition = "TEXT")
+    private String publishNote;
+
     @Column(name = "manager_average_score")
     private Double managerAverageScore;
 
@@ -133,6 +147,7 @@ public class FeedbackSummary {
         if (scoreCalculationMethod == null || scoreCalculationMethod.isBlank()) {
             scoreCalculationMethod = "SUBMITTED_RESPONSE_AVERAGE";
         }
+        if (visibilityStatus == null) visibilityStatus = FeedbackSummaryVisibilityStatus.HIDDEN;
         if (summarizedAt == null) summarizedAt = LocalDateTime.now();
     }
 }

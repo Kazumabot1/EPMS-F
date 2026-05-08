@@ -8,9 +8,9 @@ import com.epms.repository.projection.PendingEvaluatorProjection;
 import java.util.List;
 
 public interface FeedbackEvaluationService {
-    FeedbackAssignmentGenerationResponse generateAssignments(Long campaignId, EvaluatorConfigDTO config);
+    FeedbackAssignmentGenerationResponse generateAssignments(Long campaignId, EvaluatorConfigDTO config, Long actorUserId);
     FeedbackAssignmentGenerationResponse getAssignmentPreview(Long campaignId);
-    FeedbackAssignmentGenerationResponse addManualAssignment(Long campaignId, FeedbackManualAssignmentRequest request);
-    FeedbackAssignmentGenerationResponse removeAssignment(Long campaignId, Long assignmentId);
+    FeedbackAssignmentGenerationResponse addManualAssignment(Long campaignId, FeedbackManualAssignmentRequest request, Long actorUserId);
+    FeedbackAssignmentGenerationResponse removeAssignment(Long campaignId, Long assignmentId, Long actorUserId);
     List<PendingEvaluatorProjection> getPendingEvaluators(Long requestId);
 }

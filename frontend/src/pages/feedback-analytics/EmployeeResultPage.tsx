@@ -3,11 +3,13 @@ import './feedback-analytics.css';
 
 const formatScore = (value?: number | null) => (value == null ? '—' : `${value.toFixed(1)}%`);
 
-const formatDateTime = (value: string) =>
-    new Intl.DateTimeFormat('en-US', {
+const formatDateTime = (value?: string | null) => {
+    if (!value) return '—';
+    return new Intl.DateTimeFormat('en-US', {
         dateStyle: 'medium',
         timeStyle: 'short',
     }).format(new Date(value));
+};
 
 const EmployeeResultPage = () => {
     const resultQuery = useMyFeedbackResult();
@@ -17,7 +19,7 @@ const EmployeeResultPage = () => {
         <div className="feedback-results-stack">
             <section className="feedback-results-hero">
                 <h1>My feedback results</h1>
-                <p>Closed-campaign results only. All evaluator identities are removed and only aggregate values are shown.</p>
+                <p>Published closed-campaign results only. All evaluator identities are removed and only aggregate values are shown.</p>
             </section>
 
             {resultQuery.isLoading ? (
@@ -25,7 +27,7 @@ const EmployeeResultPage = () => {
             ) : resultQuery.error instanceof Error ? (
                 <div className="feedback-results-banner error">{resultQuery.error.message}</div>
             ) : !result || result.results.length === 0 ? (
-                <div className="feedback-results-empty">No closed-campaign feedback results are available yet.</div>
+                <div className="feedback-results-empty">Your feedback results are not published yet.</div>
             ) : (
                 <section className="feedback-results-card">
                     <div className="feedback-results-card-header">
@@ -62,7 +64,12 @@ const EmployeeResultPage = () => {
                                     <td>{item.managerResponses}</td>
                                     <td>{item.peerResponses}</td>
                                     <td>{item.subordinateResponses}</td>
-                                    <td>{formatDateTime(item.summarizedAt)}</td>
+                                    <td>
+                                        <div className="feedback-results-table-title">
+                                            <strong>{formatDateTime(item.summarizedAt)}</strong>
+                                            <span>{item.visibilityStatus === 'PUBLISHED' ? 'Published' : 'Hidden'}</span>
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
                             </tbody>

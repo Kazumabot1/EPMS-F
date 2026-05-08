@@ -79,6 +79,8 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
                             .status(assignment.getStatus().name())
                             .canSubmit(canSubmit(assignment, response))
                             .lifecycleMessage(lifecycleMessage(assignment, response))
+                            .autoSubmitCompletedDraftsOnClose(isAutoSubmitCompletedDraftsOnClose(assignment))
+                            .autoSubmitNotice(autoSubmitNotice(assignment))
                             .dueAt(resolveEffectiveDeadline(assignment))
                             .submittedAt(response != null ? response.getSubmittedAt() : null)
                             .build();
@@ -163,6 +165,8 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
                 .submittedAt(response != null ? response.getSubmittedAt() : null)
                 .canSubmit(canSubmit(assignment, response))
                 .lifecycleMessage(lifecycleMessage(assignment, response))
+                .autoSubmitCompletedDraftsOnClose(isAutoSubmitCompletedDraftsOnClose(assignment))
+                .autoSubmitNotice(autoSubmitNotice(assignment))
                 .comments(response != null ? response.getComments() : null)
                 .totalQuestionCount(totalQuestionCount)
                 .requiredQuestionCount(requiredQuestionCount)
@@ -205,6 +209,20 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
                 .build();
     }
 
+
+    private boolean isAutoSubmitCompletedDraftsOnClose(FeedbackEvaluatorAssignment assignment) {
+        return assignment != null
+                && assignment.getFeedbackRequest() != null
+                && assignment.getFeedbackRequest().getCampaign() != null
+                && Boolean.TRUE.equals(assignment.getFeedbackRequest().getCampaign().getAutoSubmitCompletedDraftsOnClose());
+    }
+
+    private String autoSubmitNotice(FeedbackEvaluatorAssignment assignment) {
+        if (!isAutoSubmitCompletedDraftsOnClose(assignment)) {
+            return null;
+        }
+        return "This campaign auto-submits completed drafts when HR closes the campaign. Only drafts with all required ratings answered will be submitted automatically.";
+    }
 
     private boolean isVisibleInEvaluatorWorkspace(FeedbackEvaluatorAssignment assignment) {
         FeedbackCampaignStatus campaignStatus = assignment.getFeedbackRequest().getCampaign().getStatus();

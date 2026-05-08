@@ -17,13 +17,29 @@ type FormValues = {
   }>;
 };
 
+type LayoutMode = 'comfortable' | 'compact';
+type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
 const RATING_OPTIONS = [
-  { value: 1, label: 'Unsatisfactory', helper: 'Does not meet expectations' },
-  { value: 2, label: 'Needs improvement', helper: 'Needs clear improvement' },
-  { value: 3, label: 'Meet requirement', helper: 'Meets expected standard' },
-  { value: 4, label: 'Good', helper: 'Consistently good' },
-  { value: 5, label: 'Outstanding', helper: 'Excellent performance' },
+  { value: 1, label: 'Unsatisfactory' },
+  { value: 2, label: 'Needs improvement' },
+  { value: 3, label: 'Meet requirement' },
+  { value: 4, label: 'Good' },
+  { value: 5, label: 'Outstanding' },
 ] as const;
+
+const RATING_GUIDE_STORAGE_KEY = 'feedback-form-rating-guide-seen';
+const LAYOUT_STORAGE_KEY = 'feedback-form-layout-mode';
+
+const getInitialLayoutMode = (): LayoutMode => {
+  if (typeof window === 'undefined') return 'comfortable';
+  return window.localStorage.getItem(LAYOUT_STORAGE_KEY) === 'compact' ? 'compact' : 'comfortable';
+};
+
+const getInitialRatingGuideCollapsed = () => {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(RATING_GUIDE_STORAGE_KEY) === 'true';
+};
 
 const formatDateTime = (value: string | null) => {
   if (!value) {
@@ -39,6 +55,14 @@ const formatDateTime = (value: string | null) => {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
+};
+
+const formatTimeOnly = (value: Date | null) => {
+  if (!value) return 'Not saved in this session';
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(value);
 };
 
 const relationshipLabel = (type: FeedbackRelationshipType) => {
@@ -73,6 +97,12 @@ const FeedbackFormPage = () => {
   const feedbackHomePath = location.pathname.startsWith('/employee/') ? '/employee/feedback' : '/feedback';
   const parsedAssignmentId = assignmentId ? Number(assignmentId) : null;
   const [draftSavedMessage, setDraftSavedMessage] = useState('');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(getInitialLayoutMode);
+  const [ratingGuideCollapsed, setRatingGuideCollapsed] = useState(getInitialRatingGuideCollapsed);
+  const [showMissingOnly, setShowMissingOnly] = useState(false);
+  const [showCommentExamples, setShowCommentExamples] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
 
   const assignmentQuery = useFeedbackAssignmentDetail(
       parsedAssignmentId != null && Number.isFinite(parsedAssignmentId) ? parsedAssignmentId : null,
@@ -113,6 +143,7 @@ const FeedbackFormPage = () => {
     },
   });
 
+  const watchedComments = watch('comments');
   const watchedResponses = watch('responses');
   const requiredQuestions = useMemo(
       () => flatQuestions.filter((question) => question.required),
@@ -132,8 +163,30 @@ const FeedbackFormPage = () => {
           flatQuestions.filter((_, index) => Boolean(watchedResponses?.[index]?.ratingValue?.trim())).length,
       [flatQuestions, watchedResponses],
   );
+  const missingRequiredQuestionIds = useMemo(
+      () =>
+          flatQuestions
+              .filter((question, index) => question.required && !watchedResponses?.[index]?.ratingValue?.trim())
+              .map((question) => question.id),
+      [flatQuestions, watchedResponses],
+  );
+  const missingRequiredSet = useMemo(() => new Set(missingRequiredQuestionIds), [missingRequiredQuestionIds]);
   const completionPercent = requiredCount === 0 ? 100 : Math.min(100, Math.round((answeredRequiredCount / requiredCount) * 100));
   const hasMissingRequiredRatings = requiredCount > 0 && answeredRequiredCount < requiredCount;
+  const visibleSections = useMemo(
+      () =>
+          assignment
+              ? assignment.sections
+                  .map((section) => ({
+                    ...section,
+                    questions: showMissingOnly
+                        ? section.questions.filter((question) => missingRequiredSet.has(question.id))
+                        : section.questions,
+                  }))
+                  .filter((section) => section.questions.length > 0)
+              : [],
+      [assignment, missingRequiredSet, showMissingOnly],
+  );
 
   useEffect(() => {
     if (!assignment) {
@@ -150,8 +203,19 @@ const FeedbackFormPage = () => {
       })),
     });
     setDraftSavedMessage('');
+    setAutoSaveStatus('idle');
+    setLastSavedAt(null);
+
+    if (typeof window !== 'undefined' && window.localStorage.getItem(RATING_GUIDE_STORAGE_KEY) !== 'true') {
+      window.localStorage.setItem(RATING_GUIDE_STORAGE_KEY, 'true');
+    }
   }, [assignment, flatQuestions, reset]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, layoutMode);
+    }
+  }, [layoutMode]);
 
   useEffect(() => {
     if (!isDirty || !assignment?.canSubmit) {
@@ -183,6 +247,38 @@ const FeedbackFormPage = () => {
       }),
     };
   };
+
+  const hasInvalidDraftRating = (payload: NonNullable<ReturnType<typeof buildDraftPayload>>) =>
+      payload.responses.some((response) => {
+        if (response.ratingValue == null) return false;
+        return !Number.isFinite(response.ratingValue) || response.ratingValue < 1 || response.ratingValue > 5;
+      });
+
+  useEffect(() => {
+    if (!assignment?.canSubmit || !isDirty || submitMutation.isPending || saveDraftMutation.isPending) {
+      return undefined;
+    }
+
+    setAutoSaveStatus('idle');
+    const timeoutId = window.setTimeout(async () => {
+      const payload = buildDraftPayload();
+      if (!payload || hasInvalidDraftRating(payload)) return;
+
+      try {
+        setAutoSaveStatus('saving');
+        await saveDraftMutation.mutateAsync(payload);
+        const currentValues = getValues();
+        reset(currentValues);
+        setLastSavedAt(new Date());
+        setAutoSaveStatus('saved');
+        setDraftSavedMessage('Draft auto-saved. The response can be continued later from My Tasks.');
+      } catch {
+        setAutoSaveStatus('error');
+      }
+    }, 3500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [assignment?.canSubmit, isDirty, watchedComments, watchedResponses, submitMutation.isPending, saveDraftMutation.isPending]);
 
   const validateResponsesForSubmit = (values: FormValues) => {
     clearErrors();
@@ -249,11 +345,14 @@ const FeedbackFormPage = () => {
     }
 
     try {
+      setAutoSaveStatus('saving');
       await saveDraftMutation.mutateAsync(payload);
       reset(getValues());
-      setDraftSavedMessage('Draft saved. You can return later from My tasks.');
+      setLastSavedAt(new Date());
+      setAutoSaveStatus('saved');
+      setDraftSavedMessage('Draft saved successfully. The response can be continued later from My Tasks.');
     } catch {
-      // Error surfaced below.
+      setAutoSaveStatus('error');
     }
   };
 
@@ -266,6 +365,7 @@ const FeedbackFormPage = () => {
     const { hasClientError, responses } = validateResponsesForSubmit(values);
 
     if (hasClientError) {
+      setShowMissingOnly(true);
       return;
     }
 
@@ -288,6 +388,30 @@ const FeedbackFormPage = () => {
     }
   });
 
+  const scrollToQuestion = (questionId: number) => {
+    document.getElementById(`feedback-question-${questionId}`)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
+
+  const getQuestionNavState = (index: number, required: boolean) => {
+    const answered = Boolean(watchedResponses?.[index]?.ratingValue?.trim());
+    if (required && !answered) return 'missing';
+    if (answered) return 'answered';
+    return 'optional';
+  };
+
+  const handleRatingGuideToggle = () => {
+    setRatingGuideCollapsed((current) => {
+      const next = !current;
+      if (typeof window !== 'undefined' && next) {
+        window.localStorage.setItem(RATING_GUIDE_STORAGE_KEY, 'true');
+      }
+      return next;
+    });
+  };
+
   const overallCommentsRegistration = register('comments');
 
   if (assignmentQuery.isLoading) {
@@ -302,16 +426,26 @@ const FeedbackFormPage = () => {
     return <div className="feedback-evaluator-empty">Feedback assignment not found.</div>;
   }
 
-  const saving = saveDraftMutation.isPending || submitMutation.isPending;
+  const draftSaving = saveDraftMutation.isPending;
+  const submitting = submitMutation.isPending;
+  const actionBusy = draftSaving || submitting;
+  const autoSaveText =
+      autoSaveStatus === 'saving'
+          ? 'Auto-saving draft...'
+          : autoSaveStatus === 'error'
+              ? 'Auto-save failed. Use Save draft to retry.'
+              : lastSavedAt
+                  ? `Last saved at ${formatTimeOnly(lastSavedAt)}`
+                  : 'Auto-save is ready';
 
   return (
-      <div className="feedback-evaluator-stack">
-        <section className="feedback-evaluator-card feedback-evaluator-form-shell">
+      <div className={`feedback-evaluator-stack feedback-form-layout-${layoutMode}`}>
+        <section className="feedback-evaluator-card feedback-evaluator-form-shell feedback-form-custom-shell">
           <div className="feedback-evaluator-card-header feedback-evaluator-card-header-wrap">
             <div>
               <p className="feedback-workspace-kicker">Assignment detail</p>
               <h2>{assignment.campaignName}</h2>
-              <span>Give {relationshipLabel(assignment.relationshipType).toLowerCase()} for the selected employee.</span>
+              <span>Complete the assigned {relationshipLabel(assignment.relationshipType).toLowerCase()} form for the selected employee.</span>
             </div>
 
             <Link className="feedback-evaluator-secondary" to={feedbackHomePath}>
@@ -319,11 +453,57 @@ const FeedbackFormPage = () => {
             </Link>
           </div>
 
+          <div className="feedback-form-preferences-panel" aria-label="Evaluator form preferences">
+            <div>
+              <span>Layout</span>
+              <div className="feedback-form-segmented-control" aria-label="Choose form layout">
+                <button
+                    type="button"
+                    className={layoutMode === 'comfortable' ? 'active' : ''}
+                    onClick={() => setLayoutMode('comfortable')}
+                >
+                  Comfortable
+                </button>
+                <button
+                    type="button"
+                    className={layoutMode === 'compact' ? 'active' : ''}
+                    onClick={() => setLayoutMode('compact')}
+                >
+                  Compact
+                </button>
+              </div>
+            </div>
+            <div>
+              <span>Focus tools</span>
+              <div className="feedback-form-toggle-row">
+                <button
+                    type="button"
+                    className={showMissingOnly ? 'active' : ''}
+                    onClick={() => setShowMissingOnly((current) => !current)}
+                    disabled={missingRequiredQuestionIds.length === 0 && !showMissingOnly}
+                >
+                  Missing required only
+                </button>
+                <button
+                    type="button"
+                    className={showCommentExamples ? 'active' : ''}
+                    onClick={() => setShowCommentExamples((current) => !current)}
+                >
+                  Comment examples
+                </button>
+              </div>
+            </div>
+            <div className={`feedback-form-autosave-pill ${autoSaveStatus}`}>
+              <span>Draft status</span>
+              <strong>{autoSaveText}</strong>
+            </div>
+          </div>
+
           <div className="feedback-evaluator-review-strip">
             <div className="feedback-evaluator-person-row">
               <div className="feedback-evaluator-avatar large">{initials(assignment.targetEmployeeName)}</div>
               <div>
-                <span>Feedback for</span>
+                <span>Assigned target employee</span>
                 <strong>{assignment.targetEmployeeName}</strong>
                 <small>{relationshipLabel(assignment.relationshipType)}</small>
               </div>
@@ -356,7 +536,7 @@ const FeedbackFormPage = () => {
             </div>
             <div>
               <span>Anonymity</span>
-              <strong>{assignment.anonymous ? 'Identity hidden in reports' : 'Identity visible to HR workflow'}</strong>
+              <strong>{assignment.anonymous ? 'Identity hidden where anonymity applies' : 'Identity visible according to feedback visibility rules'}</strong>
             </div>
           </div>
 
@@ -365,17 +545,22 @@ const FeedbackFormPage = () => {
                 {assignment.lifecycleMessage}
               </div>
           ) : null}
+          {assignment.autoSubmitNotice ? (
+              <div className="feedback-evaluator-banner info feedback-auto-submit-notice">
+                {assignment.autoSubmitNotice}
+              </div>
+          ) : null}
           {draftSavedMessage ? (
               <div className="feedback-evaluator-banner success">{draftSavedMessage}</div>
           ) : null}
           {isDirty && assignment.canSubmit ? (
               <div className="feedback-evaluator-banner info">
-                You have unsaved changes. Save a draft before leaving, or submit when complete.
+                There are unsaved changes in this form. Auto-save will run after a short pause, or use Save draft now.
               </div>
           ) : null}
           {assignment.canSubmit && hasMissingRequiredRatings ? (
               <div className="feedback-evaluator-banner warning">
-                Final submission is locked until all required ratings are selected. Save draft is still available.
+                Final submission remains unavailable until all required ratings are selected. Use “Missing required only” to finish faster.
               </div>
           ) : null}
           {saveDraftMutation.error instanceof Error ? (
@@ -386,131 +571,201 @@ const FeedbackFormPage = () => {
           ) : null}
 
           <form className="feedback-evaluator-stack" onSubmit={onSubmit}>
-            <div className="feedback-rating-guide" aria-label="Rating scale guide">
-              {RATING_OPTIONS.map((option) => (
-                  <div key={option.value}>
-                    <strong>{option.value}</strong>
-                    <span>{option.label}</span>
+            <section className={`feedback-rating-scale-panel ${ratingGuideCollapsed ? 'collapsed' : ''}`} aria-label="Rating scale guide">
+              <div className="feedback-rating-scale-copy">
+                <div>
+                  <strong>Rating scale</strong>
+                  <span>{ratingGuideCollapsed ? 'Collapsed to reduce form noise.' : 'Select one score from 1 to 5 for each question. The scale appears here once and can be collapsed anytime.'}</span>
+                </div>
+                <button type="button" onClick={handleRatingGuideToggle}>
+                  {ratingGuideCollapsed ? 'Show scale' : 'Hide scale'}
+                </button>
+              </div>
+              {!ratingGuideCollapsed ? (
+                  <div className="feedback-rating-scale-list">
+                    {RATING_OPTIONS.map((option) => (
+                        <div key={option.value} className="feedback-rating-scale-chip">
+                          <strong>{option.value}</strong>
+                          <span>{option.label}</span>
+                        </div>
+                    ))}
                   </div>
-              ))}
-            </div>
+              ) : null}
+            </section>
 
-            {assignment.sections.map((section) => (
-                <section key={section.id} className="feedback-question-section">
-                  {section.title && section.title.toLowerCase() !== 'evaluation' ? (
-                      <header>
-                        <h3>{section.title}</h3>
-                      </header>
+            <div className="feedback-form-answer-workspace">
+              <aside className="feedback-question-nav-card" aria-label="Question navigation">
+                <div className="feedback-question-nav-head">
+                  <span>Question navigation</span>
+                  <strong>{missingRequiredQuestionIds.length} missing</strong>
+                </div>
+                <div className="feedback-question-nav-list">
+                  {flatQuestions.map((question, index) => {
+                    const state = getQuestionNavState(index, question.required);
+                    return (
+                        <button
+                            type="button"
+                            key={question.id}
+                            className={`feedback-question-nav-item ${state}`}
+                            onClick={() => scrollToQuestion(question.id)}
+                        >
+                          <span>Q{question.questionOrder}</span>
+                          <strong>{state === 'missing' ? 'Missing' : state === 'answered' ? 'Answered' : 'Optional'}</strong>
+                        </button>
+                    );
+                  })}
+                </div>
+              </aside>
+
+              <div className="feedback-form-main-column">
+                {showMissingOnly && visibleSections.length === 0 ? (
+                    <div className="feedback-evaluator-empty feedback-form-missing-empty">
+                      <h3>All required questions are complete</h3>
+                      <p>Turn off “Missing required only” to review optional questions, comments, and final submission.</p>
+                    </div>
+                ) : null}
+
+                {visibleSections.map((section) => (
+                    <section key={section.id} className="feedback-question-section">
+                      {section.title && section.title.toLowerCase() !== 'evaluation' ? (
+                          <header>
+                            <h3>{section.title}</h3>
+                          </header>
+                      ) : null}
+
+                      <div className="feedback-question-list">
+                        {section.questions.map((question) => {
+                          const formIndex = flatQuestions.findIndex((item) => item.id === question.id);
+                          const selectedRating = watchedResponses?.[formIndex]?.ratingValue ?? '';
+                          const selectedOption = RATING_OPTIONS.find((option) => String(option.value) === selectedRating);
+                          const responseCommentRegistration = register(`responses.${formIndex}.comment`);
+                          return (
+                              <article
+                                  key={question.id}
+                                  id={`feedback-question-${question.id}`}
+                                  className={`feedback-question-card feedback-question-card-clean ${missingRequiredSet.has(question.id) ? 'missing-required' : ''}`}
+                              >
+                                <div className="feedback-question-head feedback-question-head-clean">
+                                  <div>
+                                    <span>Question {question.questionOrder}{question.required ? ' · Required' : ' · Optional'}</span>
+                                    <strong>{question.questionText}</strong>
+                                  </div>
+                                  <div className={`feedback-question-rating-state ${selectedOption ? 'selected' : ''}`}>
+                                    <span>Selected rating</span>
+                                    <strong>{selectedOption ? `${selectedOption.value} · ${selectedOption.label}` : 'Not selected yet'}</strong>
+                                  </div>
+                                </div>
+
+                                <input
+                                    type="hidden"
+                                    {...register(`responses.${formIndex}.questionId`, {
+                                      value: question.id,
+                                      valueAsNumber: true,
+                                    })}
+                                />
+
+                                <div className="feedback-rating-choice-row feedback-rating-choice-row-clean" role="radiogroup" aria-label={`Rating for ${question.questionText}`}>
+                                  {RATING_OPTIONS.map((option) => {
+                                    const isSelected = selectedRating === String(option.value);
+                                    return (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            disabled={!assignment.canSubmit || submitting}
+                                            className={`feedback-rating-choice feedback-rating-choice-clean ${isSelected ? 'selected' : ''}`}
+                                            onClick={() => {
+                                              setValue(`responses.${formIndex}.ratingValue`, String(option.value), {
+                                                shouldDirty: true,
+                                                shouldValidate: true,
+                                              });
+                                              clearErrors(`responses.${formIndex}.ratingValue`);
+                                              setDraftSavedMessage('');
+                                            }}
+                                            aria-pressed={isSelected}
+                                            aria-label={`${option.value} - ${option.label}`}
+                                            title={`${option.value} - ${option.label}`}
+                                        >
+                                          <strong>{option.value}</strong>
+                                        </button>
+                                    );
+                                  })}
+                                </div>
+
+                                <input
+                                    type="hidden"
+                                    {...register(`responses.${formIndex}.ratingValue`)}
+                                />
+                                {errors.responses?.[formIndex]?.ratingValue ? (
+                                    <small className="feedback-evaluator-error">
+                                      {errors.responses[formIndex]?.ratingValue?.message}
+                                    </small>
+                                ) : null}
+
+                                <label className="feedback-question-field feedback-question-field-wide">
+                                  <span>Supporting comment</span>
+                                  {showCommentExamples ? (
+                                      <small className="feedback-comment-example">
+                                        Example: mention the situation, observed behavior, and impact. Keep it specific and respectful.
+                                      </small>
+                                  ) : null}
+                                  <textarea
+                                      disabled={!assignment.canSubmit || submitting}
+                                      {...responseCommentRegistration}
+                                      placeholder="Add a short example, observation, or supporting context for this rating."
+                                      onChange={(event) => {
+                                        responseCommentRegistration.onChange(event);
+                                        setDraftSavedMessage('');
+                                      }}
+                                  />
+                                </label>
+                              </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                ))}
+
+                <label className="feedback-question-field feedback-question-field-wide feedback-overall-comments-card">
+                  <span>Overall comments</span>
+                  {showCommentExamples ? (
+                      <small className="feedback-comment-example">
+                        Example: summarize key strengths, improvement areas, and one or two useful examples for the target employee.
+                      </small>
                   ) : null}
+                  <textarea
+                      disabled={!assignment.canSubmit || submitting}
+                      {...overallCommentsRegistration}
+                      placeholder="Summarize key strengths, improvement areas, and any supporting context for this feedback."
+                      onChange={(event) => {
+                        overallCommentsRegistration.onChange(event);
+                        setDraftSavedMessage('');
+                      }}
+                  />
+                </label>
 
-                  <div className="feedback-question-list">
-                    {section.questions.map((question) => {
-                      const formIndex = flatQuestions.findIndex((item) => item.id === question.id);
-                      const selectedRating = watchedResponses?.[formIndex]?.ratingValue ?? '';
-                      const responseCommentRegistration = register(`responses.${formIndex}.comment`);
-                      return (
-                          <article key={question.id} className="feedback-question-card">
-                            <div className="feedback-question-head">
-                              <div>
-                                <span>Question {question.questionOrder}{question.required ? ' · Required' : ' · Optional'}</span>
-                                <strong>{question.questionText}</strong>
-                              </div>
-                            </div>
-
-                            <input
-                                type="hidden"
-                                {...register(`responses.${formIndex}.questionId`, {
-                                  value: question.id,
-                                  valueAsNumber: true,
-                                })}
-                            />
-
-                            <div className="feedback-rating-choice-row" role="radiogroup" aria-label={`Rating for ${question.questionText}`}>
-                              {RATING_OPTIONS.map((option) => {
-                                const isSelected = selectedRating === String(option.value);
-                                return (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        disabled={!assignment.canSubmit || saving}
-                                        className={`feedback-rating-choice ${isSelected ? 'selected' : ''}`}
-                                        onClick={() => {
-                                          setValue(`responses.${formIndex}.ratingValue`, String(option.value), {
-                                            shouldDirty: true,
-                                            shouldValidate: true,
-                                          });
-                                          clearErrors(`responses.${formIndex}.ratingValue`);
-                                          setDraftSavedMessage('');
-                                        }}
-                                        aria-pressed={isSelected}
-                                    >
-                                      <strong>{option.value}</strong>
-                                      <span>{option.label}</span>
-                                      <small>{option.helper}</small>
-                                    </button>
-                                );
-                              })}
-                            </div>
-
-                            <input
-                                type="hidden"
-                                {...register(`responses.${formIndex}.ratingValue`)}
-                            />
-                            {errors.responses?.[formIndex]?.ratingValue ? (
-                                <small className="feedback-evaluator-error">
-                                  {errors.responses[formIndex]?.ratingValue?.message}
-                                </small>
-                            ) : null}
-
-                            <label className="feedback-question-field feedback-question-field-wide">
-                              <span>Comment</span>
-                              <textarea
-                                  disabled={!assignment.canSubmit || saving}
-                                  {...responseCommentRegistration}
-                                  placeholder="Add a short example or context for this rating"
-                                  onChange={(event) => {
-                                    responseCommentRegistration.onChange(event);
-                                    setDraftSavedMessage('');
-                                  }}
-                              />
-                            </label>
-                          </article>
-                      );
-                    })}
+                <div className="feedback-evaluator-actions feedback-evaluator-actions-split feedback-form-sticky-actions">
+                  <div className="feedback-form-save-status">
+                    <span>{autoSaveText}</span>
+                    {isDirty && assignment.canSubmit ? <small>Unsaved changes detected</small> : <small>Changes are up to date</small>}
                   </div>
-                </section>
-            ))}
-
-            <label className="feedback-question-field feedback-question-field-wide">
-              <span>Overall comments</span>
-              <textarea
-                  disabled={!assignment.canSubmit || saving}
-                  {...overallCommentsRegistration}
-                  placeholder="Summarize strengths, areas to improve, and any supporting context"
-                  onChange={(event) => {
-                    overallCommentsRegistration.onChange(event);
-                    setDraftSavedMessage('');
-                  }}
-              />
-            </label>
-
-            <div className="feedback-evaluator-actions feedback-evaluator-actions-split">
-              <button
-                  className="feedback-evaluator-secondary solid"
-                  disabled={!assignment.canSubmit || saving}
-                  type="button"
-                  onClick={handleSaveDraft}
-              >
-                {saveDraftMutation.isPending ? 'Saving draft...' : 'Save draft'}
-              </button>
-              <button
-                  className="feedback-evaluator-primary"
-                  disabled={!assignment.canSubmit || saving || hasMissingRequiredRatings}
-                  type="submit"
-                  title={hasMissingRequiredRatings ? 'Select all required ratings before final submission.' : undefined}
-              >
-                {submitMutation.isPending ? 'Submitting feedback...' : 'Submit final feedback'}
-              </button>
+                  <button
+                      className="feedback-evaluator-secondary solid"
+                      disabled={!assignment.canSubmit || actionBusy}
+                      type="button"
+                      onClick={handleSaveDraft}
+                  >
+                    {draftSaving ? 'Saving draft...' : 'Save draft now'}
+                  </button>
+                  <button
+                      className="feedback-evaluator-primary"
+                      disabled={!assignment.canSubmit || actionBusy || hasMissingRequiredRatings}
+                      type="submit"
+                      title={hasMissingRequiredRatings ? 'Select all required ratings before final submission.' : undefined}
+                  >
+                    {submitting ? 'Submitting feedback...' : 'Submit final feedback'}
+                  </button>
+                </div>
+              </div>
             </div>
           </form>
         </section>

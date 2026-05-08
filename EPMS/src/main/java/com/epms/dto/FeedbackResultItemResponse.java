@@ -35,5 +35,9 @@ public class FeedbackResultItemResponse {
     Double projectStakeholderAverageScore;
     String scoreCalculationMethod;
     String scoreCalculationNote;
+    String visibilityStatus;
+    LocalDateTime publishedAt;
+    Long publishedByUserId;
+    String publishNote;
     LocalDateTime summarizedAt;
 }

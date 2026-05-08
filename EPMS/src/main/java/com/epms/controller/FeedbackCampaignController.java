@@ -3,6 +3,8 @@ package com.epms.controller;
 import com.epms.dto.EvaluatorConfigDTO;
 import com.epms.dto.FeedbackAssignmentGenerationResponse;
 import com.epms.dto.FeedbackCampaignCreateRequest;
+import com.epms.dto.FeedbackCampaignEarlyCloseRequest;
+import com.epms.dto.FeedbackCampaignEarlyCloseReviewRequest;
 import com.epms.dto.FeedbackCampaignResponse;
 import com.epms.dto.FeedbackCampaignTargetsRequest;
 import com.epms.dto.FeedbackManualAssignmentRequest;
@@ -55,6 +57,15 @@ public class FeedbackCampaignController {
         return ResponseEntity.ok(GenericApiResponse.success("Feedback campaigns retrieved successfully", response));
     }
 
+    @GetMapping("/early-close/requests")
+    public ResponseEntity<GenericApiResponse<List<FeedbackCampaignResponse>>> getPendingEarlyCloseRequests() {
+        ensureAdmin();
+        List<FeedbackCampaignResponse> response = feedbackCampaignService.getPendingEarlyCloseRequests().stream()
+                .map(this::mapCampaign)
+                .toList();
+        return ResponseEntity.ok(GenericApiResponse.success("Pending early close requests retrieved successfully", response));
+    }
+
     @GetMapping("/{campaignId}")
     public ResponseEntity<GenericApiResponse<FeedbackCampaignResponse>> getCampaign(@PathVariable Long campaignId) {
         ensureHrOrAdmin();
@@ -84,7 +95,7 @@ public class FeedbackCampaignController {
             @Valid @RequestBody EvaluatorConfigDTO request
     ) {
         ensureHrOrAdmin();
-        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.generateAssignments(campaignId, request);
+        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.generateAssignments(campaignId, request, SecurityUtils.currentUserId().longValue());
         return ResponseEntity.ok(GenericApiResponse.success("Evaluator assignments generated successfully", response));
     }
 
@@ -105,7 +116,7 @@ public class FeedbackCampaignController {
             @Valid @RequestBody FeedbackManualAssignmentRequest request
     ) {
         ensureHrOrAdmin();
-        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.addManualAssignment(campaignId, request);
+        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.addManualAssignment(campaignId, request, SecurityUtils.currentUserId().longValue());
         return ResponseEntity.ok(GenericApiResponse.success("Manual evaluator assignment added successfully", response));
     }
 
@@ -115,7 +126,7 @@ public class FeedbackCampaignController {
             @PathVariable Long assignmentId
     ) {
         ensureHrOrAdmin();
-        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.removeAssignment(campaignId, assignmentId);
+        FeedbackAssignmentGenerationResponse response = feedbackEvaluationService.removeAssignment(campaignId, assignmentId, SecurityUtils.currentUserId().longValue());
         return ResponseEntity.ok(GenericApiResponse.success("Evaluator assignment removed successfully", response));
     }
 
@@ -136,6 +147,57 @@ public class FeedbackCampaignController {
         FeedbackCampaign campaign = feedbackCampaignService.closeCampaign(campaignId, SecurityUtils.currentUserId().longValue());
         return ResponseEntity.ok(GenericApiResponse.success(
                 "Feedback campaign closed successfully",
+                mapCampaign(campaign)
+        ));
+    }
+
+    @PostMapping("/{campaignId}/early-close/request")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignResponse>> requestEarlyClose(
+            @PathVariable Long campaignId,
+            @Valid @RequestBody FeedbackCampaignEarlyCloseRequest request
+    ) {
+        ensureHrOrAdmin();
+        FeedbackCampaign campaign = feedbackCampaignService.requestEarlyClose(
+                campaignId,
+                SecurityUtils.currentUserId().longValue(),
+                request.getReason()
+        );
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Early close request sent for Admin approval",
+                mapCampaign(campaign)
+        ));
+    }
+
+    @PostMapping("/{campaignId}/early-close/approve")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignResponse>> approveEarlyClose(
+            @PathVariable Long campaignId,
+            @Valid @RequestBody FeedbackCampaignEarlyCloseReviewRequest request
+    ) {
+        ensureAdmin();
+        FeedbackCampaign campaign = feedbackCampaignService.approveEarlyClose(
+                campaignId,
+                SecurityUtils.currentUserId().longValue(),
+                request.getReviewNote()
+        );
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Early close approved and campaign closed",
+                mapCampaign(campaign)
+        ));
+    }
+
+    @PostMapping("/{campaignId}/early-close/reject")
+    public ResponseEntity<GenericApiResponse<FeedbackCampaignResponse>> rejectEarlyClose(
+            @PathVariable Long campaignId,
+            @Valid @RequestBody FeedbackCampaignEarlyCloseReviewRequest request
+    ) {
+        ensureAdmin();
+        FeedbackCampaign campaign = feedbackCampaignService.rejectEarlyClose(
+                campaignId,
+                SecurityUtils.currentUserId().longValue(),
+                request.getReviewNote()
+        );
+        return ResponseEntity.ok(GenericApiResponse.success(
+                "Early close request rejected",
                 mapCampaign(campaign)
         ));
     }
@@ -179,6 +241,18 @@ public class FeedbackCampaignController {
                 .instructions(campaign.getInstructions())
                 .status(campaign.getStatus().name())
                 .formId(campaign.getFormId())
+                .autoSubmitCompletedDraftsOnClose(Boolean.TRUE.equals(campaign.getAutoSubmitCompletedDraftsOnClose()))
+                .earlyCloseRequestStatus(campaign.getEarlyCloseRequestStatus() == null ? "NONE" : campaign.getEarlyCloseRequestStatus().name())
+                .earlyCloseRequestedAt(campaign.getEarlyCloseRequestedAt())
+                .earlyCloseRequestedByUserId(campaign.getEarlyCloseRequestedByUserId())
+                .earlyCloseRequestReason(campaign.getEarlyCloseRequestReason())
+                .earlyCloseReviewedAt(campaign.getEarlyCloseReviewedAt())
+                .earlyCloseReviewedByUserId(campaign.getEarlyCloseReviewedByUserId())
+                .earlyCloseReviewReason(campaign.getEarlyCloseReviewReason())
+                .closedAt(campaign.getClosedAt())
+                .closedByUserId(campaign.getClosedByUserId())
+                .closeReason(campaign.getCloseReason())
+                .closedEarly(Boolean.TRUE.equals(campaign.getClosedEarly()))
                 .createdBy(campaign.getCreatedByUserId())
                 .createdAt(campaign.getCreatedAt())
                 .targetCount(requests.size())
@@ -202,6 +276,17 @@ public class FeedbackCampaignController {
                 );
         if (!authorized) {
             throw new UnauthorizedActionException("Only HR/Admin can manage feedback campaigns.");
+        }
+    }
+
+    private void ensureAdmin() {
+        List<String> roles = SecurityUtils.currentUser().getRoles();
+        boolean authorized = roles != null && roles.stream()
+                .filter(role -> role != null && !role.isBlank())
+                .map(this::normalizeRole)
+                .anyMatch(role -> role.equals("ADMIN") || role.equals("SUPER_ADMIN"));
+        if (!authorized) {
+            throw new UnauthorizedActionException("Only Admin can review feedback early-close requests.");
         }
     }
 

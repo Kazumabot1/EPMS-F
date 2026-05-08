@@ -39,5 +39,9 @@ public class FeedbackIntegrationScoreResponse {
     Long projectStakeholderResponses;
     String scoreCalculationMethod;
     String scoreCalculationNote;
+    String visibilityStatus;
+    LocalDateTime publishedAt;
+    Long publishedByUserId;
+    String publishNote;
     LocalDateTime summarizedAt;
 }

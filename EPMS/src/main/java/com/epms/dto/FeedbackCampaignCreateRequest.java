@@ -40,4 +40,6 @@ public class FeedbackCampaignCreateRequest {
     private String description;
 
     private String instructions;
+
+    private Boolean autoSubmitCompletedDraftsOnClose = false;
 }
