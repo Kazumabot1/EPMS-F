@@ -22,9 +22,14 @@ export interface Meeting {
   employeeId: number;
   employeeFirstName: string;
   employeeLastName: string;
-  managerId: number;
-  managerFirstName: string;
-  managerLastName: string;
+
+  managerId?: number | null;
+  managerFirstName?: string | null;
+  managerLastName?: string | null;
+
+  creatorUserId?: number | null;
+  creatorName?: string | null;
+  creatorEmail?: string | null;
 
   scheduledDate: string;
   location?: string | null;

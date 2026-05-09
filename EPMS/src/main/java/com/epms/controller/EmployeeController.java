@@ -6,8 +6,8 @@ import com.epms.dto.EmployeeRequestDto;
 import com.epms.dto.EmployeeResponseDto;
 import com.epms.dto.GenericApiResponse;
 import com.epms.entity.Employee;
-import com.epms.repository.EmployeeDepartmentRepository;
 import com.epms.service.EmployeeService;
+import com.epms.repository.EmployeeRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
-    private final EmployeeDepartmentRepository employeeDepartmentRepository;
+    private final EmployeeRepository employeeRepository;
 
     @GetMapping
     public ResponseEntity<GenericApiResponse<List<EmployeeResponseDto>>> getAllEmployees(
@@ -56,29 +56,24 @@ public class EmployeeController {
         return ResponseEntity.ok(GenericApiResponse.success("Department transfer preview fetched", dto));
     }
 
-    /*
-     * Used by One-on-One meeting employee dropdown.
+    /**
+     * Used by One-on-One Meeting employee dropdown.
      *
-     * This endpoint returns active employees assigned to the selected department.
-     * It checks both currentDepartment and parentDepartment in employee_department.
+     * This endpoint now checks both:
+     * - employee_department.currentdepartment / parentdepartment
+     * - users.department_id
+     *
+     * This fixes the case where HR selects a department but employees do not appear
+     * because older data is only linked through users.department_id.
      */
     @GetMapping("/active-by-department/{departmentId}")
     public ResponseEntity<GenericApiResponse<List<EmployeeDropdownDto>>> getActiveByDepartment(
             @PathVariable Integer departmentId
     ) {
-        List<EmployeeDropdownDto> employees = employeeDepartmentRepository
-                .findActiveAssignmentsByDepartmentId(departmentId)
+        List<EmployeeDropdownDto> employees = employeeRepository
+                .findActiveDropdownEmployeesByDepartmentId(departmentId)
                 .stream()
-                .map(employeeDepartment -> {
-                    Employee employee = employeeDepartment.getEmployee();
-
-                    EmployeeDropdownDto dto = new EmployeeDropdownDto();
-                    dto.setId(employee.getId());
-                    dto.setFirstName(employee.getFirstName());
-                    dto.setLastName(employee.getLastName());
-
-                    return dto;
-                })
+                .map(this::toDropdownDto)
                 .collect(Collectors.collectingAndThen(
                         Collectors.toMap(
                                 EmployeeDropdownDto::getId,
@@ -122,5 +117,15 @@ public class EmployeeController {
     public ResponseEntity<GenericApiResponse<EmployeeResponseDto>> deactivateEmployee(@PathVariable Integer id) {
         EmployeeResponseDto dto = employeeService.deactivateEmployee(id);
         return ResponseEntity.ok(GenericApiResponse.success("Employee deactivated", dto));
+    }
+
+    private EmployeeDropdownDto toDropdownDto(Employee employee) {
+        EmployeeDropdownDto dto = new EmployeeDropdownDto();
+
+        dto.setId(employee.getId());
+        dto.setFirstName(employee.getFirstName());
+        dto.setLastName(employee.getLastName());
+
+        return dto;
     }
 }

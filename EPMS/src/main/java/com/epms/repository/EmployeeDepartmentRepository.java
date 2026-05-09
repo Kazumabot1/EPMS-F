@@ -13,12 +13,8 @@ public interface EmployeeDepartmentRepository extends JpaRepository<EmployeeDepa
     /*
      * Used by One-on-One employee dropdown.
      *
-     * This returns employees if the selected department matches either:
-     * - employee_department.currentdepartment
-     * - employee_department.parentdepartment
-     *
-     * This is better for the dropdown because HR expects employees to appear
-     * when they belong to that department in either column.
+     * HR selects a department and expects employees to appear if that department
+     * is either the employee's currentDepartment OR parentDepartment.
      */
     @Query("""
         SELECT DISTINCT ed
@@ -37,11 +33,9 @@ public interface EmployeeDepartmentRepository extends JpaRepository<EmployeeDepa
     );
 
     /*
-     * Working department means:
-     * - parentDepartment if present
-     * - otherwise currentDepartment
-     *
-     * Keep this method because appraisal/team logic may still need the working department rule.
+     * Working department rule:
+     * parentDepartment if not null, otherwise currentDepartment.
+     * Keep this because other modules may depend on it.
      */
     @Query("""
         SELECT DISTINCT ed
@@ -59,9 +53,6 @@ public interface EmployeeDepartmentRepository extends JpaRepository<EmployeeDepa
             @Param("departmentId") Integer departmentId
     );
 
-    /*
-     * Used by team/PIP logic where actual active users are required.
-     */
     @Query("""
         SELECT DISTINCT u
         FROM EmployeeDepartment ed
