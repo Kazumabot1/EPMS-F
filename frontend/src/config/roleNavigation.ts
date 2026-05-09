@@ -97,6 +97,15 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
       ],
     },
     { label: '360 Feedback', path: '/hr/feedback/dashboard', icon: 'bi-chat-dots' },
+    {
+      label: 'One-on-One',
+      path: '/one-on-one-meetings',
+      icon: 'bi-chat-left-text',
+      children: [
+        { label: '1:1 Meetings', path: '/one-on-one-meetings', icon: 'bi-chat-dots' },
+        { label: 'Action Items', path: '/one-on-one-action-items', icon: 'bi-list-check' },
+      ],
+    },
     { label: 'Notifications', path: '/notifications', icon: 'bi-bell' },
     {
       label: 'PIP',
@@ -153,6 +162,15 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
       children: [
         { label: 'Employee Performance Review', path: '/manager/appraisals', icon: 'bi-pencil-square', end: true },
         { label: 'Review History List', path: '/manager/appraisals/history', icon: 'bi-clock-history' },
+      ],
+    },
+    {
+      label: 'One-on-One',
+      path: '/one-on-one-meetings',
+      icon: 'bi-chat-left-text',
+      children: [
+        { label: '1:1 Meetings', path: '/one-on-one-meetings', icon: 'bi-chat-dots' },
+        { label: 'Action Items', path: '/one-on-one-action-items', icon: 'bi-list-check' },
       ],
     },
     { label: 'Team Reports', path: '/manager/reports', icon: 'bi-file-earmark-bar-graph' },

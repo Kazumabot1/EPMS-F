@@ -138,6 +138,9 @@ function App() {
               <Route path="/manager/appraisals" element={<EmployeePerformanceReviewPage />} />
               <Route path="/manager/appraisals/history" element={<AppraisalHistoryListPage role="pm" />} />
 
+              <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
+              <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
+
               <Route
                 path="/manager/reports"
                 element={
