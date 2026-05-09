@@ -78,6 +78,13 @@ function App() {
             <Route path="/pip/past-plans" element={<PipPastPlansPage />} />
           </Route>
 
+          <Route element={<ProtectedRoute allowedRoles={['HR', 'DepartmentHead', 'Manager']} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
+              <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
+            </Route>
+          </Route>
+
           <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
             <Route element={<AppLayout />}>
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -175,9 +182,6 @@ function App() {
               <Route path="/department-head/appraisals/review" element={<AppraisalReviewQueuePage mode="dept-head" />} />
               <Route path="/department-head/appraisals/history" element={<AppraisalHistoryListPage role="dept-head" />} />
 
-              <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
-              <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
-
               <Route path="/pip/create" element={<PipCreatePage />} />
             </Route>
           </Route>
@@ -212,9 +216,6 @@ function App() {
 
               <Route path="/pip-updates" element={<PipUpdates />} />
               <Route path="/notification-templates" element={<NotificationTemplates />} />
-
-              <Route path="/one-on-one-meetings" element={<OneOnOneMeetings />} />
-              <Route path="/one-on-one-action-items" element={<OneOnOneActionItems />} />
 
               <Route path="/hr/position/create" element={<PositionCreate />} />
               <Route path="/hr/position-level/create" element={<PositionLevelCreate />} />

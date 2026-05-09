@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Optional;
 
 @RestController
@@ -18,19 +19,36 @@ public class OneOnOneActionItemController {
 
     private final OneOnOneActionItemService actionItemService;
 
-    /** Create or update the description for a meeting's action item */
+    @GetMapping
+    public ResponseEntity<GenericApiResponse<List<OneOnOneActionItemResponseDto>>> getAll() {
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Action items fetched", actionItemService.getAll())
+        );
+    }
+
     @PostMapping
     public ResponseEntity<GenericApiResponse<OneOnOneActionItemResponseDto>> saveActionItem(
-            @RequestBody OneOnOneActionItemRequestDto request) {
+            @RequestBody OneOnOneActionItemRequestDto request
+    ) {
         OneOnOneActionItemResponseDto saved = actionItemService.saveActionItem(request);
         return ResponseEntity.ok(GenericApiResponse.success("Action item saved", saved));
     }
 
-    /** Get the action item for a specific meeting */
+    @PutMapping("/{id}")
+    public ResponseEntity<GenericApiResponse<OneOnOneActionItemResponseDto>> updateActionItem(
+            @PathVariable Integer id,
+            @RequestBody OneOnOneActionItemRequestDto request
+    ) {
+        OneOnOneActionItemResponseDto updated = actionItemService.updateActionItem(id, request);
+        return ResponseEntity.ok(GenericApiResponse.success("Action item updated", updated));
+    }
+
     @GetMapping("/meeting/{meetingId}")
     public ResponseEntity<GenericApiResponse<OneOnOneActionItemResponseDto>> getByMeeting(
-            @PathVariable Integer meetingId) {
+            @PathVariable Integer meetingId
+    ) {
         Optional<OneOnOneActionItemResponseDto> item = actionItemService.getByMeetingId(meetingId);
+
         return item
                 .map(dto -> ResponseEntity.ok(GenericApiResponse.success("Action item fetched", dto)))
                 .orElse(ResponseEntity.ok(GenericApiResponse.success("No action item yet", null)));

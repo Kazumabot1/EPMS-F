@@ -10,10 +10,11 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Why this file is changed:
- * - currentdepartment and parentdepartment are now Department FK references.
- * - Department-based employee lookup uses:
- *     COALESCE(parentDepartment.id, currentDepartment.id)
+ * Employee repository.
+ *
+ * Department lookup supports both:
+ * - employee_department.currentdepartment / parentdepartment
+ * - users.department_id legacy/login link
  */
 public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
 
@@ -75,5 +76,44 @@ public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
     List<Employee> findCurrentByWorkingDepartmentId(
             @Param("departmentId") Integer departmentId,
             @Param("includeInactive") boolean includeInactive
+    );
+
+    /**
+     * Used by One-on-One employee dropdown.
+     *
+     * This is intentionally broader than working-department lookup because
+     * old/real data may link employees through users.department_id instead of
+     * only employee_department.
+     *
+     * It returns active employees when selected department matches:
+     * - employee_department.currentdepartment
+     * - employee_department.parentdepartment
+     * - users.department_id
+     */
+    @Query("""
+       SELECT DISTINCT e
+       FROM Employee e
+       LEFT JOIN e.employeeDepartments ed
+       LEFT JOIN ed.currentDepartment cd
+       LEFT JOIN ed.parentDepartment pd
+       LEFT JOIN User u ON u.employeeId = e.id
+       WHERE (e.active IS NULL OR e.active = true)
+         AND (
+              (
+                  ed.enddate IS NULL
+                  AND (
+                      cd.id = :departmentId
+                      OR pd.id = :departmentId
+                  )
+              )
+              OR (
+                  (u.active IS NULL OR u.active = true)
+                  AND u.departmentId = :departmentId
+              )
+         )
+       ORDER BY e.firstName ASC, e.lastName ASC
+       """)
+    List<Employee> findActiveDropdownEmployeesByDepartmentId(
+            @Param("departmentId") Integer departmentId
     );
 }
