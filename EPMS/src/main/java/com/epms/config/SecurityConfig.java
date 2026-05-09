@@ -100,6 +100,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
+                        /*
+                         * WebSocket / SockJS handshake endpoint.
+                         */
                         .requestMatchers(
                                 "/ws",
                                 "/ws/**"
@@ -119,6 +122,28 @@ public class SecurityConfig {
                                 "/api/notifications/**"
                         ).authenticated()
 
+                        /*
+                         * One-on-One dependencies.
+                         *
+                         * These must be BEFORE the broad HR-only:
+                         *   /api/employees/**
+                         *   /api/departments/**
+                         *
+                         * Otherwise the employee dropdown request gets caught and blocked.
+                         */
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/departments",
+                                "/api/departments/**",
+                                "/api/employees/active-by-department/**"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                "/api/one-on-one-meetings",
+                                "/api/one-on-one-meetings/**",
+                                "/api/one-on-one-action-items",
+                                "/api/one-on-one-action-items/**"
+                        ).authenticated()
+
                         .requestMatchers(
                                 "/api/users",
                                 "/api/users/**",
@@ -134,6 +159,9 @@ public class SecurityConfig {
                                 hasRoleDashboardOrPosition(authentication.get(), ADMIN_ROLES, ADMIN_DASHBOARDS)
                         )
 
+                        /*
+                         * HR/Admin management APIs.
+                         */
                         .requestMatchers(
                                 "/api/dashboard",
                                 "/api/dashboard/**",
@@ -233,10 +261,6 @@ public class SecurityConfig {
                                 "/api/pip/**",
                                 "/api/pips",
                                 "/api/pips/**",
-                                "/api/one-on-one-meetings",
-                                "/api/one-on-one-meetings/**",
-                                "/api/one-on-one-action-items",
-                                "/api/one-on-one-action-items/**",
                                 "/api/v1/feedback",
                                 "/api/v1/feedback/**"
                         ).authenticated()
