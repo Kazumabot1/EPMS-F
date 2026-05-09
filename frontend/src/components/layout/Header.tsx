@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import SignatureModal from '../signature/SignatureModal';
 
 type HeaderProps = {
   collapsed: boolean;
@@ -77,6 +78,7 @@ const Header = ({ collapsed }: HeaderProps) => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const [notifItems, setNotifItems] = useState<NotifItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -291,6 +293,18 @@ const Header = ({ collapsed }: HeaderProps) => {
                 <i className="bi bi-person" />
                 Profile
               </Link>
+              <button
+                type="button"
+                className="hr-user-dropdown-item"
+                role="menuitem"
+                onClick={() => {
+                  closeMenu();
+                  setSignatureOpen(true);
+                }}
+              >
+                <i className="bi bi-pen" />
+                Signature
+              </button>
 
               <button
                 type="button"
@@ -305,6 +319,7 @@ const Header = ({ collapsed }: HeaderProps) => {
           )}
         </div>
       </div>
+      <SignatureModal open={signatureOpen} onClose={() => setSignatureOpen(false)} />
     </header>
   );
 };

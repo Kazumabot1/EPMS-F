@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { appraisalTemplateService } from '../../services/appraisalService';
+import { signatureService } from '../../services/signatureService';
 import type {
   AppraisalCriterionRequest,
   AppraisalSectionRequest,
   AppraisalTemplateRequest,
   AppraisalTemplateResponse,
 } from '../../types/appraisal';
+import type { Signature } from '../../types/signature';
 import AppraisalRatingDots from '../../components/appraisal/AppraisalRatingDots';
 import './appraisal.css';
 
@@ -51,6 +53,10 @@ const makeCriteria = (criteriaText: string, sortOrder: number, description = '')
 const toEditableForm = (template: AppraisalTemplateResponse): AppraisalTemplateRequest => ({
   templateName: template.templateName,
   description: template.description ?? '',
+  appraiseeSignatureId: template.appraiseeSignatureId ?? null,
+  appraiserSignatureId: template.appraiserSignatureId ?? null,
+  hrSignatureId: template.hrSignatureId ?? null,
+  signatureDateFormat: template.signatureDateFormat ?? 'DD/MM/YYYY',
   formType: template.formType ?? 'ANNUAL',
   targetAllDepartments: true,
   departmentIds: [],
@@ -75,6 +81,10 @@ const toEditableForm = (template: AppraisalTemplateResponse): AppraisalTemplateR
 const normalizeForm = (form: AppraisalTemplateRequest): AppraisalTemplateRequest => ({
   templateName: form.templateName.trim(),
   description: form.description?.trim() ?? '',
+  appraiseeSignatureId: form.appraiseeSignatureId ?? null,
+  appraiserSignatureId: form.appraiserSignatureId ?? null,
+  hrSignatureId: form.hrSignatureId ?? null,
+  signatureDateFormat: form.signatureDateFormat ?? 'DD/MM/YYYY',
   formType: 'ANNUAL',
   targetAllDepartments: true,
   departmentIds: [],
@@ -101,6 +111,21 @@ type TemplateRecordLocationState = {
   templateId?: number;
 };
 
+const signatureDateFormats: Array<'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'> = [
+  'DD/MM/YYYY',
+  'MM/DD/YYYY',
+  'YYYY-MM-DD',
+];
+
+const formatDateByPattern = (date: Date, pattern: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD') => {
+  const day = `${date.getDate()}`.padStart(2, '0');
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const year = `${date.getFullYear()}`;
+  if (pattern === 'MM/DD/YYYY') return `${month}/${day}/${year}`;
+  if (pattern === 'YYYY-MM-DD') return `${year}-${month}-${day}`;
+  return `${day}/${month}/${year}`;
+};
+
 const AppraisalTemplateRecordsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -111,6 +136,8 @@ const AppraisalTemplateRecordsPage = () => {
   const [editForm, setEditForm] = useState<AppraisalTemplateRequest | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [signatureLoading, setSignatureLoading] = useState(false);
 
   const totalCriteria = useMemo(() => (
     selectedTemplate?.sections.reduce((sum, section) => sum + section.criteria.length, 0) ?? 0
@@ -119,6 +146,11 @@ const AppraisalTemplateRecordsPage = () => {
   const editTotalCriteria = useMemo(() => (
     editForm?.sections.reduce((sum, section) => sum + section.criteria.length, 0) ?? 0
   ), [editForm]);
+  const signatureById = useMemo(() => {
+    const map = new Map<number, Signature>();
+    signatures.forEach((item) => map.set(item.id, item));
+    return map;
+  }, [signatures]);
 
   const loadTemplates = async () => {
     setLoading(true);
@@ -138,6 +170,21 @@ const AppraisalTemplateRecordsPage = () => {
       window.history.replaceState({}, document.title);
     }
     void loadTemplates();
+  }, []);
+
+  useEffect(() => {
+    const loadSignatures = async () => {
+      try {
+        setSignatureLoading(true);
+        const data = await signatureService.list();
+        setSignatures(data);
+      } catch {
+        setSignatures([]);
+      } finally {
+        setSignatureLoading(false);
+      }
+    };
+    void loadSignatures();
   }, []);
 
   const openView = async (templateId: number) => {
@@ -395,6 +442,53 @@ const AppraisalTemplateRecordsPage = () => {
                 <span>Description</span>
                 <input value={editForm.description ?? ''} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} />
               </label>
+              <label className="appraisal-field">
+                <span>Appraisee Signature</span>
+                <select
+                  value={editForm.appraiseeSignatureId ?? ''}
+                  onChange={(event) => setEditForm({ ...editForm, appraiseeSignatureId: event.target.value ? Number(event.target.value) : null })}
+                >
+                  <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
+                  {signatures.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="appraisal-field">
+                <span>Appraiser Signature</span>
+                <select
+                  value={editForm.appraiserSignatureId ?? ''}
+                  onChange={(event) => setEditForm({ ...editForm, appraiserSignatureId: event.target.value ? Number(event.target.value) : null })}
+                >
+                  <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
+                  {signatures.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="appraisal-field">
+                <span>HR Signature</span>
+                <select
+                  value={editForm.hrSignatureId ?? ''}
+                  onChange={(event) => setEditForm({ ...editForm, hrSignatureId: event.target.value ? Number(event.target.value) : null })}
+                >
+                  <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
+                  {signatures.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="appraisal-field">
+                <span>Date Format</span>
+                <select
+                  value={editForm.signatureDateFormat ?? 'DD/MM/YYYY'}
+                  onChange={(event) => setEditForm({ ...editForm, signatureDateFormat: event.target.value as AppraisalTemplateRequest['signatureDateFormat'] })}
+                >
+                  {signatureDateFormats.map((format) => (
+                    <option key={format} value={format}>{format}</option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
 
@@ -609,9 +703,21 @@ const AppraisalTemplateRecordsPage = () => {
 
 
           <div className="appraisal-signature-grid">
-            <div>Signature of Appraisee & Date</div>
-            <div>Signature of Appraiser & Date</div>
-            <div>HR Signature / Date / Designation</div>
+            <SignatureDisplayBlock
+              label="Signature of Appraisee & Date"
+              signature={selectedTemplate.appraiseeSignatureId ? signatureById.get(selectedTemplate.appraiseeSignatureId) : undefined}
+              dateText={formatDateByPattern(new Date(), selectedTemplate.signatureDateFormat ?? 'DD/MM/YYYY')}
+            />
+            <SignatureDisplayBlock
+              label="Signature of Appraiser & Date"
+              signature={selectedTemplate.appraiserSignatureId ? signatureById.get(selectedTemplate.appraiserSignatureId) : undefined}
+              dateText={formatDateByPattern(new Date(), selectedTemplate.signatureDateFormat ?? 'DD/MM/YYYY')}
+            />
+            <SignatureDisplayBlock
+              label="HR Signature / Date / Designation"
+              signature={selectedTemplate.hrSignatureId ? signatureById.get(selectedTemplate.hrSignatureId) : undefined}
+              dateText={formatDateByPattern(new Date(), selectedTemplate.signatureDateFormat ?? 'DD/MM/YYYY')}
+            />
           </div>
         </div>
       )}
@@ -620,3 +726,26 @@ const AppraisalTemplateRecordsPage = () => {
 };
 
 export default AppraisalTemplateRecordsPage;
+
+type SignatureDisplayBlockProps = {
+  label: string;
+  signature?: Signature;
+  dateText: string;
+};
+
+const SignatureDisplayBlock = ({ label, signature, dateText }: SignatureDisplayBlockProps) => {
+  const src = signature
+    ? (signature.imageData.startsWith('data:') ? signature.imageData : `data:${signature.imageType};base64,${signature.imageData}`)
+    : null;
+  return (
+    <div className="appraisal-signature-slot">
+      {src ? (
+        <img src={src} alt={signature?.name ?? 'signature'} className="appraisal-signature-image" />
+      ) : (
+        <span className="appraisal-signature-placeholder">{label}</span>
+      )}
+      <p className="appraisal-signature-date">Date: {dateText}</p>
+      {signature ? <small className="appraisal-signature-name">{signature.name}</small> : null}
+    </div>
+  );
+};

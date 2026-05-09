@@ -121,6 +121,10 @@ public class SecurityConfig {
                                 "/api/notifications",
                                 "/api/notifications/**"
                         ).authenticated()
+                        .requestMatchers(
+                                "/api/signatures",
+                                "/api/signatures/**"
+                        ).authenticated()
 
                         /*
                          * One-on-One dependencies.

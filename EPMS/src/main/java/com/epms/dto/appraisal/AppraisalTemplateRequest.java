@@ -14,6 +14,10 @@ import java.util.List;
 public class AppraisalTemplateRequest {
     private String templateName;
     private String description;
+    private Long appraiseeSignatureId;
+    private Long appraiserSignatureId;
+    private Long hrSignatureId;
+    private String signatureDateFormat;
     private AppraisalCycleType formType;
     private Boolean targetAllDepartments = false;
     private List<Integer> departmentIds = new ArrayList<>();

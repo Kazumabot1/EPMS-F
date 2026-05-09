@@ -28,6 +28,18 @@ public class AppraisalFormTemplate {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "appraisee_signature_id")
+    private Long appraiseeSignatureId;
+
+    @Column(name = "appraiser_signature_id")
+    private Long appraiserSignatureId;
+
+    @Column(name = "hr_signature_id")
+    private Long hrSignatureId;
+
+    @Column(name = "signature_date_format", length = 20)
+    private String signatureDateFormat = "DD/MM/YYYY";
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private AppraisalCycleType formType;
@@ -81,6 +93,9 @@ public class AppraisalFormTemplate {
         }
         if (this.targetAllDepartments == null) {
             this.targetAllDepartments = false;
+        }
+        if (this.signatureDateFormat == null || this.signatureDateFormat.isBlank()) {
+            this.signatureDateFormat = "DD/MM/YYYY";
         }
     }
 

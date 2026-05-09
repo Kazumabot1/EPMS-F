@@ -33,6 +33,10 @@ export interface AppraisalSectionRequest {
 export interface AppraisalTemplateRequest {
   templateName: string;
   description?: string;
+  appraiseeSignatureId?: number | null;
+  appraiserSignatureId?: number | null;
+  hrSignatureId?: number | null;
+  signatureDateFormat?: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
   formType: AppraisalCycleType;
   targetAllDepartments: boolean;
   departmentIds: number[];
@@ -54,6 +58,10 @@ export interface AppraisalTemplateResponse {
   id: number;
   templateName: string;
   description?: string | null;
+  appraiseeSignatureId?: number | null;
+  appraiserSignatureId?: number | null;
+  hrSignatureId?: number | null;
+  signatureDateFormat?: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
   formType: AppraisalCycleType;
   targetAllDepartments: boolean;
   departmentIds: number[];

@@ -17,6 +17,10 @@ public class AppraisalTemplateResponse {
     private Integer id;
     private String templateName;
     private String description;
+    private Long appraiseeSignatureId;
+    private Long appraiserSignatureId;
+    private Long hrSignatureId;
+    private String signatureDateFormat;
     private AppraisalCycleType formType;
     private Boolean targetAllDepartments;
     private List<Integer> departmentIds = new ArrayList<>();

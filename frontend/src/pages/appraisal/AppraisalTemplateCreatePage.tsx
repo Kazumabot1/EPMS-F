@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { appraisalTemplateService } from '../../services/appraisalService';
 import { extractApiErrorMessage } from '../../services/apiError';
+import { signatureService } from '../../services/signatureService';
 import type { AppraisalSectionRequest, AppraisalTemplateRequest } from '../../types/appraisal';
+import type { Signature } from '../../types/signature';
 import AppraisalRatingDots from '../../components/appraisal/AppraisalRatingDots';
 import './appraisal.css';
 
@@ -115,11 +117,30 @@ const defaultSections = (): AppraisalSectionRequest[] => [
 const emptyTemplate = (): AppraisalTemplateRequest => ({
   templateName: 'Performance Appraisal Form Template',
   description: '',
+  appraiseeSignatureId: null,
+  appraiserSignatureId: null,
+  hrSignatureId: null,
+  signatureDateFormat: 'DD/MM/YYYY',
   formType: 'ANNUAL',
   targetAllDepartments: true,
   departmentIds: [],
   sections: defaultSections(),
 });
+
+const signatureDateFormats: Array<'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'> = [
+  'DD/MM/YYYY',
+  'MM/DD/YYYY',
+  'YYYY-MM-DD',
+];
+
+const formatDateByPattern = (date: Date, pattern: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD') => {
+  const day = `${date.getDate()}`.padStart(2, '0');
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const year = `${date.getFullYear()}`;
+  if (pattern === 'MM/DD/YYYY') return `${month}/${day}/${year}`;
+  if (pattern === 'YYYY-MM-DD') return `${year}-${month}-${day}`;
+  return `${day}/${month}/${year}`;
+};
 
 const scoreRanges = [
   { range: '86-100', label: 'Outstanding', description: 'Performance exceptional and far exceeds expectations.' },
@@ -133,11 +154,33 @@ const AppraisalTemplateCreatePage = () => {
   const [form, setForm] = useState<AppraisalTemplateRequest>(() => emptyTemplate());
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [signatureLoading, setSignatureLoading] = useState(false);
 
   const totalCriteria = useMemo(
     () => form.sections.reduce((sum, section) => sum + section.criteria.length, 0),
     [form.sections],
   );
+  const signatureById = useMemo(() => {
+    const map = new Map<number, Signature>();
+    signatures.forEach((item) => map.set(item.id, item));
+    return map;
+  }, [signatures]);
+
+  useEffect(() => {
+    const loadSignatures = async () => {
+      try {
+        setSignatureLoading(true);
+        const data = await signatureService.list();
+        setSignatures(data);
+      } catch {
+        setSignatures([]);
+      } finally {
+        setSignatureLoading(false);
+      }
+    };
+    void loadSignatures();
+  }, []);
 
   const updateSection = (sectionIndex: number, patch: Partial<AppraisalSectionRequest>) => {
     setForm((previous) => ({
@@ -248,6 +291,10 @@ const AppraisalTemplateCreatePage = () => {
       const created = await appraisalTemplateService.create({
         templateName: form.templateName.trim(),
         description: form.description,
+        appraiseeSignatureId: form.appraiseeSignatureId ?? null,
+        appraiserSignatureId: form.appraiserSignatureId ?? null,
+        hrSignatureId: form.hrSignatureId ?? null,
+        signatureDateFormat: form.signatureDateFormat ?? 'DD/MM/YYYY',
         formType: 'ANNUAL',
         targetAllDepartments: true,
         departmentIds: [],
@@ -413,10 +460,80 @@ const AppraisalTemplateCreatePage = () => {
           </table>
         </div>
 
+        <div className="appraisal-form-block">
+          <div className="appraisal-form-block-header">
+            <div>
+              <h3>Signature Section</h3>
+              <p className="appraisal-muted">Choose saved signatures and date format to print directly in this template.</p>
+            </div>
+          </div>
+          <div className="appraisal-inline-grid two">
+            <label className="appraisal-field">
+              <span>Appraisee Signature</span>
+              <select
+                value={form.appraiseeSignatureId ?? ''}
+                onChange={(event) => setForm((previous) => ({ ...previous, appraiseeSignatureId: event.target.value ? Number(event.target.value) : null }))}
+              >
+                <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
+                {signatures.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="appraisal-field">
+              <span>Appraiser Signature</span>
+              <select
+                value={form.appraiserSignatureId ?? ''}
+                onChange={(event) => setForm((previous) => ({ ...previous, appraiserSignatureId: event.target.value ? Number(event.target.value) : null }))}
+              >
+                <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
+                {signatures.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="appraisal-field">
+              <span>HR Signature</span>
+              <select
+                value={form.hrSignatureId ?? ''}
+                onChange={(event) => setForm((previous) => ({ ...previous, hrSignatureId: event.target.value ? Number(event.target.value) : null }))}
+              >
+                <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
+                {signatures.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="appraisal-field">
+              <span>Date Format</span>
+              <select
+                value={form.signatureDateFormat ?? 'DD/MM/YYYY'}
+                onChange={(event) => setForm((previous) => ({ ...previous, signatureDateFormat: event.target.value as AppraisalTemplateRequest['signatureDateFormat'] }))}
+              >
+                {signatureDateFormats.map((format) => (
+                  <option key={format} value={format}>{format}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
         <div className="appraisal-signature-grid">
-          <div>Signature of Appraisee & Date</div>
-          <div>Signature of Appraiser & Date</div>
-          <div>HR Signature / Date / Designation</div>
+          <SignatureDisplayBlock
+            label="Signature of Appraisee & Date"
+            signature={form.appraiseeSignatureId ? signatureById.get(form.appraiseeSignatureId) : undefined}
+            dateText={formatDateByPattern(new Date(), form.signatureDateFormat ?? 'DD/MM/YYYY')}
+          />
+          <SignatureDisplayBlock
+            label="Signature of Appraiser & Date"
+            signature={form.appraiserSignatureId ? signatureById.get(form.appraiserSignatureId) : undefined}
+            dateText={formatDateByPattern(new Date(), form.signatureDateFormat ?? 'DD/MM/YYYY')}
+          />
+          <SignatureDisplayBlock
+            label="HR Signature / Date / Designation"
+            signature={form.hrSignatureId ? signatureById.get(form.hrSignatureId) : undefined}
+            dateText={formatDateByPattern(new Date(), form.signatureDateFormat ?? 'DD/MM/YYYY')}
+          />
         </div>
 
         <div className="appraisal-button-row final-actions">
@@ -431,3 +548,26 @@ const AppraisalTemplateCreatePage = () => {
 };
 
 export default AppraisalTemplateCreatePage;
+
+type SignatureDisplayBlockProps = {
+  label: string;
+  signature?: Signature;
+  dateText: string;
+};
+
+const SignatureDisplayBlock = ({ label, signature, dateText }: SignatureDisplayBlockProps) => {
+  const src = signature
+    ? (signature.imageData.startsWith('data:') ? signature.imageData : `data:${signature.imageType};base64,${signature.imageData}`)
+    : null;
+  return (
+    <div className="appraisal-signature-slot">
+      {src ? (
+        <img src={src} alt={signature?.name ?? 'signature'} className="appraisal-signature-image" />
+      ) : (
+        <span className="appraisal-signature-placeholder">{label}</span>
+      )}
+      <p className="appraisal-signature-date">Date: {dateText}</p>
+      {signature ? <small className="appraisal-signature-name">{signature.name}</small> : null}
+    </div>
+  );
+};
