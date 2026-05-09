@@ -6,11 +6,14 @@ const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:80
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // sockjs-client references Node's `global`; browsers only have `globalThis` / `window`.
+
   define: {
     global: 'globalThis',
   },
+
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
         target: apiProxyTarget,

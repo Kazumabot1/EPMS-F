@@ -2,6 +2,7 @@ package com.epms.dto;
 
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -32,6 +33,8 @@ public final class AssessmentFormDtos {
     public static class AssessmentFormPayload {
         private String formName;
         private String description;
+        private LocalDate startDate;
+        private LocalDate endDate;
         private List<String> targetRoles = new ArrayList<>();
         private List<AssessmentSectionPayload> sections = new ArrayList<>();
     }
@@ -58,6 +61,8 @@ public final class AssessmentFormDtos {
         private Integer id;
         private String formName;
         private String description;
+        private LocalDate startDate;
+        private LocalDate endDate;
         private Boolean isActive;
         private List<String> targetRoles = new ArrayList<>();
         private Date createdAt;
