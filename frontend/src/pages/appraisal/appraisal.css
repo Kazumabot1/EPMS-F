@@ -564,16 +564,41 @@ button.appraisal-rating-dot:not(:disabled) {
   margin-bottom: 18px;
 }
 
-.appraisal-signature-grid div {
+.appraisal-signature-slot {
   border-bottom: 1px solid #94a3b8;
-  min-height: 56px;
+  min-height: 86px;
   color: #64748b;
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 6px;
 }
 
-.appraisal-signature-grid div:last-child {
+.appraisal-signature-grid .appraisal-signature-slot:last-child {
   grid-column: span 2;
   width: 50%;
+}
+
+.appraisal-signature-image {
+  height: 52px;
+  width: 180px;
+  object-fit: contain;
+}
+
+.appraisal-signature-placeholder {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+.appraisal-signature-date {
+  margin: 0;
+  color: #475569;
+}
+
+.appraisal-signature-name {
+  color: #64748b;
 }
 
 .final-actions {
@@ -634,7 +659,7 @@ button.appraisal-rating-dot:not(:disabled) {
   }
 
   .appraisal-info-field span,
-  .appraisal-signature-grid div:last-child {
+  .appraisal-signature-grid .appraisal-signature-slot:last-child {
     width: 100%;
   }
 }

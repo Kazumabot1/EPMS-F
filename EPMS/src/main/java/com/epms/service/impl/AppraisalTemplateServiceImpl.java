@@ -22,6 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional
 public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
+    private static final List<String> ALLOWED_SIGNATURE_DATE_FORMATS = List.of("DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD");
 
     private final AppraisalFormTemplateRepository templateRepository;
     private final AppraisalSectionRepository sectionRepository;
@@ -36,6 +37,10 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
         AppraisalFormTemplate template = new AppraisalFormTemplate();
         template.setTemplateName(request.getTemplateName().trim());
         template.setDescription(request.getDescription());
+        template.setAppraiseeSignatureId(request.getAppraiseeSignatureId());
+        template.setAppraiserSignatureId(request.getAppraiserSignatureId());
+        template.setHrSignatureId(request.getHrSignatureId());
+        template.setSignatureDateFormat(normalizeSignatureDateFormat(request.getSignatureDateFormat()));
         template.setFormType(request.getFormType() != null ? request.getFormType() : com.epms.entity.enums.AppraisalCycleType.ANNUAL);
         template.setTargetAllDepartments(request.getTargetAllDepartments() == null || Boolean.TRUE.equals(request.getTargetAllDepartments()));
         template.setStatus(AppraisalTemplateStatus.DRAFT);
@@ -62,6 +67,10 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
 
         template.setTemplateName(request.getTemplateName().trim());
         template.setDescription(request.getDescription());
+        template.setAppraiseeSignatureId(request.getAppraiseeSignatureId());
+        template.setAppraiserSignatureId(request.getAppraiserSignatureId());
+        template.setHrSignatureId(request.getHrSignatureId());
+        template.setSignatureDateFormat(normalizeSignatureDateFormat(request.getSignatureDateFormat()));
         template.setFormType(request.getFormType() != null ? request.getFormType() : template.getFormType());
         template.setTargetAllDepartments(request.getTargetAllDepartments() == null || Boolean.TRUE.equals(request.getTargetAllDepartments()));
         template.setVersionNo((template.getVersionNo() == null ? 1 : template.getVersionNo()) + 1);
@@ -156,6 +165,7 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
         if (request.getSections() == null || request.getSections().isEmpty()) {
             throw new BadRequestException("At least one section is required.");
         }
+        validateSignatureDateFormat(request.getSignatureDateFormat());
     }
 
     private void applyDepartments(AppraisalFormTemplate template, AppraisalTemplateRequest request) {
@@ -214,6 +224,10 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
         response.setId(template.getId());
         response.setTemplateName(template.getTemplateName());
         response.setDescription(template.getDescription());
+        response.setAppraiseeSignatureId(template.getAppraiseeSignatureId());
+        response.setAppraiserSignatureId(template.getAppraiserSignatureId());
+        response.setHrSignatureId(template.getHrSignatureId());
+        response.setSignatureDateFormat(normalizeSignatureDateFormat(template.getSignatureDateFormat()));
         response.setFormType(template.getFormType());
         response.setTargetAllDepartments(template.getTargetAllDepartments());
         response.setStatus(template.getStatus());
@@ -242,6 +256,20 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
         }
 
         return response;
+    }
+
+    private void validateSignatureDateFormat(String signatureDateFormat) {
+        String normalized = normalizeSignatureDateFormat(signatureDateFormat);
+        if (!ALLOWED_SIGNATURE_DATE_FORMATS.contains(normalized)) {
+            throw new BadRequestException("Signature date format is invalid. Allowed: DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD");
+        }
+    }
+
+    private String normalizeSignatureDateFormat(String signatureDateFormat) {
+        if (signatureDateFormat == null || signatureDateFormat.isBlank()) {
+            return "DD/MM/YYYY";
+        }
+        return signatureDateFormat.trim().toUpperCase();
     }
 
     private AppraisalSectionResponse mapSection(AppraisalSection section) {

@@ -92,6 +92,10 @@ public class SecurityConfig {
                                 "/api/notifications",
                                 "/api/notifications/**"
                         ).authenticated()
+                        .requestMatchers(
+                                "/api/signatures",
+                                "/api/signatures/**"
+                        ).authenticated()
 
                         .requestMatchers(
                                 "/api/users",

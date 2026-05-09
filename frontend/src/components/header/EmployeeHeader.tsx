@@ -432,6 +432,7 @@ import type { UserRole } from '../../config/roleNavigation';
 import { dashboardPathByRole, displayRoleName } from '../../config/roleNavigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotificationsWebSocket } from '../../hooks/useNotificationsWebSocket';
+import SignatureModal from '../signature/SignatureModal';
 
 interface UserLike {
   fullName?: string;
@@ -535,6 +536,7 @@ const EmployeeHeader = ({
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const [notifItems, setNotifItems] = useState<NotifItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -807,6 +809,17 @@ const EmployeeHeader = ({
                 <i className="bi bi-house-door" />
                 Dashboard
               </button>
+              <button
+                type="button"
+                className="employee-user-dropdown-item"
+                onClick={() => {
+                  closeMenu();
+                  setSignatureOpen(true);
+                }}
+              >
+                <i className="bi bi-pen" />
+                Signature
+              </button>
 
               <button
                 type="button"
@@ -891,6 +904,7 @@ const EmployeeHeader = ({
           </div>
         </div>
       )}
+      <SignatureModal open={signatureOpen} onClose={() => setSignatureOpen(false)} />
     </header>
   );
 };
