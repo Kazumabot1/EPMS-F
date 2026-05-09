@@ -25,6 +25,8 @@ export type AssessmentSectionPayload = {
 export type AssessmentFormPayload = {
   formName: string;
   description?: string;
+  startDate: string;
+  endDate: string;
   targetRoles: AssessmentTargetRole[];
   sections: AssessmentSectionPayload[];
 };
@@ -33,6 +35,8 @@ export type AssessmentFormResponse = {
   id: number;
   formName: string;
   description?: string;
+  startDate?: string;
+  endDate?: string;
   isActive: boolean;
   targetRoles: AssessmentTargetRole[];
   createdAt?: string;

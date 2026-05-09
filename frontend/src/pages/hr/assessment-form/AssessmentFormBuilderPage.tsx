@@ -14,6 +14,7 @@ const TARGET_ROLES: { label: string; value: AssessmentTargetRole }[] = [
 ];
 
 const RESPONSE_TYPES: AssessmentResponseType[] = ['RATING', 'TEXT', 'YES_NO'];
+const RATING_OPTIONS = [1, 2, 3, 4, 5];
 
 const RESPONSE_TYPE_LABELS: Record<AssessmentResponseType, string> = {
   RATING: 'Rating',
@@ -21,9 +22,19 @@ const RESPONSE_TYPE_LABELS: Record<AssessmentResponseType, string> = {
   YES_NO: 'Yes / No',
 };
 
+const today = () => new Date().toISOString().slice(0, 10);
+
+const defaultEndDate = () => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + 1);
+  return date.toISOString().slice(0, 10);
+};
+
 const emptyForm = (): AssessmentFormPayload => ({
   formName: '',
   description: '',
+  startDate: today(),
+  endDate: defaultEndDate(),
   targetRoles: ['Employee'],
   sections: [
     {
@@ -41,6 +52,19 @@ const emptyForm = (): AssessmentFormPayload => ({
   ],
 });
 
+const formatDate = (value?: string) => {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString();
+};
+
+const normalizeIntegerOneToFive = (value: number) => {
+  if (!Number.isFinite(value)) return 1;
+  const rounded = Math.round(value);
+  if (rounded < 1) return 1;
+  if (rounded > 5) return 5;
+  return rounded;
+};
+
 const AssessmentFormBuilderPage = () => {
   const [forms, setForms] = useState<AssessmentFormResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,7 +77,7 @@ const AssessmentFormBuilderPage = () => {
 
   const activeForms = useMemo(
     () => forms.filter((item) => item.isActive !== false),
-    [forms]
+    [forms],
   );
 
   const totalSections = useMemo(() => {
@@ -67,7 +91,7 @@ const AssessmentFormBuilderPage = () => {
         (item.sections?.reduce(
           (sectionTotal, section) =>
             sectionTotal + (section.questions?.length ?? 0),
-          0
+          0,
         ) ?? 0)
       );
     }, 0);
@@ -77,7 +101,7 @@ const AssessmentFormBuilderPage = () => {
     return (
       item.sections?.reduce(
         (total, section) => total + (section.questions?.length ?? 0),
-        0
+        0,
       ) ?? 0
     );
   };
@@ -115,6 +139,8 @@ const AssessmentFormBuilderPage = () => {
     setForm({
       formName: item.formName,
       description: item.description ?? '',
+      startDate: item.startDate ?? today(),
+      endDate: item.endDate ?? defaultEndDate(),
       targetRoles: item.targetRoles?.length ? item.targetRoles : ['Employee'],
       sections: item.sections?.length
         ? item.sections.map((section, sectionIndex) => ({
@@ -127,7 +153,7 @@ const AssessmentFormBuilderPage = () => {
                   questionText: question.questionText,
                   responseType: question.responseType,
                   isRequired: question.isRequired ?? true,
-                  weight: question.weight ?? 1,
+                  weight: normalizeIntegerOneToFive(Number(question.weight ?? 1)),
                 }))
               : [
                   {
@@ -165,7 +191,7 @@ const AssessmentFormBuilderPage = () => {
     setForm((prev) => ({
       ...prev,
       sections: prev.sections.map((section, index) =>
-        index === sectionIndex ? { ...section, title } : section
+        index === sectionIndex ? { ...section, title } : section,
       ),
     }));
   };
@@ -173,7 +199,7 @@ const AssessmentFormBuilderPage = () => {
   const updateQuestion = (
     sectionIndex: number,
     questionIndex: number,
-    patch: Partial<AssessmentFormPayload['sections'][number]['questions'][number]>
+    patch: Partial<AssessmentFormPayload['sections'][number]['questions'][number]>,
   ) => {
     setForm((prev) => ({
       ...prev,
@@ -182,10 +208,10 @@ const AssessmentFormBuilderPage = () => {
           ? {
               ...section,
               questions: section.questions.map((question, qIndex) =>
-                qIndex === questionIndex ? { ...question, ...patch } : question
+                qIndex === questionIndex ? { ...question, ...patch } : question,
               ),
             }
-          : section
+          : section,
       ),
     }));
   };
@@ -265,7 +291,7 @@ const AssessmentFormBuilderPage = () => {
                 },
               ],
             }
-          : section
+          : section,
       ),
     }));
   };
@@ -287,6 +313,13 @@ const AssessmentFormBuilderPage = () => {
 
   const validate = () => {
     if (!form.formName.trim()) return 'Form name is required.';
+    if (!form.startDate) return 'Start date is required.';
+    if (!form.endDate) return 'End date is required.';
+
+    if (new Date(form.startDate) > new Date(form.endDate)) {
+      return 'Start date cannot be later than end date.';
+    }
+
     if (!form.targetRoles.length) return 'Select at least one target role.';
     if (!form.sections.length) return 'Add at least one section.';
 
@@ -296,6 +329,14 @@ const AssessmentFormBuilderPage = () => {
 
       for (const question of section.questions) {
         if (!question.questionText.trim()) return 'Every question needs text.';
+
+        if (!Number.isInteger(Number(question.weight))) {
+          return 'Rating/weight must be a whole number from 1 to 5.';
+        }
+
+        if (Number(question.weight) < 1 || Number(question.weight) > 5) {
+          return 'Rating/weight must be between 1 and 5.';
+        }
       }
     }
 
@@ -318,6 +359,8 @@ const AssessmentFormBuilderPage = () => {
         ...form,
         formName: form.formName.trim(),
         description: form.description?.trim(),
+        startDate: form.startDate,
+        endDate: form.endDate,
         sections: form.sections.map((section, sectionIndex) => ({
           ...section,
           title: section.title.trim(),
@@ -325,7 +368,7 @@ const AssessmentFormBuilderPage = () => {
           questions: section.questions.map((question) => ({
             ...question,
             questionText: question.questionText.trim(),
-            weight: Number(question.weight || 1),
+            weight: normalizeIntegerOneToFive(Number(question.weight || 1)),
           })),
         })),
       };
@@ -380,8 +423,8 @@ const AssessmentFormBuilderPage = () => {
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100">
-                Create beautiful assessment forms with sections, weighted questions,
-                role targeting, and live previews for employees and managers.
+                Create assessment forms with date ranges, sections, questions,
+                role targeting, and rating-only 1 to 5 radio scoring.
               </p>
             </div>
 
@@ -398,57 +441,23 @@ const AssessmentFormBuilderPage = () => {
 
         <div className="grid gap-4 md:grid-cols-4">
           <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Total Forms</p>
-                <p className="mt-2 text-3xl font-bold text-slate-900">{forms.length}</p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-xl text-indigo-600">
-                <i className="bi bi-files" />
-              </div>
-            </div>
+            <p className="text-sm font-medium text-slate-500">Total Forms</p>
+            <p className="mt-2 text-3xl font-bold text-slate-900">{forms.length}</p>
           </div>
 
           <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Active Forms</p>
-                <p className="mt-2 text-3xl font-bold text-emerald-600">
-                  {activeForms.length}
-                </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-xl text-emerald-600">
-                <i className="bi bi-check2-circle" />
-              </div>
-            </div>
+            <p className="text-sm font-medium text-slate-500">Active Forms</p>
+            <p className="mt-2 text-3xl font-bold text-emerald-600">{activeForms.length}</p>
           </div>
 
           <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Sections</p>
-                <p className="mt-2 text-3xl font-bold text-violet-600">
-                  {totalSections}
-                </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-xl text-violet-600">
-                <i className="bi bi-layout-three-columns" />
-              </div>
-            </div>
+            <p className="text-sm font-medium text-slate-500">Sections</p>
+            <p className="mt-2 text-3xl font-bold text-violet-600">{totalSections}</p>
           </div>
 
           <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Questions</p>
-                <p className="mt-2 text-3xl font-bold text-purple-600">
-                  {totalQuestions}
-                </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-xl text-purple-600">
-                <i className="bi bi-question-circle" />
-              </div>
-            </div>
+            <p className="text-sm font-medium text-slate-500">Questions</p>
+            <p className="mt-2 text-3xl font-bold text-purple-600">{totalQuestions}</p>
           </div>
         </div>
 
@@ -486,7 +495,7 @@ const AssessmentFormBuilderPage = () => {
               </div>
               <h3 className="font-bold text-slate-900">No assessment forms yet</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Create one to replace the hardcoded self-assessment template.
+                Create one to start collecting employee assessments.
               </p>
             </div>
           ) : (
@@ -495,6 +504,7 @@ const AssessmentFormBuilderPage = () => {
                 <thead className="bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-6 py-4">Form</th>
+                    <th className="px-6 py-4">Period</th>
                     <th className="px-6 py-4">Target Roles</th>
                     <th className="px-6 py-4">Structure</th>
                     <th className="px-6 py-4">Status</th>
@@ -507,20 +517,14 @@ const AssessmentFormBuilderPage = () => {
                   {forms.map((item) => (
                     <tr key={item.id} className="transition hover:bg-indigo-50/40">
                       <td className="px-6 py-5">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-                            <i className="bi bi-file-earmark-text" />
-                          </div>
-
-                          <div>
-                            <div className="font-bold text-slate-900">
-                              {item.formName}
-                            </div>
-                            <div className="mt-1 max-w-md truncate text-xs text-slate-500">
-                              {item.description || 'No description'}
-                            </div>
-                          </div>
+                        <div className="font-bold text-slate-900">{item.formName}</div>
+                        <div className="mt-1 max-w-md truncate text-xs text-slate-500">
+                          {item.description || 'No description'}
                         </div>
+                      </td>
+
+                      <td className="px-6 py-5 text-xs font-semibold text-slate-600">
+                        {formatDate(item.startDate)} - {formatDate(item.endDate)}
                       </td>
 
                       <td className="px-6 py-5">
@@ -538,14 +542,8 @@ const AssessmentFormBuilderPage = () => {
 
                       <td className="px-6 py-5">
                         <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-                          <span>
-                            <i className="bi bi-layout-text-window mr-1 text-indigo-500" />
-                            {item.sections?.length ?? 0} section(s)
-                          </span>
-                          <span>
-                            <i className="bi bi-patch-question mr-1 text-purple-500" />
-                            {getQuestionCount(item)} question(s)
-                          </span>
+                          <span>{item.sections?.length ?? 0} section(s)</span>
+                          <span>{getQuestionCount(item)} question(s)</span>
                         </div>
                       </td>
 
@@ -557,11 +555,6 @@ const AssessmentFormBuilderPage = () => {
                               : 'bg-slate-100 text-slate-500'
                           }`}
                         >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              item.isActive ? 'bg-emerald-500' : 'bg-slate-400'
-                            }`}
-                          />
                           {item.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
@@ -575,9 +568,8 @@ const AssessmentFormBuilderPage = () => {
                           <button
                             type="button"
                             onClick={() => openEdit(item)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                           >
-                            <i className="bi bi-pencil-square" />
                             Edit
                           </button>
 
@@ -585,9 +577,8 @@ const AssessmentFormBuilderPage = () => {
                             <button
                               type="button"
                               onClick={() => deactivate(item.id)}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 shadow-sm transition hover:bg-red-50"
+                              className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 shadow-sm transition hover:bg-red-50"
                             >
-                              <i className="bi bi-x-circle" />
                               Deactivate
                             </button>
                           )}
@@ -613,7 +604,7 @@ const AssessmentFormBuilderPage = () => {
                   </h2>
 
                   <p className="mt-1 text-sm text-indigo-100">
-                    Build sections, questions, role targets, and scoring weights.
+                    Ratings are fixed to 1, 2, 3, 4, and 5 only.
                   </p>
                 </div>
 
@@ -658,6 +649,36 @@ const AssessmentFormBuilderPage = () => {
                           setForm((prev) => ({ ...prev, description: e.target.value }))
                         }
                         placeholder="Optional"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-bold text-slate-700">
+                        Start Date
+                      </span>
+
+                      <input
+                        type="date"
+                        className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                        value={form.startDate}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, startDate: e.target.value }))
+                        }
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-bold text-slate-700">
+                        End Date
+                      </span>
+
+                      <input
+                        type="date"
+                        className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                        value={form.endDate}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, endDate: e.target.value }))
+                        }
                       />
                     </label>
                   </div>
@@ -759,7 +780,7 @@ const AssessmentFormBuilderPage = () => {
                               </button>
                             </div>
 
-                            <div className="grid gap-3 md:grid-cols-[1fr_150px_110px_120px] md:items-center">
+                            <div className="grid gap-3 md:grid-cols-[1fr_150px_150px_120px] md:items-center">
                               <input
                                 className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
                                 value={question.questionText}
@@ -787,19 +808,21 @@ const AssessmentFormBuilderPage = () => {
                                 ))}
                               </select>
 
-                              <input
+                              <select
                                 className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
-                                type="number"
-                                min="0"
-                                step="0.1"
-                                value={question.weight}
+                                value={normalizeIntegerOneToFive(Number(question.weight))}
                                 onChange={(e) =>
                                   updateQuestion(sectionIndex, questionIndex, {
                                     weight: Number(e.target.value),
                                   })
                                 }
-                                placeholder="Weight"
-                              />
+                              >
+                                {RATING_OPTIONS.map((rating) => (
+                                  <option key={rating} value={rating}>
+                                    Weight {rating}
+                                  </option>
+                                ))}
+                              </select>
 
                               <label className="flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-600">
                                 <input
@@ -814,6 +837,26 @@ const AssessmentFormBuilderPage = () => {
                                 Required
                               </label>
                             </div>
+
+                            {question.responseType === 'RATING' && (
+                              <div className="mt-4 rounded-2xl border border-indigo-100 bg-white p-3">
+                                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-indigo-600">
+                                  Rating limit: only 1, 2, 3, 4, 5
+                                </p>
+
+                                <div className="flex flex-wrap gap-3">
+                                  {RATING_OPTIONS.map((rating) => (
+                                    <label
+                                      key={rating}
+                                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700"
+                                    >
+                                      <input type="radio" disabled />
+                                      {rating}
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
 
@@ -861,6 +904,10 @@ const AssessmentFormBuilderPage = () => {
                           {form.description || 'No description'}
                         </p>
 
+                        <p className="mt-2 text-xs font-bold text-slate-500">
+                          Period: {formatDate(form.startDate)} - {formatDate(form.endDate)}
+                        </p>
+
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           {form.targetRoles.map((role) => (
                             <span
@@ -895,18 +942,19 @@ const AssessmentFormBuilderPage = () => {
 
                                 <p className="mt-1 text-xs font-medium text-slate-400">
                                   {RESPONSE_TYPE_LABELS[question.responseType]} · Weight:{' '}
-                                  {question.weight || 0}
+                                  {normalizeIntegerOneToFive(Number(question.weight || 1))}
                                 </p>
 
                                 {question.responseType === 'RATING' && (
-                                  <div className="mt-3 flex gap-2">
-                                    {[1, 2, 3, 4, 5].map((rating) => (
-                                      <span
+                                  <div className="mt-3 flex flex-wrap gap-3">
+                                    {RATING_OPTIONS.map((rating) => (
+                                      <label
                                         key={rating}
-                                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-bold text-slate-600"
+                                        className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600"
                                       >
+                                        <input type="radio" disabled />
                                         {rating}
-                                      </span>
+                                      </label>
                                     ))}
                                   </div>
                                 )}

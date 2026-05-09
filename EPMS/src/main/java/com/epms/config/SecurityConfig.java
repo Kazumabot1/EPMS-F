@@ -34,10 +34,19 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    private static final Set<String> ADMIN_ROLES = Set.of("ADMIN");
+    private static final Set<String> ADMIN_ROLES = Set.of(
+            "ADMIN"
+    );
 
     private static final Set<String> HR_ROLES = Set.of(
             "HR",
+            "HUMAN_RESOURCE",
+            "HUMAN_RESOURCES",
+            "HR_MANAGER",
+            "HR_ADMIN",
+            "PEOPLE",
+            "PEOPLE_OPS",
+            "TALENT",
             "ADMIN"
     );
 
@@ -57,6 +66,13 @@ public class SecurityConfig {
 
     private static final Set<String> SCORE_TABLE_ROLES = Set.of(
             "HR",
+            "HUMAN_RESOURCE",
+            "HUMAN_RESOURCES",
+            "HR_MANAGER",
+            "HR_ADMIN",
+            "PEOPLE",
+            "PEOPLE_OPS",
+            "TALENT",
             "ADMIN",
             "DEPARTMENT_HEAD",
             "DEPARTMENTHEAD"
@@ -121,19 +137,27 @@ public class SecurityConfig {
                                 "/api/notifications",
                                 "/api/notifications/**"
                         ).authenticated()
+
                         .requestMatchers(
                                 "/api/signatures",
                                 "/api/signatures/**"
                         ).authenticated()
 
                         /*
+                         * Assessment Form Builder.
+                         *
+                         * HR/Admin only.
+                         * Your DB role ROLE_HR becomes HR in UserPrincipal roles
+                         * and ROLE_HR in Spring authorities. This checker supports both.
+                         */
+                        .requestMatchers(
+                                "/api/appraisal-forms",
+                                "/api/appraisal-forms/**"
+                        ).access((authentication, context) -> isHrOrAdmin(authentication.get()))
+
+                        /*
                          * One-on-One dependencies.
-                         *
-                         * These must be BEFORE the broad HR-only:
-                         *   /api/employees/**
-                         *   /api/departments/**
-                         *
-                         * Otherwise the employee dropdown request gets caught and blocked.
+                         * These must stay before broad /api/employees/** and /api/departments/** rules.
                          */
                         .requestMatchers(HttpMethod.GET,
                                 "/api/departments",
@@ -165,6 +189,10 @@ public class SecurityConfig {
 
                         /*
                          * HR/Admin management APIs.
+                         *
+                         * Important:
+                         * Do NOT include /api/appraisal-forms here.
+                         * It is handled above.
                          */
                         .requestMatchers(
                                 "/api/dashboard",
@@ -173,9 +201,6 @@ public class SecurityConfig {
                                 "/api/employees/**",
                                 "/api/hr/employee-accounts",
                                 "/api/hr/employee-accounts/**",
-
-                                "/api/appraisal-forms",
-                                "/api/appraisal-forms/**",
 
                                 "/api/assessment-forms",
                                 "/api/assessment-forms/**",
@@ -276,6 +301,56 @@ public class SecurityConfig {
         return http.build();
     }
 
+    private AuthorizationDecision isHrOrAdmin(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return new AuthorizationDecision(false);
+        }
+
+        Object principal = authentication.getPrincipal();
+
+        if (principal == null || "anonymousUser".equals(principal)) {
+            return new AuthorizationDecision(false);
+        }
+
+        if (principal instanceof UserPrincipal userPrincipal) {
+            String dashboard = userPrincipal.getDashboard();
+
+            if ("HR_DASHBOARD".equals(dashboard) || "ADMIN_DASHBOARD".equals(dashboard)) {
+                return new AuthorizationDecision(true);
+            }
+
+            if (userPrincipal.getRoles() != null) {
+                for (String role : userPrincipal.getRoles()) {
+                    String normalizedRole = normalizeAuthorityName(role);
+
+                    if ("ADMIN".equals(normalizedRole) || isHrLike(normalizedRole)) {
+                        return new AuthorizationDecision(true);
+                    }
+                }
+            }
+
+            String normalizedPosition = normalizeAuthorityName(userPrincipal.getPosition());
+
+            if (isHrLike(normalizedPosition)) {
+                return new AuthorizationDecision(true);
+            }
+        }
+
+        for (GrantedAuthority authority : authentication.getAuthorities()) {
+            if (authority == null) {
+                continue;
+            }
+
+            String normalizedAuthority = normalizeAuthorityName(authority.getAuthority());
+
+            if ("ADMIN".equals(normalizedAuthority) || isHrLike(normalizedAuthority)) {
+                return new AuthorizationDecision(true);
+            }
+        }
+
+        return new AuthorizationDecision(false);
+    }
+
     private AuthorizationDecision hasRoleDashboardOrPosition(
             Authentication authentication,
             Set<String> allowedRoles,
@@ -300,7 +375,13 @@ public class SecurityConfig {
 
             if (userPrincipal.getRoles() != null) {
                 for (String role : userPrincipal.getRoles()) {
-                    if (allowedRoles.contains(normalizeAuthorityName(role))) {
+                    String normalizedRole = normalizeAuthorityName(role);
+
+                    if (allowedRoles.contains(normalizedRole)) {
+                        return new AuthorizationDecision(true);
+                    }
+
+                    if (allowedRoles.contains("HR") && isHrLike(normalizedRole)) {
                         return new AuthorizationDecision(true);
                     }
                 }
@@ -308,7 +389,7 @@ public class SecurityConfig {
 
             String normalizedPosition = normalizeAuthorityName(userPrincipal.getPosition());
 
-            if (allowedRoles.contains("HR") && normalizedPosition.contains("HR")) {
+            if (allowedRoles.contains("HR") && isHrLike(normalizedPosition)) {
                 return new AuthorizationDecision(true);
             }
 
@@ -348,9 +429,34 @@ public class SecurityConfig {
             if (allowedRoles.contains(normalizedAuthority)) {
                 return new AuthorizationDecision(true);
             }
+
+            if (allowedRoles.contains("HR") && isHrLike(normalizedAuthority)) {
+                return new AuthorizationDecision(true);
+            }
         }
 
         return new AuthorizationDecision(false);
+    }
+
+    private boolean isHrLike(String normalizedValue) {
+        if (normalizedValue == null || normalizedValue.isBlank()) {
+            return false;
+        }
+
+        return normalizedValue.equals("HR")
+                || normalizedValue.equals("HUMAN_RESOURCE")
+                || normalizedValue.equals("HUMAN_RESOURCES")
+                || normalizedValue.equals("HR_MANAGER")
+                || normalizedValue.equals("HR_ADMIN")
+                || normalizedValue.equals("PEOPLE")
+                || normalizedValue.equals("PEOPLE_OPS")
+                || normalizedValue.equals("TALENT")
+                || normalizedValue.contains("_HR")
+                || normalizedValue.contains("HR_")
+                || normalizedValue.contains("HUMAN_RESOURCE")
+                || normalizedValue.contains("HUMAN_RESOURCES")
+                || normalizedValue.contains("PEOPLE")
+                || normalizedValue.contains("TALENT");
     }
 
     private String normalizeAuthorityName(String value) {
