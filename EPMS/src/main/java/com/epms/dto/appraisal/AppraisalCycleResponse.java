@@ -32,4 +32,5 @@ public class AppraisalCycleResponse {
     private List<String> departmentNames = new ArrayList<>();
     private Date activatedAt;
     private Date completedAt;
+    private Date createdAt;
 }

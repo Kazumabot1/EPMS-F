@@ -77,6 +77,10 @@ public class AppraisalFormTemplate {
     @OrderBy("sortOrder ASC")
     private List<AppraisalSection> sections = new ArrayList<>();
 
+    @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("sortOrder ASC")
+    private List<AppraisalTemplateScoreBand> scoreBands = new ArrayList<>();
+
     @OneToMany(mappedBy = "template", fetch = FetchType.LAZY)
     private List<AppraisalCycle> cycles = new ArrayList<>();
 

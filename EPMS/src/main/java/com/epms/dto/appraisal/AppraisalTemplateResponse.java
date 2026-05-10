@@ -30,4 +30,5 @@ public class AppraisalTemplateResponse {
     private Date createdAt;
     private Date updatedAt;
     private List<AppraisalSectionResponse> sections = new ArrayList<>();
+    private List<AppraisalScoreBandResponse> scoreBands = new ArrayList<>();
 }

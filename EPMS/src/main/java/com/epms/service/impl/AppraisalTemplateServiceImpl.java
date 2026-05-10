@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -53,6 +55,7 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
 
         applyDepartments(template, request);
         applySections(template, request.getSections());
+        applyScoreBands(template, request.getScoreBands());
 
         AppraisalFormTemplate saved = templateRepository.save(template);
         return mapTemplate(saved, true);
@@ -77,8 +80,10 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
 
         template.getTargetDepartments().clear();
         template.getSections().clear();
+        template.getScoreBands().clear();
         applyDepartments(template, request);
         applySections(template, request.getSections());
+        applyScoreBands(template, request.getScoreBands());
 
         AppraisalFormTemplate saved = templateRepository.save(template);
         return mapTemplate(saved, true);
@@ -160,6 +165,9 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
         if (request.getTemplateName() == null || request.getTemplateName().isBlank()) {
             throw new BadRequestException("Template name is required.");
         }
+        if (request.getDescription() == null || request.getDescription().isBlank()) {
+            throw new BadRequestException("Template description is required.");
+        }
         // Template master is department/cycle-type independent. Cycle type and target departments
         // are selected when HR creates an Appraisal Cycle from a template.
         if (request.getSections() == null || request.getSections().isEmpty()) {
@@ -206,7 +214,7 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
                 AppraisalFormCriteria criteria = new AppraisalFormCriteria();
                 criteria.setSection(section);
                 criteria.setCriteriaText(criterionRequest.getCriteriaText().trim());
-                criteria.setDescription(criterionRequest.getDescription());
+                criteria.setDescription(criterionRequest.getDescription() == null ? "" : criterionRequest.getDescription().trim());
                 criteria.setSortOrder(criterionRequest.getSortOrder() != null ? criterionRequest.getSortOrder() : criteriaIndex);
                 criteria.setMaxRating(criterionRequest.getMaxRating() != null ? criterionRequest.getMaxRating() : 5);
                 criteria.setRatingRequired(criterionRequest.getRatingRequired() == null || criterionRequest.getRatingRequired());
@@ -216,6 +224,45 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
             }
             template.getSections().add(section);
             sectionIndex++;
+        }
+    }
+
+
+    private List<AppraisalScoreBandRequest> defaultScoreBands() {
+        List<AppraisalScoreBandRequest> defaults = new ArrayList<>();
+        defaults.add(new AppraisalScoreBandRequest(null, 86, 100, "Outstanding", "Performance exceptional and far exceeds expectations.", 1, true));
+        defaults.add(new AppraisalScoreBandRequest(null, 71, 85, "Exceeds Requirements", "Performance is consistent and clearly meets essential requirements.", 2, true));
+        defaults.add(new AppraisalScoreBandRequest(null, 60, 70, "Meet Requirement", "Performance is satisfactory and meets requirements of the job.", 3, true));
+        defaults.add(new AppraisalScoreBandRequest(null, 40, 59, "Need Improvement", "Performance is inconsistent. Supervision and training are needed.", 4, true));
+        defaults.add(new AppraisalScoreBandRequest(null, 0, 39, "Unsatisfactory", "Performance does not meet the minimum requirement of the job.", 5, true));
+        return defaults;
+    }
+
+    private void applyScoreBands(AppraisalFormTemplate template, List<AppraisalScoreBandRequest> scoreBandRequests) {
+        List<AppraisalScoreBandRequest> bands = normalizeScoreBandRequests((scoreBandRequests == null || scoreBandRequests.isEmpty())
+                ? defaultScoreBands()
+                : scoreBandRequests);
+        int index = 0;
+        for (AppraisalScoreBandRequest bandRequest : bands) {
+            if (bandRequest.getMinScore() == null || bandRequest.getMaxScore() == null) {
+                throw new BadRequestException("Score range min and max are required.");
+            }
+            if (bandRequest.getMinScore() < 0 || bandRequest.getMaxScore() > 100 || bandRequest.getMinScore() > bandRequest.getMaxScore()) {
+                throw new BadRequestException("Score ranges must be valid values between 0 and 100.");
+            }
+            if (bandRequest.getLabel() == null || bandRequest.getLabel().isBlank()) {
+                throw new BadRequestException("Score rating label is required.");
+            }
+            AppraisalTemplateScoreBand band = new AppraisalTemplateScoreBand();
+            band.setTemplate(template);
+            band.setMinScore(bandRequest.getMinScore());
+            band.setMaxScore(bandRequest.getMaxScore());
+            band.setLabel(bandRequest.getLabel().trim());
+            band.setDescription(bandRequest.getDescription());
+            band.setSortOrder(bandRequest.getSortOrder() != null ? bandRequest.getSortOrder() : index + 1);
+            band.setActive(bandRequest.getActive() == null || bandRequest.getActive());
+            template.getScoreBands().add(band);
+            index++;
         }
     }
 
@@ -255,7 +302,53 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
                     .toList());
         }
 
+        List<AppraisalTemplateScoreBand> bands = template.getScoreBands();
+        if (bands == null || bands.isEmpty()) {
+            response.setScoreBands(defaultScoreBands().stream()
+                    .map(band -> new AppraisalScoreBandResponse(
+                            band.getId(),
+                            band.getMinScore(),
+                            band.getMaxScore(),
+                            band.getLabel(),
+                            band.getDescription(),
+                            band.getSortOrder(),
+                            band.getActive()
+                    ))
+                    .toList());
+        } else {
+            response.setScoreBands(deduplicateTemplateScoreBands(bands).stream()
+                    .sorted(Comparator.comparing(AppraisalTemplateScoreBand::getSortOrder, Comparator.nullsLast(Integer::compareTo)))
+                    .map(band -> new AppraisalScoreBandResponse(
+                            band.getId(),
+                            band.getMinScore(),
+                            band.getMaxScore(),
+                            band.getLabel(),
+                            band.getDescription(),
+                            band.getSortOrder(),
+                            band.getActive()
+                    ))
+                    .toList());
+        }
+
         return response;
+    }
+
+    private List<AppraisalScoreBandRequest> normalizeScoreBandRequests(List<AppraisalScoreBandRequest> bands) {
+        Map<String, AppraisalScoreBandRequest> uniqueBands = new LinkedHashMap<>();
+        for (AppraisalScoreBandRequest band : bands) {
+            String key = band.getMinScore() + "-" + band.getMaxScore() + "-" + String.valueOf(band.getLabel()).trim().toLowerCase();
+            uniqueBands.putIfAbsent(key, band);
+        }
+        return new ArrayList<>(uniqueBands.values());
+    }
+
+    private List<AppraisalTemplateScoreBand> deduplicateTemplateScoreBands(List<AppraisalTemplateScoreBand> bands) {
+        Map<String, AppraisalTemplateScoreBand> uniqueBands = new LinkedHashMap<>();
+        for (AppraisalTemplateScoreBand band : bands) {
+            String key = band.getMinScore() + "-" + band.getMaxScore() + "-" + String.valueOf(band.getLabel()).trim().toLowerCase();
+            uniqueBands.putIfAbsent(key, band);
+        }
+        return new ArrayList<>(uniqueBands.values());
     }
 
     private void validateSignatureDateFormat(String signatureDateFormat) {

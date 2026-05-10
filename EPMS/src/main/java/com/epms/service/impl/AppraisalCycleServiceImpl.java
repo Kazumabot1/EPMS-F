@@ -8,7 +8,6 @@ import com.epms.entity.*;
 import com.epms.entity.enums.AppraisalCycleStatus;
 import com.epms.entity.enums.AppraisalCycleType;
 import com.epms.exception.BadRequestException;
-import com.epms.exception.DuplicateResourceException;
 import com.epms.exception.ResourceNotFoundException;
 import com.epms.repository.*;
 import com.epms.service.AppraisalCycleService;
@@ -61,13 +60,9 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         AppraisalFormTemplate template = templateRepository.findById(request.getTemplateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Appraisal template not found with id: " + request.getTemplateId()));
         CycleDates dates = calculateCycleDates(request);
-        if (cycleRepository.existsByCycleTypeAndCycleYearAndPeriodNo(request.getCycleType(), dates.cycleYear(), dates.periodNo())) {
-            throw new DuplicateResourceException("Appraisal cycle already exists for "
-                    + request.getCycleType() + " " + dates.cycleYear() + " period " + dates.periodNo());
-        }
 
         AppraisalCycle cycle = new AppraisalCycle();
-        cycle.setCycleName(resolveCycleName(request, dates));
+        cycle.setCycleName(request.getCycleName().trim());
         cycle.setDescription(request.getDescription());
         cycle.setTemplate(template);
         cycle.setCycleType(request.getCycleType());
@@ -75,7 +70,7 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         cycle.setPeriodNo(dates.periodNo());
         cycle.setStartDate(dates.startDate());
         cycle.setEndDate(dates.endDate());
-        cycle.setSubmissionDeadline(request.getSubmissionDeadline());
+        cycle.setSubmissionDeadline(request.getSubmissionDeadline() != null ? request.getSubmissionDeadline() : dates.endDate());
         cycle.setStatus(AppraisalCycleStatus.DRAFT);
         cycle.setLocked(false);
 
@@ -96,7 +91,6 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         return mapCycle(cycle);
     }
 
-
     @Override
     public AppraisalCycleResponse updateDraftCycle(Integer cycleId, AppraisalCycleRequest request) {
         validateCycleRequest(request);
@@ -112,14 +106,8 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         AppraisalFormTemplate template = templateRepository.findById(request.getTemplateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Appraisal template not found with id: " + request.getTemplateId()));
         CycleDates dates = calculateCycleDates(request);
-        cycleRepository.findByCycleTypeAndCycleYearAndPeriodNo(request.getCycleType(), dates.cycleYear(), dates.periodNo())
-                .filter(existing -> !existing.getId().equals(cycleId))
-                .ifPresent(existing -> {
-                    throw new DuplicateResourceException("Appraisal cycle already exists for "
-                            + request.getCycleType() + " " + dates.cycleYear() + " period " + dates.periodNo());
-                });
 
-        cycle.setCycleName(resolveCycleName(request, dates));
+        cycle.setCycleName(request.getCycleName().trim());
         cycle.setDescription(request.getDescription());
         cycle.setTemplate(template);
         cycle.setCycleType(request.getCycleType());
@@ -127,7 +115,7 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         cycle.setPeriodNo(dates.periodNo());
         cycle.setStartDate(dates.startDate());
         cycle.setEndDate(dates.endDate());
-        cycle.setSubmissionDeadline(request.getSubmissionDeadline());
+        cycle.setSubmissionDeadline(request.getSubmissionDeadline() != null ? request.getSubmissionDeadline() : dates.endDate());
         cycle.getCycleDepartments().clear();
         applyCycleDepartments(cycle, request, template);
 
@@ -180,10 +168,12 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         request.setCycleType(request.getCycleType() != null ? request.getCycleType() : source.getCycleType());
         request.setCycleYear(request.getCycleYear() != null ? request.getCycleYear() : source.getCycleYear() + 1);
         request.setPeriodNo(request.getPeriodNo() != null ? request.getPeriodNo() : source.getPeriodNo());
-        request.setCycleName(request.getCycleName());
         request.setDescription(request.getDescription() != null ? request.getDescription() : source.getDescription());
-        if (request.getSubmissionDeadline() == null) {
-            throw new BadRequestException("Submission deadline is required when re-using a cycle.");
+        if (request.getStartDate() == null && source.getCycleType() != AppraisalCycleType.ANNUAL) {
+            request.setStartDate(source.getStartDate().plusYears(1));
+        }
+        if (request.getEndDate() == null && source.getCycleType() == AppraisalCycleType.CUSTOM) {
+            request.setEndDate(source.getEndDate().plusYears(1));
         }
         return createCycle(request, createdByUserId);
     }
@@ -197,20 +187,32 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         if (request == null) {
             throw new BadRequestException("Cycle request is required.");
         }
+        if (request.getCycleName() == null || request.getCycleName().isBlank()) {
+            throw new BadRequestException("Appraisal name is required.");
+        }
         if (request.getTemplateId() == null) {
             throw new BadRequestException("Template id is required.");
         }
         if (request.getCycleType() == null) {
             throw new BadRequestException("Cycle type is required.");
         }
-        if (request.getSubmissionDeadline() == null) {
-            throw new BadRequestException("Submission deadline is required.");
+        if (request.getCycleYear() == null) {
+            throw new BadRequestException("Cycle year is required.");
         }
-        if (request.getCycleType() == AppraisalCycleType.ANNUAL && request.getCycleYear() == null) {
-            throw new BadRequestException("Cycle year is required for annual appraisal cycle.");
+        if (request.getCycleYear() < LocalDate.now().getYear()) {
+            throw new BadRequestException("Cycle year cannot be a past year.");
         }
-        if (request.getCycleType() == AppraisalCycleType.SEMI_ANNUAL && request.getStartDate() == null) {
-            throw new BadRequestException("Start date is required for semi-annual appraisal cycle.");
+        if ((request.getCycleType() == AppraisalCycleType.SEMI_ANNUAL || request.getCycleType() == AppraisalCycleType.CUSTOM)
+                && request.getStartDate() == null) {
+            throw new BadRequestException("Start date is required.");
+        }
+        if (request.getCycleType() == AppraisalCycleType.CUSTOM) {
+            if (request.getEndDate() == null) {
+                throw new BadRequestException("End date is required for custom appraisal cycle.");
+            }
+            if (request.getEndDate().isBefore(request.getStartDate())) {
+                throw new BadRequestException("End date cannot be before start date.");
+            }
         }
     }
 
@@ -225,20 +227,19 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
             );
         }
 
+        if (request.getCycleType() == AppraisalCycleType.CUSTOM) {
+            return new CycleDates(
+                    request.getCycleYear(),
+                    request.getPeriodNo() != null ? request.getPeriodNo() : 1,
+                    request.getStartDate(),
+                    request.getEndDate()
+            );
+        }
+
         LocalDate startDate = request.getStartDate();
         LocalDate endDate = startDate.plusMonths(6).minusDays(1);
         int periodNo = request.getPeriodNo() != null ? request.getPeriodNo() : (startDate.getMonthValue() <= 6 ? 1 : 2);
-        return new CycleDates(startDate.getYear(), periodNo, startDate, endDate);
-    }
-
-    private String resolveCycleName(AppraisalCycleRequest request, CycleDates dates) {
-        if (request.getCycleName() != null && !request.getCycleName().isBlank()) {
-            return request.getCycleName().trim();
-        }
-        if (request.getCycleType() == AppraisalCycleType.ANNUAL) {
-            return dates.cycleYear() + " Annual Appraisal Cycle";
-        }
-        return dates.cycleYear() + " Semi-Annual Appraisal Cycle P" + dates.periodNo();
+        return new CycleDates(request.getCycleYear(), periodNo, startDate, endDate);
     }
 
     private void applyCycleDepartments(AppraisalCycle cycle, AppraisalCycleRequest request, AppraisalFormTemplate template) {
@@ -287,6 +288,7 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         response.setLocked(cycle.getLocked());
         response.setActivatedAt(cycle.getActivatedAt());
         response.setCompletedAt(cycle.getCompletedAt());
+        response.setCreatedAt(cycle.getCreatedAt());
         if (cycle.getCycleDepartments() != null) {
             cycle.getCycleDepartments().forEach(target -> {
                 if (target.getDepartment() != null) {

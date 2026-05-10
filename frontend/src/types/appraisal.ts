@@ -1,4 +1,4 @@
-export type AppraisalCycleType = 'ANNUAL' | 'SEMI_ANNUAL';
+export type AppraisalCycleType = 'ANNUAL' | 'SEMI_ANNUAL' | 'CUSTOM';
 export type AppraisalTemplateStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 export type AppraisalCycleStatus = 'DRAFT' | 'ACTIVE' | 'LOCKED' | 'COMPLETED';
 export type EmployeeAppraisalStatus =
@@ -41,6 +41,7 @@ export interface AppraisalTemplateRequest {
   targetAllDepartments: boolean;
   departmentIds: number[];
   sections: AppraisalSectionRequest[];
+  scoreBands?: AppraisalScoreBandRequest[];
 }
 
 export interface AppraisalCriterionResponse extends AppraisalCriterionRequest {
@@ -71,6 +72,7 @@ export interface AppraisalTemplateResponse {
   createdAt?: string;
   updatedAt?: string;
   sections: AppraisalSectionResponse[];
+  scoreBands?: AppraisalScoreBandResponse[];
 }
 
 export interface AppraisalCycleRequest {
@@ -81,6 +83,7 @@ export interface AppraisalCycleRequest {
   cycleYear: number;
   periodNo?: number | null;
   startDate?: string | null;
+  endDate?: string | null;
   submissionDeadline: string;
   departmentIds: number[];
 }
@@ -108,6 +111,7 @@ export interface AppraisalCycleResponse {
   departmentNames: string[];
   activatedAt?: string | null;
   completedAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface AppraisalRatingInput {
