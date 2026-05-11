@@ -91,6 +91,16 @@
   font-size: 1.35rem;
 }
 
+.employee-kpi-view-all {
+  border: 0;
+  background: transparent;
+  color: #4f46e5;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+
 .employee-panel-head button {
   border: 0;
   background: transparent;

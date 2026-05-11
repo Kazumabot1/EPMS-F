@@ -34,10 +34,12 @@ public class DashboardResolver {
             return "MANAGER_DASHBOARD";
         }
 
-        if (hasRole(normalizedRoles, "EMPLOYEE")) {
-            return "EMPLOYEE_DASHBOARD";
-        }
-
+        /*
+         * Job-title hints must run before the generic EMPLOYEE role rule.
+         * Many HR accounts keep an EMPLOYEE (or similar) formal role while their title
+         * indicates HR work; otherwise they incorrectly get EMPLOYEE_DASHBOARD and HR APIs
+         * that rely on dashboard + roles may deny access.
+         */
         if (normalizedPosition.contains("HR")) {
             return "HR_DASHBOARD";
         }
@@ -56,6 +58,10 @@ public class DashboardResolver {
 
         if (normalizedPosition.contains("MANAGER")) {
             return "MANAGER_DASHBOARD";
+        }
+
+        if (hasRole(normalizedRoles, "EMPLOYEE")) {
+            return "EMPLOYEE_DASHBOARD";
         }
 
         return "EMPLOYEE_DASHBOARD";

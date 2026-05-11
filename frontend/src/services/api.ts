@@ -50,6 +50,12 @@ api.interceptors.response.use(
       error?.response?.data,
     );
 
+    if (status === 502) {
+      console.error(
+        '502 Bad Gateway: Vite proxy cannot reach the Spring Boot API. Run EPMS on the port in vite.config (default 8081), ensure MySQL is up if the server requires it, or set VITE_API_PROXY_TARGET to your API base URL.',
+      );
+    }
+
     if (status === 401) {
       authStorage.clearSession();
       window.location.href = '/login';
