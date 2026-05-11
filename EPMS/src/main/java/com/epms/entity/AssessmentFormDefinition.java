@@ -1,5 +1,6 @@
 package com.epms.entity;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -16,7 +17,6 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
-import jakarta.persistence.CascadeType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -39,6 +39,9 @@ public class AssessmentFormDefinition {
 
     @Column(name = "form_name", nullable = false, length = 180)
     private String formName;
+
+    @Column(name = "company_name", length = 180)
+    private String companyName;
 
     @Column(columnDefinition = "TEXT")
     private String description;
@@ -68,6 +71,15 @@ public class AssessmentFormDefinition {
     )
     @OrderBy("orderNo ASC")
     private List<AssessmentFormSectionDefinition> sections = new ArrayList<>();
+
+    @OneToMany(
+            mappedBy = "form",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
+    )
+    @OrderBy("sortOrder ASC")
+    private List<AssessmentFormScoreBandDefinition> scoreBands = new ArrayList<>();
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(nullable = false, updatable = false)

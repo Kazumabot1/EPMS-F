@@ -1,6 +1,15 @@
 package com.epms.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -24,7 +33,7 @@ public class AssessmentFormQuestionDefinition {
     private String questionText;
 
     @Column(name = "response_type", nullable = false, length = 30)
-    private String responseType = "RATING";
+    private String responseType = "YES_NO_RATING";
 
     @Column(name = "is_required", nullable = false)
     private Boolean required = true;
@@ -35,7 +44,7 @@ public class AssessmentFormQuestionDefinition {
     @PrePersist
     public void prePersist() {
         if (responseType == null || responseType.isBlank()) {
-            responseType = "RATING";
+            responseType = "YES_NO_RATING";
         }
 
         if (required == null) {

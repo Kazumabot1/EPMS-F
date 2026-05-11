@@ -30,13 +30,25 @@ public final class AssessmentFormDtos {
     }
 
     @Data
+    public static class AssessmentScoreBandPayload {
+        private Integer id;
+        private Integer minScore;
+        private Integer maxScore;
+        private String label;
+        private String description;
+        private Integer sortOrder;
+    }
+
+    @Data
     public static class AssessmentFormPayload {
         private String formName;
+        private String companyName;
         private String description;
         private LocalDate startDate;
         private LocalDate endDate;
         private List<String> targetRoles = new ArrayList<>();
         private List<AssessmentSectionPayload> sections = new ArrayList<>();
+        private List<AssessmentScoreBandPayload> scoreBands = new ArrayList<>();
     }
 
     @Data
@@ -57,9 +69,20 @@ public final class AssessmentFormDtos {
     }
 
     @Data
+    public static class AssessmentScoreBandResponse {
+        private Integer id;
+        private Integer minScore;
+        private Integer maxScore;
+        private String label;
+        private String description;
+        private Integer sortOrder;
+    }
+
+    @Data
     public static class AssessmentFormResponse {
         private Integer id;
         private String formName;
+        private String companyName;
         private String description;
         private LocalDate startDate;
         private LocalDate endDate;
@@ -68,5 +91,6 @@ public final class AssessmentFormDtos {
         private Date createdAt;
         private Date updatedAt;
         private List<AssessmentSectionResponse> sections = new ArrayList<>();
+        private List<AssessmentScoreBandResponse> scoreBands = new ArrayList<>();
     }
 }

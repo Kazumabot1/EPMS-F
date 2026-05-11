@@ -1,6 +1,7 @@
 import api from './api';
 import type {
   AssessmentRequest,
+  AssessmentScoreBand,
   AssessmentScoreRow,
   EmployeeAssessment,
 } from '../types/employeeAssessment';
@@ -11,7 +12,7 @@ const unwrap = <T,>(payload: any, fallback: T): T => {
 
 const currentPeriod = () => {
   const now = new Date();
-  return `Annual ${now.getFullYear()}`;
+  return `${now.getFullYear()}`;
 };
 
 const getFullName = (payload: any) => {
@@ -27,6 +28,68 @@ const getFullName = (payload: any) => {
     fullName ??
     ''
   );
+};
+
+const defaultScoreBands = (): AssessmentScoreBand[] => [
+  {
+    minScore: 86,
+    maxScore: 100,
+    label: 'Outstanding',
+    description:
+      'Performance exceptional and far exceeds expectations. Consistently demonstrates excellent standards in all job requirements.',
+    sortOrder: 1,
+  },
+  {
+    minScore: 71,
+    maxScore: 85,
+    label: 'Good',
+    description: 'Performance is consistent. Clearly meets essential requirements of job.',
+    sortOrder: 2,
+  },
+  {
+    minScore: 60,
+    maxScore: 70,
+    label: 'Meet Requirement',
+    description: 'Performance is satisfactory. Meets requirements of the job.',
+    sortOrder: 3,
+  },
+  {
+    minScore: 40,
+    maxScore: 59,
+    label: 'Need Improvement',
+    description:
+      'Performance is inconsistent. Meets requirements of the job occasionally. Supervision and training is required for most problem areas.',
+    sortOrder: 4,
+  },
+  {
+    minScore: 0,
+    maxScore: 39,
+    label: 'Unsatisfactory',
+    description: 'Performance does not meet the minimum requirement of the job.',
+    sortOrder: 5,
+  },
+];
+
+const normalizeScoreBands = (payload: any): AssessmentScoreBand[] => {
+  const rawBands = Array.isArray(payload?.scoreBands) ? payload.scoreBands : [];
+
+  if (!rawBands.length) {
+    return defaultScoreBands();
+  }
+
+  return rawBands
+    .map((band: any, index: number): AssessmentScoreBand => ({
+      id: band.id ?? null,
+      minScore: Number(band.minScore ?? 0),
+      maxScore: Number(band.maxScore ?? 100),
+      label: band.label ?? '',
+      description: band.description ?? '',
+      sortOrder: band.sortOrder ?? index + 1,
+    }))
+    .sort(
+      (a: AssessmentScoreBand, b: AssessmentScoreBand) =>
+        Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0),
+    );
 };
 
 const normalizeAssessment = (payload: any): EmployeeAssessment | null => {
@@ -54,13 +117,13 @@ const normalizeAssessment = (payload: any): EmployeeAssessment | null => {
       title: section.title ?? `Section ${sectionIndex + 1}`,
       orderNo: section.orderNo ?? sectionIndex + 1,
       items: rawItems.map((item: any, itemIndex: number) => ({
-        id: item.id ?? item.questionId ?? null,
+        id: item.id ?? null,
         questionId: item.questionId ?? item.id ?? null,
         sectionTitle:
           item.sectionTitle ?? section.title ?? `Section ${sectionIndex + 1}`,
         questionText: item.questionText ?? item.text ?? item.title ?? '',
         itemOrder: item.itemOrder ?? item.orderNo ?? itemIndex + 1,
-        responseType: item.responseType ?? 'RATING',
+        responseType: item.responseType ?? 'YES_NO_RATING',
         isRequired: item.isRequired ?? true,
         weight: Number(item.weight ?? 1),
         rating: item.rating ?? null,
@@ -81,14 +144,22 @@ const normalizeAssessment = (payload: any): EmployeeAssessment | null => {
       payload.title ??
       payload.form?.formName ??
       payload.assessmentForm?.formName ??
-      'Self Assessment',
+      'Employee Self-assessment Form',
+    companyName:
+      payload.companyName ??
+      payload.form?.companyName ??
+      'ACE Data Systems Ltd.',
     userId: payload.userId ?? payload.employee?.userId ?? 0,
     employeeId: payload.employeeId ?? payload.employee?.id ?? null,
     employeeName: getFullName(payload),
     employeeCode: payload.employeeCode ?? payload.employee?.employeeCode ?? null,
+    currentPosition:
+      payload.currentPosition ?? payload.position ?? payload.employee?.position ?? null,
     departmentId: payload.departmentId ?? payload.employee?.departmentId ?? null,
     departmentName:
       payload.departmentName ?? payload.employee?.departmentName ?? null,
+    assessmentDate: payload.assessmentDate ?? null,
+    managerName: payload.managerName ?? payload.manager?.fullName ?? null,
     period: payload.period ?? currentPeriod(),
     status: payload.status ?? 'DRAFT',
     totalScore: Number(payload.totalScore ?? 0),
@@ -98,15 +169,20 @@ const normalizeAssessment = (payload: any): EmployeeAssessment | null => {
     ),
     performanceLabel: payload.performanceLabel ?? 'Not scored',
     remarks: payload.remarks ?? '',
+    managerComment: payload.managerComment ?? '',
     createdAt: payload.createdAt ?? null,
     updatedAt: payload.updatedAt ?? null,
     submittedAt: payload.submittedAt ?? null,
     sections,
+    scoreBands: normalizeScoreBands(payload),
   };
 };
 
 const normalizeScoreRow = (row: any): AssessmentScoreRow => ({
   id: Number(row.id ?? row.assessmentId ?? 0),
+  formId: row.formId ?? row.assessmentFormId ?? null,
+  assessmentFormId: row.assessmentFormId ?? row.formId ?? null,
+  formName: row.formName ?? null,
   employeeId: row.employeeId ?? row.employee?.id ?? null,
   employeeName:
     row.employeeName ??
@@ -145,11 +221,6 @@ const normalizeList = <T,>(payload: any, fallback: T[]): T[] => {
 
 const isMissingDraft = (error: any) => {
   const status = error?.response?.status;
-
-  /*
-   * Only these mean no draft exists.
-   * 403 means permission/role problem and should NOT fall back to template.
-   */
   return status === 404 || status === 204;
 };
 
@@ -165,19 +236,35 @@ export const employeeAssessmentService = {
   },
 
   async getLatestDraft(): Promise<EmployeeAssessment | null> {
+    const template = await this.template();
+
+    if (!template) {
+      return null;
+    }
+
     try {
       const draft = await this.draft();
 
-      if (draft?.sections?.length) {
+      const templateFormId = template.assessmentFormId ?? template.formId;
+      const draftFormId = draft?.assessmentFormId ?? draft?.formId;
+
+      if (
+        draft?.sections?.length &&
+        draftFormId &&
+        templateFormId &&
+        Number(draftFormId) === Number(templateFormId)
+      ) {
         return draft;
       }
+
+      return template;
     } catch (error: any) {
       if (!isMissingDraft(error)) {
         throw error;
       }
-    }
 
-    return this.template();
+      return template;
+    }
   },
 
   async saveDraft(
@@ -223,18 +310,17 @@ export const employeeAssessmentService = {
     return normalizeAssessment(unwrap<any>(res, null)) as EmployeeAssessment;
   },
 
-  async myScores(): Promise<AssessmentScoreRow[]> {
+  async getMine(): Promise<AssessmentScoreRow[]> {
     const res = await api.get('/employee-assessments/my-scores');
     return normalizeList<any>(res, []).map(normalizeScoreRow);
   },
 
-  async scoreTable(): Promise<AssessmentScoreRow[]> {
+  async getScoreTable(): Promise<AssessmentScoreRow[]> {
     const res = await api.get('/employee-assessments/score-table');
     return normalizeList<any>(res, []).map(normalizeScoreRow);
   },
 
-  async getById(id: number): Promise<EmployeeAssessment | null> {
-    const res = await api.get(`/employee-assessments/${id}`);
-    return normalizeAssessment(unwrap<any>(res, null));
+  async scoreTable(): Promise<AssessmentScoreRow[]> {
+    return this.getScoreTable();
   },
 };

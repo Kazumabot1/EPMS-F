@@ -1,5 +1,14 @@
 export type AssessmentStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
-export type AssessmentResponseType = 'RATING' | 'TEXT' | 'YES_NO';
+export type AssessmentResponseType = 'RATING' | 'TEXT' | 'YES_NO' | 'YES_NO_RATING';
+
+export interface AssessmentScoreBand {
+  id?: number | null;
+  minScore: number;
+  maxScore: number;
+  label: string;
+  description?: string | null;
+  sortOrder?: number | null;
+}
 
 export interface AssessmentItem {
   id?: number | null;
@@ -28,12 +37,16 @@ export interface EmployeeAssessment {
   formId?: number | null;
   assessmentFormId?: number | null;
   formName?: string;
+  companyName?: string | null;
   userId: number;
   employeeId?: number | null;
   employeeName: string;
   employeeCode?: string | null;
+  currentPosition?: string | null;
   departmentId?: number | null;
   departmentName?: string | null;
+  assessmentDate?: string | null;
+  managerName?: string | null;
   period: string;
   status: AssessmentStatus;
   totalScore: number;
@@ -41,10 +54,12 @@ export interface EmployeeAssessment {
   scorePercent: number;
   performanceLabel: string;
   remarks: string;
+  managerComment?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   submittedAt?: string | null;
   sections: AssessmentSection[];
+  scoreBands?: AssessmentScoreBand[];
 }
 
 export interface AssessmentItemRequest {
@@ -69,6 +84,9 @@ export interface AssessmentRequest {
 
 export interface AssessmentScoreRow {
   id: number;
+  formId?: number | null;
+  assessmentFormId?: number | null;
+  formName?: string | null;
   employeeId?: number | null;
   employeeName: string;
   employeeCode?: string | null;

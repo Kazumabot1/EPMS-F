@@ -9,9 +9,21 @@ import java.util.Optional;
 
 public interface EmployeeAssessmentRepository extends JpaRepository<EmployeeAssessment, Long> {
 
-    Optional<EmployeeAssessment> findFirstByUserIdAndStatusOrderByUpdatedAtDesc(Integer userId, AssessmentStatus status);
+    Optional<EmployeeAssessment> findFirstByUserIdAndStatusOrderByUpdatedAtDesc(
+            Integer userId,
+            AssessmentStatus status
+    );
 
-    List<EmployeeAssessment> findByUserIdAndStatusOrderBySubmittedAtDesc(Integer userId, AssessmentStatus status);
+    Optional<EmployeeAssessment> findFirstByUserIdAndAssessmentFormIdAndStatusOrderByUpdatedAtDesc(
+            Integer userId,
+            Integer assessmentFormId,
+            AssessmentStatus status
+    );
+
+    List<EmployeeAssessment> findByUserIdAndStatusOrderBySubmittedAtDesc(
+            Integer userId,
+            AssessmentStatus status
+    );
 
     List<EmployeeAssessment> findByStatusOrderBySubmittedAtDesc(AssessmentStatus status);
 }

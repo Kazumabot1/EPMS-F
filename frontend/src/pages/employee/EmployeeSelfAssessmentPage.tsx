@@ -4,10 +4,11 @@ import { employeeAssessmentService } from '../../services/employeeAssessmentServ
 import type {
   AssessmentItem,
   AssessmentRequest,
+  AssessmentScoreBand,
   EmployeeAssessment,
 } from '../../types/employeeAssessment';
 
-const ratingOptions = [1, 2, 3, 4, 5];
+const ratingOptions = [5, 4, 3, 2, 1];
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -40,8 +41,18 @@ const flattenItems = (assessment: EmployeeAssessment): AssessmentItem[] =>
     })),
   );
 
+const itemNeedsYesNo = (item: AssessmentItem) => {
+  const responseType = item.responseType ?? 'YES_NO_RATING';
+  return responseType === 'YES_NO' || responseType === 'YES_NO_RATING';
+};
+
+const itemNeedsRating = (item: AssessmentItem) => {
+  const responseType = item.responseType ?? 'YES_NO_RATING';
+  return responseType === 'RATING' || responseType === 'YES_NO_RATING';
+};
+
 const answerIsMissing = (item: AssessmentItem) => {
-  const responseType = item.responseType ?? 'RATING';
+  const responseType = item.responseType ?? 'YES_NO_RATING';
 
   if (item.isRequired === false) {
     return false;
@@ -55,6 +66,15 @@ const answerIsMissing = (item: AssessmentItem) => {
     return item.yesNoAnswer === null || item.yesNoAnswer === undefined;
   }
 
+  if (responseType === 'YES_NO_RATING') {
+    return (
+      item.yesNoAnswer === null ||
+      item.yesNoAnswer === undefined ||
+      item.rating === null ||
+      item.rating === undefined
+    );
+  }
+
   return item.rating === null || item.rating === undefined;
 };
 
@@ -65,44 +85,70 @@ const buildPayload = (assessment: EmployeeAssessment): AssessmentRequest => ({
   remarks: assessment.remarks || '',
   items: flattenItems(assessment).map((item) => ({
     id: item.id ?? null,
-    questionId: item.questionId ?? item.id ?? null,
+    questionId: item.questionId ?? null,
     sectionTitle: item.sectionTitle,
     questionText: item.questionText,
     itemOrder: item.itemOrder,
     rating: item.rating ?? null,
     comment: item.comment || '',
-    responseType: item.responseType ?? 'RATING',
+    responseType: item.responseType ?? 'YES_NO_RATING',
     yesNoAnswer: item.yesNoAnswer ?? null,
   })),
 });
 
-const scoreBadgeClass = (label?: string) => {
-  switch (label) {
-    case 'Outstanding':
-      return 'border-emerald-300 bg-emerald-100 text-emerald-800';
-    case 'Good':
-      return 'border-blue-300 bg-blue-100 text-blue-800';
-    case 'Meet Requirement':
-      return 'border-yellow-300 bg-yellow-100 text-yellow-800';
-    case 'Need Improvement':
-      return 'border-orange-300 bg-orange-100 text-orange-800';
-    case 'Unsatisfactory':
-      return 'border-red-300 bg-red-100 text-red-800';
-    default:
-      return 'border-slate-300 bg-slate-100 text-slate-700';
-  }
-};
+const defaultScoreBands: AssessmentScoreBand[] = [
+  {
+    minScore: 86,
+    maxScore: 100,
+    label: 'Outstanding',
+    description:
+      'Performance exceptional and far exceeds expectations. Consistently demonstrates excellent standards in all job requirements.',
+    sortOrder: 1,
+  },
+  {
+    minScore: 71,
+    maxScore: 85,
+    label: 'Good',
+    description: 'Performance is consistent. Clearly meets essential requirements of job.',
+    sortOrder: 2,
+  },
+  {
+    minScore: 60,
+    maxScore: 70,
+    label: 'Meet Requirement',
+    description: 'Performance is satisfactory. Meets requirements of the job.',
+    sortOrder: 3,
+  },
+  {
+    minScore: 40,
+    maxScore: 59,
+    label: 'Need Improvement',
+    description:
+      'Performance is inconsistent. Meets requirements of the job occasionally. Supervision and training is required for most problem areas.',
+    sortOrder: 4,
+  },
+  {
+    minScore: 0,
+    maxScore: 39,
+    label: 'Unsatisfactory',
+    description: 'Performance does not meet the minimum requirement of the job.',
+    sortOrder: 5,
+  },
+];
 
-const responseTypeLabel = (type?: string) => {
-  switch (type) {
-    case 'TEXT':
-      return 'Text';
-    case 'YES_NO':
-      return 'Yes / No';
-    case 'RATING':
-    default:
-      return 'Rating';
+const scoreBandForPercent = (percent: number, bands: AssessmentScoreBand[]) =>
+  bands.find((band) => percent >= band.minScore && percent <= band.maxScore) ?? null;
+
+const formatDate = (date?: string | null) => {
+  if (!date) return '';
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return date;
   }
+
+  return parsed.toLocaleDateString();
 };
 
 const EmployeeSelfAssessmentPage = () => {
@@ -131,6 +177,16 @@ const EmployeeSelfAssessmentPage = () => {
     void load();
   }, []);
 
+  const scoreBands = useMemo(() => {
+    const bands = assessment?.scoreBands?.length
+      ? assessment.scoreBands
+      : defaultScoreBands;
+
+    return [...bands].sort(
+      (a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0),
+    );
+  }, [assessment?.scoreBands]);
+
   const preview = useMemo(() => {
     if (!assessment) {
       return {
@@ -143,25 +199,10 @@ const EmployeeSelfAssessmentPage = () => {
       };
     }
 
-    const items = flattenItems(assessment);
-    const visibleItems = items.filter((item) => item.isRequired !== false);
-
-    const answeredItems = visibleItems.filter((item) => {
-      const responseType = item.responseType ?? 'RATING';
-
-      if (responseType === 'TEXT') {
-        return Boolean(item.comment?.trim());
-      }
-
-      if (responseType === 'YES_NO') {
-        return item.yesNoAnswer !== null && item.yesNoAnswer !== undefined;
-      }
-
-      return item.rating !== null && item.rating !== undefined;
-    });
-
-    const ratingItems = answeredItems.filter(
-      (item) => (item.responseType ?? 'RATING') === 'RATING',
+    const items = flattenItems(assessment).filter((item) => item.isRequired !== false);
+    const answeredItems = items.filter((item) => !answerIsMissing(item));
+    const ratingItems = items.filter(
+      (item) => itemNeedsRating(item) && item.rating !== null && item.rating !== undefined,
     );
 
     const totalScore = ratingItems.reduce(
@@ -177,28 +218,17 @@ const EmployeeSelfAssessmentPage = () => {
     const percent =
       maxScore === 0 ? 0 : Number(((totalScore * 100) / maxScore).toFixed(2));
 
-    const label =
-      percent >= 86
-        ? 'Outstanding'
-        : percent >= 71
-          ? 'Good'
-          : percent >= 60
-            ? 'Meet Requirement'
-            : percent >= 40
-              ? 'Need Improvement'
-              : answeredItems.length === 0
-                ? 'Not scored'
-                : 'Unsatisfactory';
+    const activeBand = scoreBandForPercent(percent, scoreBands);
 
     return {
       answered: answeredItems.length,
-      total: visibleItems.length,
+      total: items.length,
       totalScore,
       maxScore,
       percent,
-      label,
+      label: answeredItems.length === 0 ? 'Not scored' : activeBand?.label ?? 'Not scored',
     };
-  }, [assessment]);
+  }, [assessment, scoreBands]);
 
   const updateAssessmentField = (name: 'period' | 'remarks', value: string) => {
     setAssessment((prev) => (prev ? { ...prev, [name]: value } : prev));
@@ -263,7 +293,7 @@ const EmployeeSelfAssessmentPage = () => {
     const missing = flattenItems(assessment).filter(answerIsMissing);
 
     if (missing.length) {
-      setError('Please answer every required assessment question before submitting.');
+      setError('Please answer every required assessment subject before submitting.');
       return;
     }
 
@@ -272,14 +302,13 @@ const EmployeeSelfAssessmentPage = () => {
     setError('');
 
     try {
-      const submitted = await employeeAssessmentService.submit(
-        buildPayload(assessment),
-      );
+      const payload = buildPayload(assessment);
+      const submitted = assessment.id
+        ? await employeeAssessmentService.submit(assessment.id, payload)
+        : await employeeAssessmentService.submit(payload);
 
       setAssessment(submitted);
-      setMessage(
-        'Self-assessment submitted successfully. Your score table has been updated.',
-      );
+      setMessage('Self-assessment submitted successfully. Your score table has been updated.');
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to submit self-assessment.'));
     } finally {
@@ -317,313 +346,304 @@ const EmployeeSelfAssessmentPage = () => {
   }
 
   const isSubmitted = assessment.status === 'SUBMITTED';
+  const activeBand = scoreBandForPercent(preview.percent, scoreBands);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50/40 to-indigo-100 p-6">
-      <div className="mx-auto max-w-6xl space-y-5">
-        <div className="rounded-3xl border border-white bg-white/90 p-6 shadow-sm backdrop-blur">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div className="min-h-screen bg-slate-100 p-6">
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto max-w-6xl overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm"
+      >
+        <div className="border-b border-slate-300 p-6 text-center">
+          <h1 className="text-2xl font-bold text-slate-900">
+            {assessment.formName || 'Employee Self-assessment Form'}
+          </h1>
+          <p className="mt-1 text-sm font-semibold text-slate-600">
+            {assessment.companyName || 'ACE Data Systems Ltd.'}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 border-b border-slate-300 md:grid-cols-2">
+          <div className="space-y-2 border-slate-300 p-5 md:border-r">
+            <InfoRow label="Employee Name" value={assessment.employeeName} />
+            <InfoRow label="Employee ID" value={assessment.employeeCode || ''} />
+            <InfoRow label="Current Position" value={assessment.currentPosition || ''} />
+            <InfoRow label="Department" value={assessment.departmentName || ''} />
+          </div>
+
+          <div className="space-y-2 p-5">
+            <InfoRow label="Assessment Date" value={formatDate(assessment.assessmentDate)} />
+            <InfoRow label="Manager Name" value={assessment.managerName || ''} />
+            <label className="grid grid-cols-[145px_1fr] items-center gap-3 text-sm">
+              <span className="font-semibold text-slate-700">Assessment Period :</span>
+              <input
+                type="text"
+                value={assessment.period || ''}
+                disabled={isSubmitted}
+                onChange={(event) => updateAssessmentField('period', event.target.value)}
+                className="rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
+                required
+              />
+            </label>
+            <InfoRow label="Status" value={assessment.status} />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto p-5">
+          <table className="w-full min-w-[860px] border-collapse text-sm">
+            <thead>
+              <tr className="bg-slate-100 text-slate-800">
+                <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-left">
+                  No.
+                </th>
+                <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-left">
+                  Assessment Subject
+                </th>
+                <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-center">
+                  Yes
+                </th>
+                <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-center">
+                  No
+                </th>
+                <th colSpan={5} className="border border-slate-400 px-3 py-2 text-center">
+                  Rating
+                </th>
+              </tr>
+              <tr className="bg-slate-100 text-slate-800">
+                {ratingOptions.map((rating) => (
+                  <th key={rating} className="border border-slate-400 px-3 py-2 text-center">
+                    {rating}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {assessment.sections.map((section) =>
+                section.items.map((item) => {
+                  const sectionTitle = item.sectionTitle || section.title;
+
+                  return (
+                    <tr key={`${sectionTitle}-${item.itemOrder}`}>
+                      <td className="border border-slate-300 px-3 py-2 text-center font-semibold">
+                        {item.itemOrder}
+                      </td>
+
+                      <td className="border border-slate-300 px-3 py-2">
+                        <div className="font-medium text-slate-900">{item.questionText}</div>
+
+                        {item.responseType === 'TEXT' && (
+                          <textarea
+                            value={item.comment || ''}
+                            disabled={isSubmitted}
+                            onChange={(event) =>
+                              updateItem(sectionTitle, item.itemOrder, {
+                                comment: event.target.value,
+                              })
+                            }
+                            className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
+                            rows={2}
+                            placeholder="Write your answer..."
+                          />
+                        )}
+                      </td>
+
+                      <td className="border border-slate-300 px-3 py-2 text-center">
+                        {itemNeedsYesNo(item) ? (
+                          <input
+                            type="checkbox"
+                            checked={item.yesNoAnswer === true}
+                            disabled={isSubmitted}
+                            onChange={() =>
+                              updateItem(sectionTitle, item.itemOrder, {
+                                yesNoAnswer: item.yesNoAnswer === true ? null : true,
+                              })
+                            }
+                            className="h-5 w-5"
+                          />
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+
+                      <td className="border border-slate-300 px-3 py-2 text-center">
+                        {itemNeedsYesNo(item) ? (
+                          <input
+                            type="checkbox"
+                            checked={item.yesNoAnswer === false}
+                            disabled={isSubmitted}
+                            onChange={() =>
+                              updateItem(sectionTitle, item.itemOrder, {
+                                yesNoAnswer: item.yesNoAnswer === false ? null : false,
+                              })
+                            }
+                            className="h-5 w-5"
+                          />
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+
+                      {ratingOptions.map((rating) => (
+                        <td key={rating} className="border border-slate-300 px-3 py-2 text-center">
+                          {itemNeedsRating(item) ? (
+                            <input
+                              type="radio"
+                              name={`rating-${sectionTitle}-${item.itemOrder}`}
+                              checked={item.rating === rating}
+                              disabled={isSubmitted}
+                              onChange={() =>
+                                updateItem(sectionTitle, item.itemOrder, {
+                                  rating,
+                                })
+                              }
+                              className="h-4 w-4"
+                            />
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                }),
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 border-t border-slate-300 p-5 lg:grid-cols-[1fr_340px]">
+          <div className="space-y-4">
             <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                <i className="bi bi-pencil-square" />
-                Employee Self-Assessment
+              <h2 className="mb-2 text-sm font-bold uppercase text-slate-700">Formula</h2>
+
+              <div className="rounded border border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
+                <div className="font-semibold">
+                  Score = Total Points / (Number of Questions Answered x 5) x 100
+                </div>
+
+                <div className="mt-2">
+                  Current score: {preview.totalScore} / {preview.maxScore || 0} ={' '}
+                  <span className="font-bold">{preview.percent}%</span>
+                </div>
+
+                <div className="mt-1">
+                  Current range:{' '}
+                  <span className="font-bold">{preview.label}</span>
+                  {activeBand?.description ? ` - ${activeBand.description}` : ''}
+                </div>
               </div>
-
-              <h1 className="text-2xl font-bold text-slate-800">
-                {assessment.formName || 'Self Assessment'}
-              </h1>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Complete your required answers. You can save as draft before final
-                submission.
-              </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
-              <p className="font-semibold text-slate-700">
-                {assessment.employeeName || 'Employee'}
-              </p>
-              <p className="text-slate-500">
-                {assessment.employeeCode || 'No employee code'}
-              </p>
-              <p className="text-slate-500">
-                {assessment.departmentName || 'No department'}
-              </p>
+            <label className="block text-sm font-semibold text-slate-700">
+              Other remarks:
+              <textarea
+                value={assessment.remarks || ''}
+                disabled={isSubmitted}
+                onChange={(event) => updateAssessmentField('remarks', event.target.value)}
+                className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
+                rows={5}
+                placeholder="Write your remarks..."
+              />
+            </label>
+
+            <div className="rounded border border-slate-300 p-4 text-sm text-slate-700">
+              <div className="font-semibold">Manager's Comment for self-assessment result:</div>
+
+              <div className="mt-8 min-h-16 border-b border-slate-300 text-slate-400">
+                {assessment.managerComment || ''}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="mb-2 text-sm font-bold uppercase text-slate-700">
+              Score Explanation
+            </h2>
+
+            <table className="w-full border-collapse text-sm">
+              <tbody>
+                {scoreBands.map((band) => (
+                  <tr key={`${band.minScore}-${band.maxScore}-${band.label}`}>
+                    <td className="w-20 border border-slate-300 px-2 py-2 font-semibold">
+                      {String(band.minScore).padStart(2, '0')}-{band.maxScore}
+                    </td>
+
+                    <td className="border border-slate-300 px-2 py-2">
+                      <div className="font-semibold">{band.label}</div>
+
+                      {band.description && (
+                        <div className="text-xs text-slate-500">{band.description}</div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-8 border-t border-slate-300 p-8 text-sm md:grid-cols-2">
+          <div className="pt-10 text-center">
+            <div className="border-t border-slate-500 pt-2 font-semibold">
+              Signature of Employee & Date
+            </div>
+          </div>
+
+          <div className="pt-10 text-center">
+            <div className="border-t border-slate-500 pt-2 font-semibold">
+              Signature of Manager & Date
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="rounded-3xl border border-white bg-white/90 p-5 shadow-sm backdrop-blur">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Assessment Period
-                  <input
-                    type="text"
-                    value={assessment.period || ''}
-                    disabled={isSubmitted}
-                    onChange={(event) =>
-                      updateAssessmentField('period', event.target.value)
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
-                    placeholder="2026 / Q1 2026 / Annual 2026"
-                    required
-                  />
-                </label>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                  <span className="font-semibold text-slate-700">Status:</span>{' '}
-                  {assessment.status}
-
-                  {assessment.submittedAt && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      Submitted:{' '}
-                      {new Date(assessment.submittedAt).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {assessment.sections.map((section, sectionIndex) => (
-              <div
-                key={`${section.title}-${sectionIndex}`}
-                className="overflow-hidden rounded-3xl border border-white bg-white/90 shadow-sm backdrop-blur"
-              >
-                <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50 px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-600 text-sm font-bold text-white">
-                      {sectionIndex + 1}
-                    </div>
-
-                    <div>
-                      <h2 className="font-bold text-slate-800">{section.title}</h2>
-                      <p className="text-xs text-slate-500">
-                        Answer each required question.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-slate-100">
-                  {section.items.map((item, itemIndex) => {
-                    const responseType = item.responseType ?? 'RATING';
-
-                    return (
-                      <div key={`${item.itemOrder}-${itemIndex}`} className="p-5">
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="flex-1">
-                            <div className="mb-2 flex flex-wrap items-center gap-2">
-                              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
-                                Question {item.itemOrder}
-                              </span>
-
-                              <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
-                                {responseTypeLabel(responseType)}
-                              </span>
-
-                              {item.isRequired !== false && (
-                                <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-bold text-red-700">
-                                  Required
-                                </span>
-                              )}
-                            </div>
-
-                            <p className="text-sm font-semibold text-slate-800">
-                              {item.questionText}
-                            </p>
-
-                            {responseType === 'TEXT' && (
-                              <textarea
-                                value={item.comment || ''}
-                                disabled={isSubmitted}
-                                onChange={(event) =>
-                                  updateItem(section.title, item.itemOrder, {
-                                    comment: event.target.value,
-                                  })
-                                }
-                                className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
-                                rows={4}
-                                placeholder="Write your answer..."
-                              />
-                            )}
-
-                            {responseType !== 'TEXT' && (
-                              <textarea
-                                value={item.comment || ''}
-                                disabled={isSubmitted}
-                                onChange={(event) =>
-                                  updateItem(section.title, item.itemOrder, {
-                                    comment: event.target.value,
-                                  })
-                                }
-                                className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
-                                rows={2}
-                                placeholder="Optional comment or evidence..."
-                              />
-                            )}
-                          </div>
-
-                          {responseType === 'RATING' && (
-                            <div className="flex shrink-0 items-center gap-2">
-                              {ratingOptions.map((rating) => (
-                                <button
-                                  key={rating}
-                                  type="button"
-                                  disabled={isSubmitted}
-                                  onClick={() =>
-                                    updateItem(section.title, item.itemOrder, {
-                                      rating,
-                                    })
-                                  }
-                                  className={`h-10 w-10 rounded-full border text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                                    item.rating === rating
-                                      ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                                      : 'border-slate-300 bg-white text-slate-600 hover:border-blue-400'
-                                  }`}
-                                >
-                                  {rating}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                          {responseType === 'YES_NO' && (
-                            <div className="flex shrink-0 items-center gap-2">
-                              <button
-                                type="button"
-                                disabled={isSubmitted}
-                                onClick={() =>
-                                  updateItem(section.title, item.itemOrder, {
-                                    yesNoAnswer: true,
-                                  })
-                                }
-                                className={`rounded-xl border px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                                  item.yesNoAnswer === true
-                                    ? 'border-blue-600 bg-blue-600 text-white'
-                                    : 'border-slate-300 bg-white text-slate-600 hover:border-blue-400'
-                                }`}
-                              >
-                                Yes
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={isSubmitted}
-                                onClick={() =>
-                                  updateItem(section.title, item.itemOrder, {
-                                    yesNoAnswer: false,
-                                  })
-                                }
-                                className={`rounded-xl border px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                                  item.yesNoAnswer === false
-                                    ? 'border-blue-600 bg-blue-600 text-white'
-                                    : 'border-slate-300 bg-white text-slate-600 hover:border-blue-400'
-                                }`}
-                              >
-                                No
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            <div className="rounded-3xl border border-white bg-white/90 p-5 shadow-sm backdrop-blur">
-              <label className="block text-sm font-semibold text-slate-700">
-                Overall Remarks
-                <textarea
-                  value={assessment.remarks || ''}
-                  disabled={isSubmitted}
-                  onChange={(event) =>
-                    updateAssessmentField('remarks', event.target.value)
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
-                  rows={4}
-                  placeholder="Summarize achievements, blockers, and development needs..."
-                />
-              </label>
-            </div>
-
-            {message && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-                {message}
-              </div>
-            )}
-
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            {!isSubmitted && (
-              <div className="flex flex-col gap-3 rounded-3xl border border-white bg-white/90 p-5 shadow-sm backdrop-blur sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  disabled={saving || submitting}
-                  onClick={() => void saveDraft()}
-                  className="rounded-xl border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                >
-                  {saving ? 'Saving...' : 'Save Draft'}
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={saving || submitting}
-                  className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {submitting ? 'Submitting...' : 'Submit Assessment'}
-                </button>
-              </div>
-            )}
-          </form>
-
-          <aside className="space-y-4">
-            <div className="sticky top-6 rounded-3xl border border-white bg-white/90 p-5 shadow-sm backdrop-blur">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
-                Live Score
-              </h2>
-
-              <p className="mt-4 text-4xl font-black text-slate-800">
-                {preview.percent}%
-              </p>
-
-              <p className="mt-1 text-sm text-slate-500">
-                {preview.totalScore} / {preview.maxScore || preview.total * 5}{' '}
-                rating points
-              </p>
-
-              <span
-                className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-bold ${scoreBadgeClass(
-                  preview.label,
-                )}`}
-              >
-                {preview.label}
-              </span>
-
-              <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-blue-600"
-                  style={{ width: `${Math.min(preview.percent, 100)}%` }}
-                />
-              </div>
-
-              <p className="mt-3 text-xs text-slate-500">
-                Answered {preview.answered} of {preview.total} required/visible
-                items.
-              </p>
-            </div>
-          </aside>
+        <div className="border-t border-slate-300 p-5 text-sm">
+          <div className="font-semibold">Review by:</div>
+          <div>HR Department</div>
         </div>
-      </div>
+
+        {message && (
+          <div className="mx-5 mb-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+            {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="mx-5 mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {!isSubmitted && (
+          <div className="flex flex-col gap-3 border-t border-slate-300 p-5 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              disabled={saving || submitting}
+              onClick={() => void saveDraft()}
+              className="rounded-lg border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {saving ? 'Saving...' : 'Save Draft'}
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving || submitting}
+              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+            >
+              {submitting ? 'Submitting...' : 'Submit Assessment'}
+            </button>
+          </div>
+        )}
+      </form>
     </div>
   );
 };
+
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="grid grid-cols-[145px_1fr] gap-3 text-sm">
+    <span className="font-semibold text-slate-700">{label} :</span>
+    <span className="min-h-6 border-b border-slate-300 text-slate-900">{value}</span>
+  </div>
+);
 
 export default EmployeeSelfAssessmentPage;

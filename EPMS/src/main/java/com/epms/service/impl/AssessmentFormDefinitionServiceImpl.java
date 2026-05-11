@@ -4,10 +4,13 @@ import com.epms.dto.AssessmentFormDtos.AssessmentFormPayload;
 import com.epms.dto.AssessmentFormDtos.AssessmentFormResponse;
 import com.epms.dto.AssessmentFormDtos.AssessmentQuestionPayload;
 import com.epms.dto.AssessmentFormDtos.AssessmentQuestionResponse;
+import com.epms.dto.AssessmentFormDtos.AssessmentScoreBandPayload;
+import com.epms.dto.AssessmentFormDtos.AssessmentScoreBandResponse;
 import com.epms.dto.AssessmentFormDtos.AssessmentSectionPayload;
 import com.epms.dto.AssessmentFormDtos.AssessmentSectionResponse;
 import com.epms.entity.AssessmentFormDefinition;
 import com.epms.entity.AssessmentFormQuestionDefinition;
+import com.epms.entity.AssessmentFormScoreBandDefinition;
 import com.epms.entity.AssessmentFormSectionDefinition;
 import com.epms.exception.BadRequestException;
 import com.epms.exception.ResourceNotFoundException;
@@ -25,6 +28,11 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional
 public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefinitionService {
+
+    private static final String RESPONSE_TYPE_RATING = "RATING";
+    private static final String RESPONSE_TYPE_TEXT = "TEXT";
+    private static final String RESPONSE_TYPE_YES_NO = "YES_NO";
+    private static final String RESPONSE_TYPE_YES_NO_RATING = "YES_NO_RATING";
 
     private final AssessmentFormDefinitionRepository repository;
 
@@ -56,9 +64,7 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
         AssessmentFormDefinition form = new AssessmentFormDefinition();
         applyPayload(form, payload);
 
-        AssessmentFormDefinition saved = repository.save(form);
-
-        return toResponse(saved);
+        return toResponse(repository.save(form));
     }
 
     @Override
@@ -84,11 +90,15 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
             form.getSections().clear();
         }
 
+        if (form.getScoreBands() == null) {
+            form.setScoreBands(new ArrayList<>());
+        } else {
+            form.getScoreBands().clear();
+        }
+
         applyPayload(form, payload);
 
-        AssessmentFormDefinition saved = repository.save(form);
-
-        return toResponse(saved);
+        return toResponse(repository.save(form));
     }
 
     @Override
@@ -142,39 +152,50 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
             }
 
             if (section.getQuestions() == null || section.getQuestions().isEmpty()) {
-                throw new BadRequestException("Every section needs at least one question.");
+                throw new BadRequestException("Every section needs at least one assessment subject.");
             }
 
             for (AssessmentQuestionPayload question : section.getQuestions()) {
                 if (question == null) {
-                    throw new BadRequestException("Question payload is invalid.");
+                    throw new BadRequestException("Assessment subject payload is invalid.");
                 }
 
                 if (question.getQuestionText() == null || question.getQuestionText().isBlank()) {
-                    throw new BadRequestException("Every question needs text.");
+                    throw new BadRequestException("Every assessment subject needs text.");
                 }
 
-                validateQuestionWeight(question.getWeight());
+                resolveResponseType(question.getResponseType());
             }
+        }
+
+        List<AssessmentScoreBandPayload> bands = scoreBandPayloadsOrDefaults(payload.getScoreBands());
+
+        for (AssessmentScoreBandPayload band : bands) {
+            validateScoreBand(band);
         }
     }
 
-    private void validateQuestionWeight(Double weight) {
-        if (weight == null) {
-            throw new BadRequestException("Question rating/weight is required.");
+    private void validateScoreBand(AssessmentScoreBandPayload band) {
+        if (band == null) {
+            throw new BadRequestException("Score range payload is invalid.");
         }
 
-        if (weight < 1 || weight > 5) {
-            throw new BadRequestException("Question rating/weight must be between 1 and 5.");
+        if (band.getMinScore() == null || band.getMaxScore() == null) {
+            throw new BadRequestException("Score range min and max are required.");
         }
 
-        if (Math.floor(weight) != weight) {
-            throw new BadRequestException("Question rating/weight must be a whole number. Decimals are not allowed.");
+        if (band.getMinScore() < 0 || band.getMaxScore() > 100 || band.getMinScore() > band.getMaxScore()) {
+            throw new BadRequestException("Score range must be between 0 and 100 and min cannot exceed max.");
+        }
+
+        if (band.getLabel() == null || band.getLabel().isBlank()) {
+            throw new BadRequestException("Score range label is required.");
         }
     }
 
     private void applyPayload(AssessmentFormDefinition form, AssessmentFormPayload payload) {
         form.setFormName(payload.getFormName().trim());
+        form.setCompanyName(clean(payload.getCompanyName()) == null ? "ACE Data Systems Ltd." : clean(payload.getCompanyName()));
         form.setDescription(clean(payload.getDescription()));
         form.setStartDate(payload.getStartDate());
         form.setEndDate(payload.getEndDate());
@@ -217,7 +238,7 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
                 question.setQuestionText(questionPayload.getQuestionText().trim());
                 question.setResponseType(resolveResponseType(questionPayload.getResponseType()));
                 question.setRequired(questionPayload.getIsRequired() == null || questionPayload.getIsRequired());
-                question.setWeight(questionPayload.getWeight());
+                question.setWeight(1.0);
 
                 section.getQuestions().add(question);
             }
@@ -225,20 +246,64 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
             form.getSections().add(section);
             sectionIndex++;
         }
+
+        if (form.getScoreBands() == null) {
+            form.setScoreBands(new ArrayList<>());
+        }
+
+        int bandIndex = 1;
+        for (AssessmentScoreBandPayload bandPayload : scoreBandPayloadsOrDefaults(payload.getScoreBands())) {
+            AssessmentFormScoreBandDefinition band = new AssessmentFormScoreBandDefinition();
+            band.setForm(form);
+            band.setMinScore(bandPayload.getMinScore());
+            band.setMaxScore(bandPayload.getMaxScore());
+            band.setLabel(bandPayload.getLabel().trim());
+            band.setDescription(clean(bandPayload.getDescription()));
+            band.setSortOrder(bandPayload.getSortOrder() == null ? bandIndex : bandPayload.getSortOrder());
+            form.getScoreBands().add(band);
+            bandIndex++;
+        }
     }
 
     private String resolveResponseType(String responseType) {
         if (responseType == null || responseType.isBlank()) {
-            return "RATING";
+            return RESPONSE_TYPE_YES_NO_RATING;
         }
 
         String normalized = responseType.trim().toUpperCase();
 
-        if (!normalized.equals("RATING") && !normalized.equals("TEXT") && !normalized.equals("YES_NO")) {
+        if (!normalized.equals(RESPONSE_TYPE_RATING)
+                && !normalized.equals(RESPONSE_TYPE_TEXT)
+                && !normalized.equals(RESPONSE_TYPE_YES_NO)
+                && !normalized.equals(RESPONSE_TYPE_YES_NO_RATING)) {
             throw new BadRequestException("Invalid response type: " + responseType);
         }
 
         return normalized;
+    }
+
+    private List<AssessmentScoreBandPayload> scoreBandPayloadsOrDefaults(List<AssessmentScoreBandPayload> payloads) {
+        if (payloads != null && !payloads.isEmpty()) {
+            return payloads;
+        }
+
+        List<AssessmentScoreBandPayload> defaults = new ArrayList<>();
+        defaults.add(defaultBand(86, 100, "Outstanding", "Performance exceptional and far exceeds expectations. Consistently demonstrates excellent standards in all job requirements.", 1));
+        defaults.add(defaultBand(71, 85, "Good", "Performance is consistent. Clearly meets essential requirements of job.", 2));
+        defaults.add(defaultBand(60, 70, "Meet Requirement", "Performance is satisfactory. Meets requirements of the job.", 3));
+        defaults.add(defaultBand(40, 59, "Need Improvement", "Performance is inconsistent. Meets requirements of the job occasionally. Supervision and training is required for most problem areas.", 4));
+        defaults.add(defaultBand(0, 39, "Unsatisfactory", "Performance does not meet the minimum requirement of the job.", 5));
+        return defaults;
+    }
+
+    private AssessmentScoreBandPayload defaultBand(Integer min, Integer max, String label, String description, Integer sortOrder) {
+        AssessmentScoreBandPayload band = new AssessmentScoreBandPayload();
+        band.setMinScore(min);
+        band.setMaxScore(max);
+        band.setLabel(label);
+        band.setDescription(description);
+        band.setSortOrder(sortOrder);
+        return band;
     }
 
     private AssessmentFormResponse toResponse(AssessmentFormDefinition form) {
@@ -246,6 +311,7 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
 
         response.setId(form.getId());
         response.setFormName(form.getFormName());
+        response.setCompanyName(form.getCompanyName());
         response.setDescription(form.getDescription());
         response.setStartDate(form.getStartDate());
         response.setEndDate(form.getEndDate());
@@ -264,6 +330,19 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
                                 Comparator.nullsLast(Integer::compareTo)
                         ))
                         .map(this::toSectionResponse)
+                        .toList()
+        );
+
+        response.setScoreBands(
+                form.getScoreBands() == null || form.getScoreBands().isEmpty()
+                        ? scoreBandPayloadsOrDefaults(List.of()).stream().map(this::toScoreBandResponse).toList()
+                        : form.getScoreBands()
+                        .stream()
+                        .sorted(Comparator.comparing(
+                                AssessmentFormScoreBandDefinition::getSortOrder,
+                                Comparator.nullsLast(Integer::compareTo)
+                        ))
+                        .map(this::toScoreBandResponse)
                         .toList()
         );
 
@@ -298,6 +377,28 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
         response.setIsRequired(question.getRequired());
         response.setWeight(question.getWeight());
 
+        return response;
+    }
+
+    private AssessmentScoreBandResponse toScoreBandResponse(AssessmentFormScoreBandDefinition band) {
+        AssessmentScoreBandResponse response = new AssessmentScoreBandResponse();
+        response.setId(band.getId());
+        response.setMinScore(band.getMinScore());
+        response.setMaxScore(band.getMaxScore());
+        response.setLabel(band.getLabel());
+        response.setDescription(band.getDescription());
+        response.setSortOrder(band.getSortOrder());
+        return response;
+    }
+
+    private AssessmentScoreBandResponse toScoreBandResponse(AssessmentScoreBandPayload band) {
+        AssessmentScoreBandResponse response = new AssessmentScoreBandResponse();
+        response.setId(band.getId());
+        response.setMinScore(band.getMinScore());
+        response.setMaxScore(band.getMaxScore());
+        response.setLabel(band.getLabel());
+        response.setDescription(band.getDescription());
+        response.setSortOrder(band.getSortOrder());
         return response;
     }
 

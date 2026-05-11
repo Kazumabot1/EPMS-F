@@ -30,6 +30,9 @@ public class EmployeeAssessmentAnswer {
     @JoinColumn(name = "assessment_id", nullable = false)
     private EmployeeAssessment assessment;
 
+    @Column(name = "question_id")
+    private Integer questionId;
+
     @Column(name = "section_title", nullable = false)
     private String sectionTitle;
 
@@ -39,6 +42,15 @@ public class EmployeeAssessmentAnswer {
     @Column(name = "item_order", nullable = false)
     private Integer itemOrder;
 
+    @Column(name = "response_type", nullable = false, length = 30)
+    private String responseType = "YES_NO_RATING";
+
+    @Column(name = "is_required", nullable = false)
+    private Boolean required = true;
+
+    @Column(name = "weight", nullable = false)
+    private Double weight = 1.0;
+
     @Column(name = "rating")
     private Integer rating;
 
@@ -47,4 +59,7 @@ public class EmployeeAssessmentAnswer {
 
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
+
+    @Column(name = "yes_no_answer")
+    private Boolean yesNoAnswer;
 }

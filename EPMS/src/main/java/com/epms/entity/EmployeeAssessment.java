@@ -19,6 +19,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,17 +48,35 @@ public class EmployeeAssessment {
     @Column(name = "employee_code")
     private String employeeCode;
 
+    @Column(name = "current_position")
+    private String currentPosition;
+
     @Column(name = "department_id")
     private Integer departmentId;
 
     @Column(name = "department_name")
     private String departmentName;
 
+    @Column(name = "assessment_form_id")
+    private Integer assessmentFormId;
+
+    @Column(name = "form_name")
+    private String formName;
+
+    @Column(name = "company_name")
+    private String companyName;
+
+    @Column(name = "assessment_date")
+    private LocalDate assessmentDate;
+
+    @Column(name = "manager_name")
+    private String managerName;
+
     @Column(name = "period_label", nullable = false)
     private String period;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     private AssessmentStatus status;
 
     @Column(name = "total_score")
@@ -74,6 +93,9 @@ public class EmployeeAssessment {
 
     @Column(name = "remarks", columnDefinition = "TEXT")
     private String remarks;
+
+    @Column(name = "manager_comment", columnDefinition = "TEXT")
+    private String managerComment;
 
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt;
@@ -110,11 +132,35 @@ public class EmployeeAssessment {
         if (period == null || period.isBlank()) {
             period = String.valueOf(now.getYear());
         }
+
+        if (assessmentDate == null) {
+            assessmentDate = LocalDate.now();
+        }
+
+        if (totalScore == null) {
+            totalScore = 0.0;
+        }
+
+        if (maxScore == null) {
+            maxScore = 0.0;
+        }
+
+        if (scorePercent == null) {
+            scorePercent = 0.0;
+        }
+
+        if (performanceLabel == null || performanceLabel.isBlank()) {
+            performanceLabel = "Not scored";
+        }
     }
 
     @PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
+
+        if (assessmentDate == null) {
+            assessmentDate = LocalDate.now();
+        }
     }
 
     public void addAnswer(EmployeeAssessmentAnswer answer) {
