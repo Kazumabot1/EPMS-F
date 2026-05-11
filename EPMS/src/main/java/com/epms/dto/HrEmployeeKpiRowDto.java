@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,9 @@ public class HrEmployeeKpiRowDto {
     private Double totalScore;
     private Double totalWeightedScore;
     private LocalDateTime finalizedAt;
+
+    private LocalDate periodStartDate;
+    private LocalDate periodEndDate;
 
     @Builder.Default
     private List<ManagerKpiScoreLineDto> lines = new ArrayList<>();

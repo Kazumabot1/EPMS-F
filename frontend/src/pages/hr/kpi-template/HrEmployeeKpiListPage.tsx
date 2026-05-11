@@ -3,7 +3,9 @@ import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { kpiWorkflowService } from '../../../services/kpiWorkflowService';
+import { fetchDepartments, type Department } from '../../../services/departmentService';
 import type { HrEmployeeKpiRow } from '../../../types/kpiWorkflow';
+import HrEmployeeKpiModal from './HrEmployeeKpiModal';
 
 type HrKpiTab = 'finalized' | 'in_progress';
 
@@ -21,6 +23,25 @@ const HrEmployeeKpiListPage = () => {
   const [rows, setRows] = useState<HrEmployeeKpiRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [selectedRow, setSelectedRow] = useState<HrEmployeeKpiRow | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDepartments = async () => {
+      try {
+        const depts = await fetchDepartments();
+        if (!cancelled) setDepartments(depts.filter((d) => d.status !== false));
+      } catch {
+        // non-critical, skip silently
+      }
+    };
+    void loadDepartments();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +68,12 @@ const HrEmployeeKpiListPage = () => {
 
   const sorted = useMemo(() => {
     const copy = [...rows];
+    if (selectedDeptId != null) {
+      const matched = departments.find((d) => d.id === selectedDeptId);
+      if (matched) {
+        copy.splice(0, copy.length, ...copy.filter((r) => r.departmentName === matched.departmentName));
+      }
+    }
     if (tab === 'finalized') {
       copy.sort((a, b) => (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? ''));
     } else {
@@ -59,7 +86,7 @@ const HrEmployeeKpiListPage = () => {
       );
     }
     return copy;
-  }, [rows, tab]);
+  }, [rows, tab, selectedDeptId, departments]);
 
   const colCount = tab === 'in_progress' ? 8 : 7;
 
@@ -89,6 +116,51 @@ const HrEmployeeKpiListPage = () => {
         Review KPI assignments across departments. <strong>In progress</strong> shows scores managers have entered before finalization;
         <strong> Finalized</strong> lists locked records (including period-end auto-finalization when you open that tab).
       </p>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1rem' }}>
+        <label htmlFor="dept-filter" style={{ fontSize: '.82rem', color: '#64748b', fontWeight: 600 }}>
+          Department:
+        </label>
+        <select
+          id="dept-filter"
+          value={selectedDeptId ?? ''}
+          onChange={(e) => setSelectedDeptId(e.target.value ? Number(e.target.value) : null)}
+          style={{
+            padding: '.4rem .6rem',
+            borderRadius: '8px',
+            border: '1px solid #e2e8f0',
+            background: '#fff',
+            color: '#334155',
+            fontSize: '.82rem',
+            cursor: 'pointer',
+            minWidth: '180px',
+          }}
+        >
+          <option value="">All departments</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.departmentName}
+            </option>
+          ))}
+        </select>
+        {selectedDeptId != null && (
+          <button
+            type="button"
+            onClick={() => setSelectedDeptId(null)}
+            style={{
+              border: '1px solid #cbd5e1',
+              background: '#fff',
+              borderRadius: '8px',
+              padding: '.35rem .65rem',
+              fontSize: '.78rem',
+              cursor: 'pointer',
+              color: '#64748b',
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', marginBottom: '1.25rem' }}>
         <button type="button" style={tabBtnStyle(tab === 'finalized')} onClick={() => setTab('finalized')}>
@@ -143,8 +215,24 @@ const HrEmployeeKpiListPage = () => {
               {sorted.map((r) => (
                 <Fragment key={r.employeeKpiFormId}>
                   <tr>
-                    <td style={{ padding: '.65rem', borderBottom: '1px solid #f1f5f9', color: '#0f172a', fontWeight: 600 }}>
-                      {r.employeeName}
+                    <td style={{ padding: '.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRow(r)}
+                        style={{
+                          border: 'none',
+                          background: 'none',
+                          padding: 0,
+                          fontSize: '.85rem',
+                          fontWeight: 600,
+                          color: '#0f172a',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          textDecorationColor: '#94a3b8',
+                        }}
+                      >
+                        {r.employeeName}
+                      </button>
                     </td>
                     <td style={{ padding: '.65rem', borderBottom: '1px solid #f1f5f9', color: '#475569' }}>
                       {r.departmentName ?? '—'}
@@ -254,6 +342,8 @@ const HrEmployeeKpiListPage = () => {
           </table>
         </div>
       )}
+
+      <HrEmployeeKpiModal open={selectedRow !== null} row={selectedRow} onClose={() => setSelectedRow(null)} />
     </div>
   );
 };

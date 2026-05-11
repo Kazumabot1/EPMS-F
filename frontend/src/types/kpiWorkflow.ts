@@ -33,6 +33,8 @@ export type ManagerKpiAssignment = {
   status: string;
   totalScore: number | null;
   totalWeightedScore: number | null;
+  periodStartDate?: string | null;
+  periodEndDate?: string | null;
   lines: ManagerKpiScoreLine[];
 };
 
@@ -52,4 +54,6 @@ export type HrEmployeeKpiRow = EmployeeKpiResult & {
   employeeName: string;
   departmentName: string | null;
   positionTitle: string | null;
+  periodStartDate?: string | null;
+  periodEndDate?: string | null;
 };

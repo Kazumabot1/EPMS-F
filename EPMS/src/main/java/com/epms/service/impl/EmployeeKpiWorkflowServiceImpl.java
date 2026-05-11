@@ -499,6 +499,8 @@ public class EmployeeKpiWorkflowServiceImpl implements EmployeeKpiWorkflowServic
                 .totalScore(ekf.getTotalScore())
                 .totalWeightedScore(ekf.getTotalWeightedScore())
                 .finalizedAt(ekf.getFinalizedAt())
+                .periodStartDate(ekf.getKpiForm().getStartDate())
+                .periodEndDate(ekf.getKpiForm().getEndDate())
                 .lines(scoreLines(ekf))
                 .build();
     }
@@ -597,6 +599,8 @@ public class EmployeeKpiWorkflowServiceImpl implements EmployeeKpiWorkflowServic
                 .status(ekf.getStatus())
                 .totalScore(ekf.getTotalScore())
                 .totalWeightedScore(ekf.getTotalWeightedScore())
+                .periodStartDate(ekf.getKpiForm().getStartDate())
+                .periodEndDate(ekf.getKpiForm().getEndDate())
                 .lines(scoreLines(ekf))
                 .build();
     }
