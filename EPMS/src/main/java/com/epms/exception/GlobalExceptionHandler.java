@@ -132,7 +132,9 @@ public class GlobalExceptionHandler {
                         .status(HttpStatus.FORBIDDEN.value())
                         .error(HttpStatus.FORBIDDEN.getReasonPhrase())
                         .message(
-                                "You do not have permission for this action. HR or ADMIN role is required for KPI templates.")
+                                ex.getMessage() != null && !ex.getMessage().isBlank()
+                                        ? ex.getMessage()
+                                        : "Access denied. Your account does not have permission for this action.")
                         .path(request.getRequestURI())
                         .build();
 

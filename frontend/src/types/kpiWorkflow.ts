@@ -1,0 +1,59 @@
+export type UseKpiTemplateResult = {
+  assignmentsCreated: number;
+  assignmentsSkippedExisting: number;
+  managersNotified: number;
+  /** Present when HR applied the template to all departments */
+  departmentsWithMatches?: number | null;
+};
+
+export type ManagerKpiTemplateSummary = {
+  kpiFormId: number;
+  title: string;
+  openAssignments: number;
+  periodStartDate?: string | null;
+  periodEndDate?: string | null;
+};
+
+export type ManagerKpiScoreLine = {
+  kpiFormItemId: number;
+  kpiLabel: string | null;
+  weight: number | null;
+  target: number | null;
+  unitName: string | null;
+  actualValue: number | null;
+  /** Achievement % — (actual/target)×100 when using actual, else legacy 0–100 */
+  score: number | null;
+  weightedScore: number | null;
+};
+
+export type ManagerKpiAssignment = {
+  employeeKpiFormId: number;
+  employeeId: number;
+  employeeName: string;
+  status: string;
+  totalScore: number | null;
+  totalWeightedScore: number | null;
+  periodStartDate?: string | null;
+  periodEndDate?: string | null;
+  lines: ManagerKpiScoreLine[];
+};
+
+export type EmployeeKpiResult = {
+  employeeKpiFormId: number;
+  kpiFormId: number;
+  kpiTitle: string;
+  status: string;
+  totalScore: number | null;
+  totalWeightedScore: number | null;
+  finalizedAt: string | null;
+  lines: ManagerKpiScoreLine[];
+};
+
+export type HrEmployeeKpiRow = EmployeeKpiResult & {
+  employeeId: number;
+  employeeName: string;
+  departmentName: string | null;
+  positionTitle: string | null;
+  periodStartDate?: string | null;
+  periodEndDate?: string | null;
+};

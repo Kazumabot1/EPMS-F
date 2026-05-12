@@ -563,6 +563,7 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
           { to: '/hr/performance-kpi/category', label: 'KPI Categories', icon: 'bi bi-tags' },
           { to: '/hr/performance-kpi/item', label: 'KPI Items', icon: 'bi bi-card-checklist' },
           { to: '/hr/kpi-template', label: 'KPI Templates', icon: 'bi bi-ui-checks-grid' },
+          { to: '/hr/employee-kpis', label: 'Employee KPI', icon: 'bi bi-people-fill' },
         ],
       },
     ];

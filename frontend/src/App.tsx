@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import HrEmployeeAccountImport from './pages/employee/HrEmployeeAccountImport';
@@ -20,6 +19,7 @@ import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 import EmployeeMyDashboard from './pages/employee/EmployeeMyDashboard';
 import EmployeeManagement from './pages/employee/EmployeeManagement';
 import EmployeeRoutePlaceholder from './pages/employee/EmployeeRoutePlaceholder';
+import EmployeeKpiResultsPage from './pages/employee/EmployeeKpiResultsPage';
 import EmployeeSelfAssessmentPage from './pages/employee/EmployeeSelfAssessmentPage';
 import EmployeeAssessmentScoresPage from './pages/employee/EmployeeAssessmentScoresPage';
 
@@ -31,6 +31,7 @@ import DepartmentComparisonPage from './pages/department/DepartmentComparisonPag
 
 import ManagerDashboard from './pages/manager/ManagerDashboard';
 import ManagerAssessmentReviewPage from './pages/manager/ManagerAssessmentReviewPage';
+import ManagerKpiScoringPage from './pages/manager/ManagerKpiScoringPage';
 import CeoDashboard from './pages/ceo/CeoDashboard';
 import DepartmentHeadDashboard from './pages/department-head/DepartmentHeadDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -49,6 +50,7 @@ import KpiItemPage from './pages/hr/performance-kpi/item/KpiItemPage';
 import KpiTemplateDetailPage from './pages/hr/kpi-template/KpiTemplateDetailPage';
 import KpiTemplateEditorPage from './pages/hr/kpi-template/KpiTemplateEditorPage';
 import KpiTemplateListPage from './pages/hr/kpi-template/KpiTemplateListPage';
+import HrEmployeeKpiListPage from './pages/hr/kpi-template/HrEmployeeKpiListPage';
 
 import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 import Notifications from './pages/Notifications';
@@ -103,15 +105,7 @@ function App() {
             <Route element={<AppLayout />}>
               <Route path="/employee/dashboard" element={<EmployeeMyDashboard />} />
 
-              <Route
-                path="/employee/kpis"
-                element={
-                  <EmployeeRoutePlaceholder
-                    title="My KPIs"
-                    description="Track your KPI progress, scores, and weight distribution."
-                  />
-                }
-              />
+              <Route path="/employee/kpis" element={<EmployeeKpiResultsPage />} />
 
               <Route path="/employee/appraisals" element={<AppraisalHistoryListPage role="employee" />} />
               <Route path="/employee/assessment-scores" element={<EmployeeAssessmentScoresPage />} />
@@ -145,6 +139,9 @@ function App() {
             <Route element={<AppLayout />}>
               <Route path="/manager/dashboard" element={<ManagerDashboard />} />
               <Route path="/manager/assessment-review" element={<ManagerAssessmentReviewPage />} />
+              <Route path="/manager/kpi" element={<Navigate to="/manager/kpi-scoring" replace />} />
+              <Route path="/manager/kpi/history" element={<Navigate to="/manager/kpi-scoring" replace />} />
+              <Route path="/manager/kpi-scoring" element={<ManagerKpiScoringPage />} />
               <Route path="/manager/appraisals" element={<EmployeePerformanceReviewPage />} />
               <Route path="/manager/appraisals/history" element={<AppraisalHistoryListPage role="pm" />} />
 
@@ -232,6 +229,7 @@ function App() {
               <Route path="/hr/kpi-template/:id/edit" element={<KpiTemplateEditorPage />} />
               <Route path="/hr/kpi-template/:id" element={<KpiTemplateDetailPage />} />
               <Route path="/hr/kpi-template" element={<KpiTemplateListPage />} />
+              <Route path="/hr/employee-kpis" element={<HrEmployeeKpiListPage />} />
             </Route>
           </Route>
         </Route>

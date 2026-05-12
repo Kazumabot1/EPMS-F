@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import KpiNotificationMessageBody from '../notifications/KpiNotificationMessageBody';
 import SignatureModal from '../signature/SignatureModal';
 
 type HeaderProps = {
@@ -15,6 +16,7 @@ type NotifItem = {
   type?: string | null;
   isRead?: boolean | null;
   createdAt?: string | number | number[] | null;
+  referenceId?: number | null;
 };
 
 function unwrap<T>(res: { data?: { data?: T } & T }): T | undefined {
@@ -61,7 +63,7 @@ function notifIconClass(type?: string | null) {
   if (t === 'MEETING') return 'bi bi-calendar-event';
   if (t === 'PIP') return 'bi bi-clipboard2-pulse';
   if (t === 'APPRAISAL') return 'bi bi-exclamation-triangle';
-  if (t === 'KPI') return 'bi bi-bullseye';
+  if (t === 'KPI' || t.startsWith('KPI_')) return 'bi bi-bullseye';
   if (t === 'FEEDBACK') return 'bi bi-chat-dots';
 
   return 'bi bi-bell';
@@ -213,23 +215,38 @@ const Header = ({ collapsed }: HeaderProps) => {
                   <p className="hr-notif-popover__empty">No notifications yet.</p>
                 ) : (
                   notifItems.map((n) => (
-                    <button
+                    <div
                       key={n.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       className={`hr-notif-popover__item ${n.isRead ? '' : 'is-unread'}`}
                       onClick={() => onNotifItemClick(n.id, n.isRead)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onNotifItemClick(n.id, n.isRead);
+                        }
+                      }}
                     >
                       <i className={`hr-notif-popover__item-icon ${notifIconClass(n.type)}`} aria-hidden />
                       <span className="hr-notif-popover__item-main">
                         <span className="hr-notif-popover__item-title">{n.title}</span>
-                        <span className="hr-notif-popover__item-msg">{n.message}</span>
+                        <span className="hr-notif-popover__item-msg">
+                          <KpiNotificationMessageBody
+                            message={n.message}
+                            type={n.type}
+                            referenceId={n.referenceId}
+                            user={user}
+                            onKpiLinkNavigate={() => onNotifItemClick(n.id, n.isRead)}
+                          />
+                        </span>
                         <span className="hr-notif-popover__item-time">{formatNotifTime(n.createdAt)}</span>
                       </span>
                       <span
                         className={`hr-notif-popover__item-dot ${n.isRead ? 'is-read' : ''}`}
                         aria-hidden
                       />
-                    </button>
+                    </div>
                   ))
                 )}
               </div>

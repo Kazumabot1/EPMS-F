@@ -1,14 +1,11 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { kpiWorkflowService } from '../../services/kpiWorkflowService';
+import type { EmployeeKpiResult } from '../../types/kpiWorkflow';
 import './employee-dashboard.css';
 
-const summaryCards = [
-  {
-    title: 'My KPI Score',
-    value: '91.6%',
-    subtitle: 'of 100% total weight',
-    icon: 'bi-bullseye',
-    iconClass: 'bg-indigo-50 text-indigo-600',
-    extra: '+2.3% vs last quarter',
-  },
+const staticCards = [
   {
     title: 'Appraisal Status',
     value: 'self submitted',
@@ -36,6 +33,50 @@ const summaryCards = [
 ];
 
 const EmployeeMyDashboard = () => {
+  const [kpiRows, setKpiRows] = useState<EmployeeKpiResult[]>([]);
+  const [kpiLoading, setKpiLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setKpiLoading(true);
+        const data = await kpiWorkflowService.myFinalizedResults();
+        if (!cancelled) setKpiRows(data);
+      } catch (err) {
+        if (!cancelled) toast.error(err instanceof Error ? err.message : 'Could not load KPI summary.');
+      } finally {
+        if (!cancelled) setKpiLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const latestKpi = useMemo(() => {
+    if (!kpiRows.length) return null;
+    const sorted = [...kpiRows].sort((a, b) => (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? ''));
+    return sorted[0];
+  }, [kpiRows]);
+
+  const kpiSummaryCard = {
+    title: 'My KPI score',
+    value: kpiLoading ? '…' : latestKpi?.totalWeightedScore != null ? `${latestKpi.totalWeightedScore.toFixed(2)}` : '—',
+    subtitle: kpiLoading
+      ? 'Loading KPI results…'
+      : latestKpi
+        ? `Latest: ${latestKpi.kpiTitle}`
+        : 'No finalized KPIs yet',
+    icon: 'bi-bullseye',
+    iconClass: 'bg-indigo-50 text-indigo-600',
+    extra:
+      !kpiLoading && kpiRows.length > 1
+        ? `${kpiRows.length} finalized cycle${kpiRows.length === 1 ? '' : 's'} on record`
+        : '',
+  };
+
   return (
     <div className="employee-dashboard">
       <section className="employee-dashboard-title">
@@ -44,7 +85,7 @@ const EmployeeMyDashboard = () => {
       </section>
 
       <section className="employee-summary-grid">
-        {summaryCards.map((card) => (
+        {[kpiSummaryCard, ...staticCards].map((card) => (
           <article key={card.title} className="employee-summary-card">
             <div className="employee-summary-head">
               <div>
@@ -65,21 +106,41 @@ const EmployeeMyDashboard = () => {
         <article className="employee-panel-card employee-panel-main">
           <div className="employee-panel-head">
             <h2>My KPIs</h2>
-            <button type="button">
-              View All
-            </button>
+            <Link to="/employee/kpis" className="employee-kpi-view-all">
+              View all
+            </Link>
           </div>
-          <div className="employee-kpi-box">
-            <div className="employee-kpi-row">
-              <p>Code Quality Score</p>
-              <span>Active</span>
-            </div>
-            <p className="employee-kpi-muted">Weight: 25%</p>
-            <div className="employee-kpi-progress">
-              <div />
-            </div>
-            <p className="employee-kpi-muted">92 / 90 (102%)</p>
-          </div>
+          {kpiLoading && <p className="employee-kpi-muted">Loading…</p>}
+          {!kpiLoading && kpiRows.length === 0 && (
+            <p className="employee-kpi-muted">Finalized KPI scores from your manager will show here.</p>
+          )}
+          {!kpiLoading &&
+            kpiRows.slice(0, 4).map((r) => (
+              <div key={r.employeeKpiFormId} className="employee-kpi-box">
+                <div className="employee-kpi-row">
+                  <p>{r.kpiTitle}</p>
+                  <span>Finalized</span>
+                </div>
+                <p className="employee-kpi-muted">
+                  Weighted total:{' '}
+                  {r.totalWeightedScore != null ? (
+                    <strong style={{ color: '#1e293b' }}>{r.totalWeightedScore.toFixed(2)}</strong>
+                  ) : (
+                    '—'
+                  )}
+                </p>
+                <div className="employee-kpi-progress">
+                  <div
+                    style={{
+                      width: `${Math.min(100, r.totalScore ?? 0)}%`,
+                    }}
+                  />
+                </div>
+                <p className="employee-kpi-muted">
+                  Avg achievement % (weighted): {r.totalScore != null ? `${r.totalScore.toFixed(1)}%` : '—'}
+                </p>
+              </div>
+            ))}
         </article>
 
         <article className="employee-panel-card">

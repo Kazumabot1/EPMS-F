@@ -482,6 +482,17 @@
   overflow: hidden;
 }
 
+.hr-notif-popover__item-msg .notif-kpi-title-link {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hr-notif-popover__item-msg .notif-kpi-title-link:hover {
+  color: #1d4ed8;
+}
+
 .hr-notif-popover__item-time {
   font-size: 0.72rem;
   color: #9ca3af;

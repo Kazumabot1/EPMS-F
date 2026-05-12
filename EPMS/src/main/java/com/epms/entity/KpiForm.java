@@ -14,6 +14,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(callSuper = false)
 public class KpiForm {
 
     @Id
@@ -35,6 +36,7 @@ public class KpiForm {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", referencedColumnName = "id")
+    @EqualsAndHashCode.Exclude
     private User createdByUser;
 
     @Column(name = "created_by_string")
@@ -45,6 +47,7 @@ public class KpiForm {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "updated_by", referencedColumnName = "id")
+    @EqualsAndHashCode.Exclude
     private User updatedByUser;
 
     @Column(name = "updated_at")
@@ -62,19 +65,23 @@ public class KpiForm {
     @Builder.Default
     @OneToMany(mappedBy = "kpiForm", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("sortOrder ASC")
+    @EqualsAndHashCode.Exclude
     private List<KpiFormItem> items = new ArrayList<>();
 
     @Builder.Default
     @OneToMany(mappedBy = "kpiForm", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @EqualsAndHashCode.Exclude
     private List<EmployeeKpiForm> employeeKpiForms = new ArrayList<>();
 
     @Builder.Default
     @OneToMany(mappedBy = "kpiForm", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("changedAt DESC")
+    @EqualsAndHashCode.Exclude
     private List<KpiVersionHistory> versionHistory = new ArrayList<>();
 
     @Builder.Default
     @OneToMany(mappedBy = "kpiForm", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @EqualsAndHashCode.Exclude
     private List<KpiPosition> kpiPositions = new ArrayList<>();
 
     @PrePersist

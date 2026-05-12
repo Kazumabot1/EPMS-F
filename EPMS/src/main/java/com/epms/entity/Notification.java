@@ -25,6 +25,9 @@ public class Notification {
     private String message;
     private String type; // APPRAISAL, FEEDBACK, etc.
 
+    /** Optional FK target (e.g. kpi_form.id for KPI_* notification types). */
+    private Integer referenceId;
+
     private Boolean isRead = false;
 
     @Temporal(TemporalType.TIMESTAMP)
