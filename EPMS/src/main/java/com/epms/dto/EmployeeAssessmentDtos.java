@@ -41,6 +41,14 @@ public final class EmployeeAssessmentDtos {
     }
 
     @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ReviewActionRequest {
+        private String comment;
+        private String reason;
+    }
+
+    @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
@@ -101,8 +109,11 @@ public final class EmployeeAssessmentDtos {
         private String currentPosition;
         private Integer departmentId;
         private String departmentName;
-        private LocalDate assessmentDate;
+        private Integer managerUserId;
         private String managerName;
+        private Integer departmentHeadUserId;
+        private String departmentHeadName;
+        private LocalDate assessmentDate;
 
         private String period;
         private String status;
@@ -112,10 +123,39 @@ public final class EmployeeAssessmentDtos {
         private String performanceLabel;
         private String remarks;
         private String managerComment;
+        private String hrComment;
+        private String departmentHeadComment;
+        private String declineReason;
+
+        private Long employeeSignatureId;
+        private String employeeSignatureName;
+        private String employeeSignatureImageData;
+        private String employeeSignatureImageType;
+        private LocalDateTime employeeSignedAt;
+
+        private Long managerSignatureId;
+        private String managerSignatureName;
+        private String managerSignatureImageData;
+        private String managerSignatureImageType;
+        private LocalDateTime managerSignedAt;
+
+        private Long departmentHeadSignatureId;
+        private String departmentHeadSignatureName;
+        private String departmentHeadSignatureImageData;
+        private String departmentHeadSignatureImageType;
+        private LocalDateTime departmentHeadSignedAt;
+
+        private Long hrSignatureId;
+        private String hrSignatureName;
+        private String hrSignatureImageData;
+        private String hrSignatureImageType;
+        private LocalDateTime hrSignedAt;
 
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         private LocalDateTime submittedAt;
+        private LocalDateTime approvedAt;
+        private LocalDateTime declinedAt;
 
         private List<AssessmentSectionResponse> sections;
         private List<AssessmentScoreBandResponse> scoreBands;
@@ -130,16 +170,29 @@ public final class EmployeeAssessmentDtos {
         private Integer formId;
         private Integer assessmentFormId;
         private String formName;
+
         private Integer employeeId;
         private String employeeName;
         private String employeeCode;
+        private Integer departmentId;
         private String departmentName;
+        private Integer managerUserId;
+        private String managerName;
+
         private String period;
         private String status;
         private Double totalScore;
         private Double maxScore;
         private Double scorePercent;
         private String performanceLabel;
+
         private LocalDateTime submittedAt;
+        private LocalDateTime approvedAt;
+        private LocalDateTime declinedAt;
+
+        private Boolean employeeSigned;
+        private Boolean managerSigned;
+        private Boolean departmentHeadSigned;
+        private Boolean hrSigned;
     }
 }

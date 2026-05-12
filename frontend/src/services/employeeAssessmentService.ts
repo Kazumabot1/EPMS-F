@@ -10,10 +10,7 @@ const unwrap = <T,>(payload: any, fallback: T): T => {
   return payload?.data?.data ?? payload?.data ?? fallback;
 };
 
-const currentPeriod = () => {
-  const now = new Date();
-  return `${now.getFullYear()}`;
-};
+const currentPeriod = () => String(new Date().getFullYear());
 
 const getFullName = (payload: any) => {
   const firstName = payload?.employee?.firstName ?? payload?.firstName ?? '';
@@ -72,12 +69,9 @@ const defaultScoreBands = (): AssessmentScoreBand[] => [
 
 const normalizeScoreBands = (payload: any): AssessmentScoreBand[] => {
   const rawBands = Array.isArray(payload?.scoreBands) ? payload.scoreBands : [];
+  const bands = rawBands.length ? rawBands : defaultScoreBands();
 
-  if (!rawBands.length) {
-    return defaultScoreBands();
-  }
-
-  return rawBands
+  return bands
     .map((band: any, index: number): AssessmentScoreBand => ({
       id: band.id ?? null,
       minScore: Number(band.minScore ?? 0),
@@ -149,6 +143,7 @@ const normalizeAssessment = (payload: any): EmployeeAssessment | null => {
       payload.companyName ??
       payload.form?.companyName ??
       'ACE Data Systems Ltd.',
+
     userId: payload.userId ?? payload.employee?.userId ?? 0,
     employeeId: payload.employeeId ?? payload.employee?.id ?? null,
     employeeName: getFullName(payload),
@@ -158,8 +153,16 @@ const normalizeAssessment = (payload: any): EmployeeAssessment | null => {
     departmentId: payload.departmentId ?? payload.employee?.departmentId ?? null,
     departmentName:
       payload.departmentName ?? payload.employee?.departmentName ?? null,
-    assessmentDate: payload.assessmentDate ?? null,
+    managerUserId: payload.managerUserId ?? null,
     managerName: payload.managerName ?? payload.manager?.fullName ?? null,
+    departmentHeadUserId: payload.departmentHeadUserId ?? null,
+    departmentHeadName:
+      payload.departmentHeadName ??
+      payload.departmentHead?.fullName ??
+      payload.departmentHead?.name ??
+      null,
+    assessmentDate: payload.assessmentDate ?? null,
+
     period: payload.period ?? currentPeriod(),
     status: payload.status ?? 'DRAFT',
     totalScore: Number(payload.totalScore ?? 0),
@@ -169,10 +172,45 @@ const normalizeAssessment = (payload: any): EmployeeAssessment | null => {
     ),
     performanceLabel: payload.performanceLabel ?? 'Not scored',
     remarks: payload.remarks ?? '',
-    managerComment: payload.managerComment ?? '',
+    managerComment: payload.managerComment ?? null,
+    hrComment: payload.hrComment ?? null,
+    departmentHeadComment: payload.departmentHeadComment ?? null,
+    declineReason: payload.declineReason ?? null,
+
+    // Employee signature
+    employeeSignatureId: payload.employeeSignatureId ?? null,
+    employeeSignatureName: payload.employeeSignatureName ?? null,
+    employeeSignatureImageData: payload.employeeSignatureImageData ?? null,
+    employeeSignatureImageType: payload.employeeSignatureImageType ?? null,
+    employeeSignedAt: payload.employeeSignedAt ?? null,
+
+    // Manager signature
+    managerSignatureId: payload.managerSignatureId ?? null,
+    managerSignatureName: payload.managerSignatureName ?? null,
+    managerSignatureImageData: payload.managerSignatureImageData ?? null,
+    managerSignatureImageType: payload.managerSignatureImageType ?? null,
+    managerSignedAt: payload.managerSignedAt ?? null,
+
+    // Department head signature
+    departmentHeadSignatureId: payload.departmentHeadSignatureId ?? null,
+    departmentHeadSignatureName: payload.departmentHeadSignatureName ?? null,
+    departmentHeadSignatureImageData: payload.departmentHeadSignatureImageData ?? null,
+    departmentHeadSignatureImageType: payload.departmentHeadSignatureImageType ?? null,
+    departmentHeadSignedAt: payload.departmentHeadSignedAt ?? null,
+
+    // HR signature
+    hrSignatureId: payload.hrSignatureId ?? null,
+    hrSignatureName: payload.hrSignatureName ?? null,
+    hrSignatureImageData: payload.hrSignatureImageData ?? null,
+    hrSignatureImageType: payload.hrSignatureImageType ?? null,
+    hrSignedAt: payload.hrSignedAt ?? null,
+
     createdAt: payload.createdAt ?? null,
     updatedAt: payload.updatedAt ?? null,
     submittedAt: payload.submittedAt ?? null,
+    approvedAt: payload.approvedAt ?? null,
+    declinedAt: payload.declinedAt ?? null,
+
     sections,
     scoreBands: normalizeScoreBands(payload),
   };
@@ -192,11 +230,14 @@ const normalizeScoreRow = (row: any): AssessmentScoreRow => ({
     getFullName(row) ??
     'Unknown Employee',
   employeeCode: row.employeeCode ?? row.employee?.employeeCode ?? null,
+  departmentId: row.departmentId ?? row.employee?.departmentId ?? row.department?.id ?? null,
   departmentName:
     row.departmentName ??
     row.employee?.departmentName ??
     row.department?.name ??
     null,
+  managerUserId: row.managerUserId ?? null,
+  managerName: row.managerName ?? null,
   period: row.period ?? currentPeriod(),
   status: row.status ?? 'DRAFT',
   totalScore: Number(row.totalScore ?? 0),
@@ -206,6 +247,14 @@ const normalizeScoreRow = (row: any): AssessmentScoreRow => ({
   ),
   performanceLabel: row.performanceLabel ?? row.label ?? 'Not scored',
   submittedAt: row.submittedAt ?? row.updatedAt ?? null,
+  approvedAt: row.approvedAt ?? null,
+  declinedAt: row.declinedAt ?? null,
+  employeeSigned: Boolean(row.employeeSigned ?? row.employeeSignatureId ?? row.employeeSignedAt),
+  managerSigned: Boolean(row.managerSigned ?? row.managerSignatureId ?? row.managerSignedAt),
+  departmentHeadSigned: Boolean(
+    row.departmentHeadSigned ?? row.departmentHeadSignatureId ?? row.departmentHeadSignedAt,
+  ),
+  hrSigned: Boolean(row.hrSigned ?? row.hrSignatureId ?? row.hrSignedAt),
 });
 
 const normalizeList = <T,>(payload: any, fallback: T[]): T[] => {
@@ -226,13 +275,13 @@ const isMissingDraft = (error: any) => {
 
 export const employeeAssessmentService = {
   async template(): Promise<EmployeeAssessment | null> {
-    const res = await api.get('/employee-assessments/template');
-    return normalizeAssessment(unwrap<any>(res, null));
+    const response = await api.get('/employee-assessments/template');
+    return normalizeAssessment(unwrap<any>(response, null));
   },
 
   async draft(): Promise<EmployeeAssessment | null> {
-    const res = await api.get('/employee-assessments/my-latest-draft');
-    return normalizeAssessment(unwrap<any>(res, null));
+    const response = await api.get('/employee-assessments/my-latest-draft');
+    return normalizeAssessment(unwrap<any>(response, null));
   },
 
   async getLatestDraft(): Promise<EmployeeAssessment | null> {
@@ -242,8 +291,26 @@ export const employeeAssessmentService = {
       return null;
     }
 
+    const lockedStatuses = [
+      'SUBMITTED',
+      'PENDING_MANAGER',
+      'PENDING_DEPARTMENT_HEAD',
+      'PENDING_HR',
+      'APPROVED',
+      'DECLINED',
+      'REJECTED',
+    ];
+
+    if (lockedStatuses.includes(template.status)) {
+      return template;
+    }
+
     try {
       const draft = await this.draft();
+
+      if (draft && lockedStatuses.includes(draft.status)) {
+        return draft;
+      }
 
       const templateFormId = template.assessmentFormId ?? template.formId;
       const draftFormId = draft?.assessmentFormId ?? draft?.formId;
@@ -267,15 +334,20 @@ export const employeeAssessmentService = {
     }
   },
 
+  async getById(id: number): Promise<EmployeeAssessment> {
+    const response = await api.get(`/employee-assessments/${id}`);
+    return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
+  },
+
   async saveDraft(
     payload: AssessmentRequest,
     assessmentId?: number | null,
   ): Promise<EmployeeAssessment> {
-    const res = assessmentId
+    const response = assessmentId
       ? await api.put(`/employee-assessments/${assessmentId}`, payload)
       : await api.post('/employee-assessments', payload);
 
-    return normalizeAssessment(unwrap<any>(res, null)) as EmployeeAssessment;
+    return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
   },
 
   async submit(
@@ -287,12 +359,12 @@ export const employeeAssessmentService = {
         throw new Error('Assessment payload is required.');
       }
 
-      const res = await api.post(
+      const response = await api.post(
         `/employee-assessments/${payloadOrId}/submit`,
         maybePayload,
       );
 
-      return normalizeAssessment(unwrap<any>(res, null)) as EmployeeAssessment;
+      return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
     }
 
     const payload = payloadOrId;
@@ -302,22 +374,51 @@ export const employeeAssessmentService = {
       throw new Error('Assessment draft could not be created before submission.');
     }
 
-    const res = await api.post(
+    const response = await api.post(
       `/employee-assessments/${savedDraft.id}/submit`,
       payload,
     );
 
-    return normalizeAssessment(unwrap<any>(res, null)) as EmployeeAssessment;
+    return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
+  },
+
+  async managerSign(id: number, comment?: string): Promise<EmployeeAssessment> {
+    const response = await api.post(`/employee-assessments/${id}/manager-sign`, {
+      comment: comment ?? null,
+    });
+    return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
+  },
+
+  async departmentHeadSign(id: number, comment?: string): Promise<EmployeeAssessment> {
+    const response = await api.post(`/employee-assessments/${id}/department-head-sign`, {
+      comment: comment ?? null,
+    });
+    return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
+  },
+
+  async hrApprove(id: number, comment?: string): Promise<EmployeeAssessment> {
+    const response = await api.post(`/employee-assessments/${id}/hr-approve`, {
+      comment: comment ?? null,
+    });
+    return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
+  },
+
+  async hrDecline(id: number, reason: string, comment?: string): Promise<EmployeeAssessment> {
+    const response = await api.post(`/employee-assessments/${id}/hr-decline`, {
+      reason,
+      comment: comment ?? null,
+    });
+    return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
   },
 
   async getMine(): Promise<AssessmentScoreRow[]> {
-    const res = await api.get('/employee-assessments/my-scores');
-    return normalizeList<any>(res, []).map(normalizeScoreRow);
+    const response = await api.get('/employee-assessments/my-scores');
+    return normalizeList<any>(response, []).map(normalizeScoreRow);
   },
 
   async getScoreTable(): Promise<AssessmentScoreRow[]> {
-    const res = await api.get('/employee-assessments/score-table');
-    return normalizeList<any>(res, []).map(normalizeScoreRow);
+    const response = await api.get('/employee-assessments/score-table');
+    return normalizeList<any>(response, []).map(normalizeScoreRow);
   },
 
   async scoreTable(): Promise<AssessmentScoreRow[]> {

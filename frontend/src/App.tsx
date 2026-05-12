@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import HrEmployeeAccountImport from './pages/employee/HrEmployeeAccountImport';
@@ -29,6 +30,7 @@ import DepartmentManagement from './pages/department/DepartmentManagement';
 import DepartmentComparisonPage from './pages/department/DepartmentComparisonPage';
 
 import ManagerDashboard from './pages/manager/ManagerDashboard';
+import ManagerAssessmentReviewPage from './pages/manager/ManagerAssessmentReviewPage';
 import CeoDashboard from './pages/ceo/CeoDashboard';
 import DepartmentHeadDashboard from './pages/department-head/DepartmentHeadDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -142,6 +144,7 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['Manager']} />}>
             <Route element={<AppLayout />}>
               <Route path="/manager/dashboard" element={<ManagerDashboard />} />
+              <Route path="/manager/assessment-review" element={<ManagerAssessmentReviewPage />} />
               <Route path="/manager/appraisals" element={<EmployeePerformanceReviewPage />} />
               <Route path="/manager/appraisals/history" element={<AppraisalHistoryListPage role="pm" />} />
 

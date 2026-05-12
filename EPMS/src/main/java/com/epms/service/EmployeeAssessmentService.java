@@ -6,6 +6,7 @@ import com.epms.dto.EmployeeAssessmentDtos.AssessmentRequest;
 import com.epms.dto.EmployeeAssessmentDtos.AssessmentResponse;
 import com.epms.dto.EmployeeAssessmentDtos.AssessmentScoreBandResponse;
 import com.epms.dto.EmployeeAssessmentDtos.AssessmentSectionResponse;
+import com.epms.dto.EmployeeAssessmentDtos.ReviewActionRequest;
 import com.epms.dto.EmployeeAssessmentDtos.ScoreTableRowResponse;
 import com.epms.entity.AssessmentFormDefinition;
 import com.epms.entity.AssessmentFormQuestionDefinition;
@@ -15,6 +16,7 @@ import com.epms.entity.Department;
 import com.epms.entity.Employee;
 import com.epms.entity.EmployeeAssessment;
 import com.epms.entity.EmployeeAssessmentAnswer;
+import com.epms.entity.Signature;
 import com.epms.entity.User;
 import com.epms.entity.enums.AssessmentStatus;
 import com.epms.exception.BadRequestException;
@@ -24,6 +26,7 @@ import com.epms.repository.AssessmentFormDefinitionRepository;
 import com.epms.repository.DepartmentRepository;
 import com.epms.repository.EmployeeAssessmentRepository;
 import com.epms.repository.EmployeeRepository;
+import com.epms.repository.SignatureRepository;
 import com.epms.repository.UserRepository;
 import com.epms.security.SecurityUtils;
 import com.epms.security.UserPrincipal;
@@ -34,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -57,34 +61,62 @@ public class EmployeeAssessmentService {
     private static final String RESPONSE_TYPE_YES_NO = "YES_NO";
     private static final String RESPONSE_TYPE_YES_NO_RATING = "YES_NO_RATING";
 
+    private static final List<AssessmentStatus> EMPLOYEE_VISIBLE_STATUSES = List.of(
+            AssessmentStatus.DRAFT,
+            AssessmentStatus.SUBMITTED,
+            AssessmentStatus.PENDING_MANAGER,
+            AssessmentStatus.PENDING_DEPARTMENT_HEAD,
+            AssessmentStatus.PENDING_HR,
+            AssessmentStatus.APPROVED,
+            AssessmentStatus.DECLINED,
+            AssessmentStatus.REJECTED
+    );
+
+    private static final List<AssessmentStatus> REVIEW_TABLE_STATUSES = List.of(
+            AssessmentStatus.SUBMITTED,
+            AssessmentStatus.PENDING_MANAGER,
+            AssessmentStatus.PENDING_DEPARTMENT_HEAD,
+            AssessmentStatus.PENDING_HR,
+            AssessmentStatus.APPROVED,
+            AssessmentStatus.DECLINED,
+            AssessmentStatus.REJECTED
+    );
+
+    private static final List<AssessmentStatus> NON_EDITABLE_STATUSES = List.of(
+            AssessmentStatus.SUBMITTED,
+            AssessmentStatus.PENDING_MANAGER,
+            AssessmentStatus.PENDING_DEPARTMENT_HEAD,
+            AssessmentStatus.PENDING_HR,
+            AssessmentStatus.APPROVED,
+            AssessmentStatus.DECLINED,
+            AssessmentStatus.REJECTED
+    );
+
     private final EmployeeAssessmentRepository assessmentRepository;
     private final AssessmentFormDefinitionRepository formRepository;
     private final UserRepository userRepository;
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
+    private final SignatureRepository signatureRepository;
 
     @Transactional(readOnly = true)
     public AssessmentResponse getTemplateForCurrentUser() {
         User user = currentUserEntity();
         AssessmentFormDefinition form = findAssignedActiveFormForCurrentUser();
-        EmployeeProfile profile = resolveProfile(user);
 
-        return toTemplateResponse(user, profile, form);
+        return assessmentRepository
+                .findFirstByUserIdAndAssessmentFormIdAndStatusInOrderByUpdatedAtDesc(
+                        user.getId(),
+                        form.getId(),
+                        EMPLOYEE_VISIBLE_STATUSES
+                )
+                .map(this::toResponse)
+                .orElseGet(() -> toTemplateResponse(user, resolveProfile(user), form));
     }
 
     @Transactional(readOnly = true)
     public AssessmentResponse getLatestDraftForCurrentUser() {
-        User user = currentUserEntity();
-        AssessmentFormDefinition form = findAssignedActiveFormForCurrentUser();
-
-        return assessmentRepository
-                .findFirstByUserIdAndAssessmentFormIdAndStatusOrderByUpdatedAtDesc(
-                        user.getId(),
-                        form.getId(),
-                        AssessmentStatus.DRAFT
-                )
-                .map(this::toResponse)
-                .orElseGet(() -> toTemplateResponse(user, resolveProfile(user), form));
+        return getTemplateForCurrentUser();
     }
 
     @Transactional(readOnly = true)
@@ -99,7 +131,9 @@ public class EmployeeAssessmentService {
         User user = currentUserEntity();
         AssessmentFormDefinition form = findAssignedActiveFormForCurrentUser();
 
+        ensureFormOpenForSubmission(form);
         validateRequestFormMatchesAssignedForm(request, form);
+        ensureNoNonEditableAssessment(user.getId(), form.getId());
 
         EmployeeAssessment assessment = assessmentRepository
                 .findFirstByUserIdAndAssessmentFormIdAndStatusOrderByUpdatedAtDesc(
@@ -118,11 +152,13 @@ public class EmployeeAssessmentService {
     @Transactional
     public AssessmentResponse updateDraft(Long id, AssessmentRequest request) {
         EmployeeAssessment assessment = findAssessment(id);
+
         assertOwner(assessment);
         ensureEditable(assessment);
 
         AssessmentFormDefinition form = findAssignedActiveFormForCurrentUser();
 
+        ensureFormOpenForSubmission(form);
         validateAssessmentBelongsToAssignedForm(assessment, form);
         validateRequestFormMatchesAssignedForm(request, form);
 
@@ -135,19 +171,154 @@ public class EmployeeAssessmentService {
     @Transactional
     public AssessmentResponse submit(Long id, AssessmentRequest request) {
         EmployeeAssessment assessment = findAssessment(id);
+
         assertOwner(assessment);
         ensureEditable(assessment);
 
         AssessmentFormDefinition form = findAssignedActiveFormForCurrentUser();
 
+        ensureFormOpenForSubmission(form);
         validateAssessmentBelongsToAssignedForm(assessment, form);
         validateRequestFormMatchesAssignedForm(request, form);
 
-        applyRequest(assessment, request, AssessmentStatus.SUBMITTED, form);
+        if (assessment.getManagerUserId() == null) {
+            throw new BadRequestException("You cannot submit because no manager is assigned to your account.");
+        }
+
+        applyRequest(assessment, request, AssessmentStatus.PENDING_MANAGER, form);
         validateComplete(assessment);
         calculateScores(assessment, form);
+        attachEmployeeSignature(assessment);
 
         assessment.setSubmittedAt(LocalDateTime.now());
+
+        return toResponse(assessmentRepository.save(assessment));
+    }
+
+    @Transactional
+    public AssessmentResponse managerSign(Long id, ReviewActionRequest request) {
+        EmployeeAssessment assessment = findAssessment(id);
+        UserPrincipal principal = SecurityUtils.currentUser();
+
+        if (!Objects.equals(assessment.getManagerUserId(), principal.getId())) {
+            throw new UnauthorizedActionException("Only this employee's assigned manager can sign this self-assessment.");
+        }
+
+        if (!AssessmentStatus.PENDING_MANAGER.equals(assessment.getStatus())) {
+            throw new BadRequestException("This assessment is not waiting for manager signature.");
+        }
+
+        Signature signature = currentDefaultSignature();
+
+        assessment.setManagerSignatureId(signature.getId());
+        assessment.setManagerSignatureName(signature.getName());
+        assessment.setManagerSignatureImageData(signature.getImageData());
+        assessment.setManagerSignatureImageType(signature.getImageType());
+        assessment.setManagerSignedAt(LocalDateTime.now());
+        assessment.setManagerComment(clean(request == null ? null : request.getComment()));
+        assessment.setStatus(AssessmentStatus.PENDING_DEPARTMENT_HEAD);
+
+        return toResponse(assessmentRepository.save(assessment));
+    }
+
+    @Transactional
+    public AssessmentResponse departmentHeadSign(Long id, ReviewActionRequest request) {
+        EmployeeAssessment assessment = findAssessment(id);
+        UserPrincipal principal = SecurityUtils.currentUser();
+        Set<String> roles = currentUserTargetRoles(principal);
+
+        if (!roles.contains("DEPARTMENT_HEAD")) {
+            throw new UnauthorizedActionException("Only department head can sign this self-assessment.");
+        }
+
+        if (principal.getDepartmentId() == null || assessment.getDepartmentId() == null) {
+            throw new BadRequestException("Department information is missing.");
+        }
+
+        if (!Objects.equals(principal.getDepartmentId(), assessment.getDepartmentId())) {
+            throw new UnauthorizedActionException("Only the department head of this employee's department can sign this self-assessment.");
+        }
+
+        if (!AssessmentStatus.PENDING_DEPARTMENT_HEAD.equals(assessment.getStatus())) {
+            throw new BadRequestException("This assessment is not waiting for department head signature.");
+        }
+
+        User currentUser = currentUserEntity();
+        Signature signature = currentDefaultSignature();
+
+        assessment.setDepartmentHeadUserId(currentUser.getId());
+        assessment.setDepartmentHeadName(currentUser.getFullName());
+        assessment.setDepartmentHeadSignatureId(signature.getId());
+        assessment.setDepartmentHeadSignatureName(signature.getName());
+        assessment.setDepartmentHeadSignatureImageData(signature.getImageData());
+        assessment.setDepartmentHeadSignatureImageType(signature.getImageType());
+        assessment.setDepartmentHeadSignedAt(LocalDateTime.now());
+        assessment.setDepartmentHeadComment(clean(request == null ? null : request.getComment()));
+        assessment.setStatus(AssessmentStatus.PENDING_HR);
+
+        return toResponse(assessmentRepository.save(assessment));
+    }
+
+    @Transactional
+    public AssessmentResponse hrApprove(Long id, ReviewActionRequest request) {
+        EmployeeAssessment assessment = findAssessment(id);
+        UserPrincipal principal = SecurityUtils.currentUser();
+        Set<String> roles = currentUserTargetRoles(principal);
+
+        if (!roles.contains("HR") && !roles.contains("ADMIN")) {
+            throw new UnauthorizedActionException("Only HR can approve this self-assessment.");
+        }
+
+        if (!AssessmentStatus.PENDING_HR.equals(assessment.getStatus())) {
+            throw new BadRequestException("This assessment is not ready for HR approval.");
+        }
+
+        if (assessment.getManagerSignatureId() == null || assessment.getDepartmentHeadSignatureId() == null) {
+            throw new BadRequestException("HR cannot approve until manager and department head signatures are completed.");
+        }
+
+        Signature signature = currentDefaultSignature();
+
+        assessment.setHrSignatureId(signature.getId());
+        assessment.setHrSignatureName(signature.getName());
+        assessment.setHrSignatureImageData(signature.getImageData());
+        assessment.setHrSignatureImageType(signature.getImageType());
+        assessment.setHrSignedAt(LocalDateTime.now());
+        assessment.setHrComment(clean(request == null ? null : request.getComment()));
+        assessment.setStatus(AssessmentStatus.APPROVED);
+        assessment.setApprovedAt(LocalDateTime.now());
+
+        return toResponse(assessmentRepository.save(assessment));
+    }
+
+    @Transactional
+    public AssessmentResponse hrDecline(Long id, ReviewActionRequest request) {
+        EmployeeAssessment assessment = findAssessment(id);
+        UserPrincipal principal = SecurityUtils.currentUser();
+        Set<String> roles = currentUserTargetRoles(principal);
+
+        if (!roles.contains("HR") && !roles.contains("ADMIN")) {
+            throw new UnauthorizedActionException("Only HR can decline this self-assessment.");
+        }
+
+        if (AssessmentStatus.DRAFT.equals(assessment.getStatus())) {
+            throw new BadRequestException("HR cannot decline a draft assessment.");
+        }
+
+        if (AssessmentStatus.APPROVED.equals(assessment.getStatus())) {
+            throw new BadRequestException("Approved assessments cannot be declined.");
+        }
+
+        String reason = clean(request == null ? null : request.getReason());
+
+        if (reason == null) {
+            reason = "Declined by HR.";
+        }
+
+        assessment.setDeclineReason(reason);
+        assessment.setHrComment(clean(request == null ? null : request.getComment()));
+        assessment.setStatus(AssessmentStatus.DECLINED);
+        assessment.setDeclinedAt(LocalDateTime.now());
 
         return toResponse(assessmentRepository.save(assessment));
     }
@@ -157,7 +328,7 @@ public class EmployeeAssessmentService {
         Integer userId = SecurityUtils.currentUserId();
 
         return assessmentRepository
-                .findByUserIdAndStatusOrderBySubmittedAtDesc(userId, AssessmentStatus.SUBMITTED)
+                .findByUserIdAndStatusInOrderBySubmittedAtDesc(userId, REVIEW_TABLE_STATUSES)
                 .stream()
                 .map(this::toScoreRow)
                 .toList();
@@ -166,16 +337,43 @@ public class EmployeeAssessmentService {
     @Transactional(readOnly = true)
     public List<ScoreTableRowResponse> getScoreTable() {
         UserPrincipal principal = SecurityUtils.currentUser();
+        Set<String> roles = currentUserTargetRoles(principal);
 
-        if (!canViewScoreTable(principal)) {
-            throw new UnauthorizedActionException("Only HR, Admin, Managers, and Department Heads can view the employee score table.");
+        if (roles.contains("HR") || roles.contains("ADMIN")) {
+            return assessmentRepository
+                    .findByStatusInOrderBySubmittedAtDesc(REVIEW_TABLE_STATUSES)
+                    .stream()
+                    .map(this::toScoreRow)
+                    .toList();
         }
 
-        return assessmentRepository
-                .findByStatusOrderBySubmittedAtDesc(AssessmentStatus.SUBMITTED)
-                .stream()
-                .map(this::toScoreRow)
-                .toList();
+        if (roles.contains("MANAGER")) {
+            return assessmentRepository
+                    .findByStatusInAndManagerUserIdOrderBySubmittedAtDesc(
+                            REVIEW_TABLE_STATUSES,
+                            principal.getId()
+                    )
+                    .stream()
+                    .map(this::toScoreRow)
+                    .toList();
+        }
+
+        if (roles.contains("DEPARTMENT_HEAD")) {
+            if (principal.getDepartmentId() == null) {
+                return List.of();
+            }
+
+            return assessmentRepository
+                    .findByStatusInAndDepartmentIdOrderBySubmittedAtDesc(
+                            REVIEW_TABLE_STATUSES,
+                            principal.getDepartmentId()
+                    )
+                    .stream()
+                    .map(this::toScoreRow)
+                    .toList();
+        }
+
+        throw new UnauthorizedActionException("You do not have permission to view this score table.");
     }
 
     private AssessmentResponse toTemplateResponse(User user, EmployeeProfile profile, AssessmentFormDefinition form) {
@@ -192,8 +390,11 @@ public class EmployeeAssessmentService {
                 .currentPosition(profile.currentPosition())
                 .departmentId(profile.departmentId())
                 .departmentName(profile.departmentName())
-                .assessmentDate(LocalDate.now())
+                .managerUserId(profile.managerUserId())
                 .managerName(profile.managerName())
+                .departmentHeadUserId(null)
+                .departmentHeadName(null)
+                .assessmentDate(LocalDate.now())
                 .period(String.valueOf(LocalDateTime.now().getYear()))
                 .status(AssessmentStatus.DRAFT.name())
                 .totalScore(0.0)
@@ -202,6 +403,8 @@ public class EmployeeAssessmentService {
                 .performanceLabel("Not scored")
                 .remarks("")
                 .managerComment("")
+                .hrComment("")
+                .declineReason("")
                 .sections(templateSectionsFromForm(form))
                 .scoreBands(scoreBandsFromForm(form))
                 .build();
@@ -218,10 +421,11 @@ public class EmployeeAssessmentService {
                 .currentPosition(profile.currentPosition())
                 .departmentId(profile.departmentId())
                 .departmentName(profile.departmentName())
+                .managerUserId(profile.managerUserId())
+                .managerName(profile.managerName())
                 .assessmentFormId(form.getId())
                 .formName(form.getFormName())
                 .companyName(form.getCompanyName())
-                .managerName(profile.managerName())
                 .assessmentDate(LocalDate.now())
                 .status(AssessmentStatus.DRAFT)
                 .period(String.valueOf(LocalDateTime.now().getYear()))
@@ -291,16 +495,10 @@ public class EmployeeAssessmentService {
                     submittedItem = itemsByStableKey.get(stableItemKey(sectionTitle, questionText, order));
                 }
 
-                EmployeeAssessmentAnswer answer = buildAnswer(
-                        sectionTitle,
-                        question,
-                        questionText,
-                        responseType,
-                        submittedItem,
-                        order
+                assessment.addAnswer(
+                        buildAnswer(sectionTitle, question, questionText, responseType, submittedItem, order)
                 );
 
-                assessment.addAnswer(answer);
                 order++;
             }
         }
@@ -426,11 +624,9 @@ public class EmployeeAssessmentService {
     }
 
     private AssessmentResponse toResponse(EmployeeAssessment assessment) {
-        AssessmentFormDefinition form = null;
-
-        if (assessment.getAssessmentFormId() != null) {
-            form = formRepository.findById(assessment.getAssessmentFormId()).orElse(null);
-        }
+        AssessmentFormDefinition form = assessment.getAssessmentFormId() == null
+                ? null
+                : formRepository.findById(assessment.getAssessmentFormId()).orElse(null);
 
         return AssessmentResponse.builder()
                 .id(assessment.getId())
@@ -445,8 +641,11 @@ public class EmployeeAssessmentService {
                 .currentPosition(assessment.getCurrentPosition())
                 .departmentId(assessment.getDepartmentId())
                 .departmentName(assessment.getDepartmentName())
-                .assessmentDate(assessment.getAssessmentDate())
+                .managerUserId(assessment.getManagerUserId())
                 .managerName(assessment.getManagerName())
+                .departmentHeadUserId(assessment.getDepartmentHeadUserId())
+                .departmentHeadName(assessment.getDepartmentHeadName())
+                .assessmentDate(assessment.getAssessmentDate())
                 .period(assessment.getPeriod())
                 .status(assessment.getStatus() == null ? null : assessment.getStatus().name())
                 .totalScore(nullToZero(assessment.getTotalScore()))
@@ -455,9 +654,34 @@ public class EmployeeAssessmentService {
                 .performanceLabel(assessment.getPerformanceLabel())
                 .remarks(assessment.getRemarks())
                 .managerComment(assessment.getManagerComment())
+                .hrComment(assessment.getHrComment())
+                .departmentHeadComment(assessment.getDepartmentHeadComment())
+                .declineReason(assessment.getDeclineReason())
+                .employeeSignatureId(assessment.getEmployeeSignatureId())
+                .employeeSignatureName(assessment.getEmployeeSignatureName())
+                .employeeSignatureImageData(assessment.getEmployeeSignatureImageData())
+                .employeeSignatureImageType(assessment.getEmployeeSignatureImageType())
+                .employeeSignedAt(assessment.getEmployeeSignedAt())
+                .managerSignatureId(assessment.getManagerSignatureId())
+                .managerSignatureName(assessment.getManagerSignatureName())
+                .managerSignatureImageData(assessment.getManagerSignatureImageData())
+                .managerSignatureImageType(assessment.getManagerSignatureImageType())
+                .managerSignedAt(assessment.getManagerSignedAt())
+                .departmentHeadSignatureId(assessment.getDepartmentHeadSignatureId())
+                .departmentHeadSignatureName(assessment.getDepartmentHeadSignatureName())
+                .departmentHeadSignatureImageData(assessment.getDepartmentHeadSignatureImageData())
+                .departmentHeadSignatureImageType(assessment.getDepartmentHeadSignatureImageType())
+                .departmentHeadSignedAt(assessment.getDepartmentHeadSignedAt())
+                .hrSignatureId(assessment.getHrSignatureId())
+                .hrSignatureName(assessment.getHrSignatureName())
+                .hrSignatureImageData(assessment.getHrSignatureImageData())
+                .hrSignatureImageType(assessment.getHrSignatureImageType())
+                .hrSignedAt(assessment.getHrSignedAt())
                 .createdAt(assessment.getCreatedAt())
                 .updatedAt(assessment.getUpdatedAt())
                 .submittedAt(assessment.getSubmittedAt())
+                .approvedAt(assessment.getApprovedAt())
+                .declinedAt(assessment.getDeclinedAt())
                 .sections(groupSections(assessment.getAnswers()))
                 .scoreBands(form == null ? defaultScoreBands() : scoreBandsFromForm(form))
                 .build();
@@ -472,7 +696,10 @@ public class EmployeeAssessmentService {
                 .employeeId(assessment.getEmployeeId())
                 .employeeName(assessment.getEmployeeName())
                 .employeeCode(assessment.getEmployeeCode())
+                .departmentId(assessment.getDepartmentId())
                 .departmentName(assessment.getDepartmentName())
+                .managerUserId(assessment.getManagerUserId())
+                .managerName(assessment.getManagerName())
                 .period(assessment.getPeriod())
                 .status(assessment.getStatus() == null ? null : assessment.getStatus().name())
                 .totalScore(nullToZero(assessment.getTotalScore()))
@@ -480,6 +707,12 @@ public class EmployeeAssessmentService {
                 .scorePercent(nullToZero(assessment.getScorePercent()))
                 .performanceLabel(assessment.getPerformanceLabel())
                 .submittedAt(assessment.getSubmittedAt())
+                .approvedAt(assessment.getApprovedAt())
+                .declinedAt(assessment.getDeclinedAt())
+                .employeeSigned(assessment.getEmployeeSignatureId() != null)
+                .managerSigned(assessment.getManagerSignatureId() != null)
+                .departmentHeadSigned(assessment.getDepartmentHeadSignatureId() != null)
+                .hrSigned(assessment.getHrSignatureId() != null)
                 .build();
     }
 
@@ -577,8 +810,36 @@ public class EmployeeAssessmentService {
                 .filter(form -> formTargetsCurrentUser(form, currentRoles))
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "No active self-assessment form is available for your role. Please contact HR."
+                        "No active self-assessment form is available for your role or the form date period is closed. Please contact HR."
                 ));
+    }
+
+    private void ensureFormOpenForSubmission(AssessmentFormDefinition form) {
+        LocalDate today = LocalDate.now();
+
+        if (form == null || !Boolean.TRUE.equals(form.getActive())) {
+            throw new BadRequestException("This self-assessment form is not active.");
+        }
+
+        if (form.getStartDate() != null && today.isBefore(form.getStartDate())) {
+            throw new BadRequestException("This self-assessment form is not open yet.");
+        }
+
+        if (form.getEndDate() != null && today.isAfter(form.getEndDate())) {
+            throw new BadRequestException("This self-assessment form submission period has ended.");
+        }
+    }
+
+    private void ensureNoNonEditableAssessment(Integer userId, Integer formId) {
+        assessmentRepository
+                .findFirstByUserIdAndAssessmentFormIdAndStatusInOrderByUpdatedAtDesc(
+                        userId,
+                        formId,
+                        NON_EDITABLE_STATUSES
+                )
+                .ifPresent(existing -> {
+                    throw new BadRequestException("You already submitted this self-assessment form.");
+                });
     }
 
     private boolean formTargetsCurrentUser(AssessmentFormDefinition form, Set<String> currentRoles) {
@@ -610,6 +871,216 @@ public class EmployeeAssessmentService {
         }
 
         return roles;
+    }
+
+    private Signature currentDefaultSignature() {
+        Integer userId = SecurityUtils.currentUserId();
+
+        return signatureRepository
+                .findByUserIdAndIsDefaultTrueAndIsActiveTrue(Long.valueOf(userId))
+                .orElseThrow(() -> new BadRequestException("Please create and set your own default signature before signing."));
+    }
+
+    private void attachEmployeeSignature(EmployeeAssessment assessment) {
+        Signature signature = currentDefaultSignature();
+
+        assessment.setEmployeeSignatureId(signature.getId());
+        assessment.setEmployeeSignatureName(signature.getName());
+        assessment.setEmployeeSignatureImageData(signature.getImageData());
+        assessment.setEmployeeSignatureImageType(signature.getImageType());
+        assessment.setEmployeeSignedAt(LocalDateTime.now());
+    }
+
+    private List<AssessmentFormSectionDefinition> sortedSections(AssessmentFormDefinition form) {
+        if (form.getSections() == null) {
+            return List.of();
+        }
+
+        return form.getSections()
+                .stream()
+                .sorted(Comparator.comparing(
+                        AssessmentFormSectionDefinition::getOrderNo,
+                        Comparator.nullsLast(Integer::compareTo)
+                ))
+                .toList();
+    }
+
+    private List<AssessmentFormQuestionDefinition> safeQuestions(AssessmentFormSectionDefinition section) {
+        return section.getQuestions() == null ? List.of() : section.getQuestions();
+    }
+
+    private List<AssessmentScoreBandResponse> scoreBandsFromForm(AssessmentFormDefinition form) {
+        if (form.getScoreBands() == null || form.getScoreBands().isEmpty()) {
+            return defaultScoreBands();
+        }
+
+        return form.getScoreBands()
+                .stream()
+                .sorted(Comparator.comparing(
+                        AssessmentFormScoreBandDefinition::getSortOrder,
+                        Comparator.nullsLast(Integer::compareTo)
+                ))
+                .map(band -> AssessmentScoreBandResponse.builder()
+                        .id(band.getId())
+                        .minScore(band.getMinScore())
+                        .maxScore(band.getMaxScore())
+                        .label(band.getLabel())
+                        .description(band.getDescription())
+                        .sortOrder(band.getSortOrder())
+                        .build())
+                .toList();
+    }
+
+    private List<AssessmentScoreBandResponse> defaultScoreBands() {
+        return List.of(
+                AssessmentScoreBandResponse.builder()
+                        .minScore(86)
+                        .maxScore(100)
+                        .label("Outstanding")
+                        .description("Performance exceptional and far exceeds expectations.")
+                        .sortOrder(1)
+                        .build(),
+                AssessmentScoreBandResponse.builder()
+                        .minScore(71)
+                        .maxScore(85)
+                        .label("Good")
+                        .description("Performance is consistent.")
+                        .sortOrder(2)
+                        .build(),
+                AssessmentScoreBandResponse.builder()
+                        .minScore(60)
+                        .maxScore(70)
+                        .label("Meet Requirement")
+                        .description("Performance is satisfactory.")
+                        .sortOrder(3)
+                        .build(),
+                AssessmentScoreBandResponse.builder()
+                        .minScore(40)
+                        .maxScore(59)
+                        .label("Need Improvement")
+                        .description("Performance is inconsistent.")
+                        .sortOrder(4)
+                        .build(),
+                AssessmentScoreBandResponse.builder()
+                        .minScore(0)
+                        .maxScore(39)
+                        .label("Unsatisfactory")
+                        .description("Performance does not meet the minimum requirement.")
+                        .sortOrder(5)
+                        .build()
+        );
+    }
+
+    private EmployeeAssessment findAssessment(Long id) {
+        return assessmentRepository
+                .findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Assessment not found."));
+    }
+
+    private User currentUserEntity() {
+        Integer userId = SecurityUtils.currentUserId();
+
+        return userRepository
+                .findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+    }
+
+    private EmployeeProfile resolveProfile(User user) {
+        Optional<Employee> employee = user.getEmployeeId() == null
+                ? Optional.empty()
+                : employeeRepository.findById(user.getEmployeeId());
+
+        String employeeName = normalizeOptional(user.getFullName());
+
+        if (employeeName == null && employee.isPresent()) {
+            String firstName = normalizeOptional(employee.get().getFirstName());
+            String lastName = normalizeOptional(employee.get().getLastName());
+
+            employeeName = String.join(
+                    " ",
+                    List.of(firstName == null ? "" : firstName, lastName == null ? "" : lastName)
+            ).trim();
+        }
+
+        if (employeeName == null || employeeName.isBlank()) {
+            employeeName = user.getEmail();
+        }
+
+        String currentPosition = user.getPosition() == null
+                ? null
+                : user.getPosition().getPositionTitle();
+
+        if (currentPosition == null && employee.isPresent() && employee.get().getPosition() != null) {
+            currentPosition = employee.get().getPosition().getPositionTitle();
+        }
+
+        Integer departmentId = user.getDepartmentId();
+        String departmentName = null;
+
+        if (departmentId != null) {
+            departmentName = departmentRepository
+                    .findById(departmentId)
+                    .map(Department::getDepartmentName)
+                    .orElse(null);
+        }
+
+        Integer managerUserId = user.getManagerId();
+        String managerName = null;
+
+        if (managerUserId != null) {
+            managerName = userRepository
+                    .findById(managerUserId)
+                    .map(User::getFullName)
+                    .orElse(null);
+        }
+
+        return new EmployeeProfile(
+                user.getEmployeeId(),
+                employeeName,
+                normalizeOptional(user.getEmployeeCode()),
+                normalizeOptional(currentPosition),
+                departmentId,
+                departmentName,
+                managerUserId,
+                normalizeOptional(managerName)
+        );
+    }
+
+    private void assertCanView(EmployeeAssessment assessment) {
+        UserPrincipal principal = SecurityUtils.currentUser();
+        Set<String> roles = currentUserTargetRoles(principal);
+
+        if (assessment.getUserId().equals(principal.getId())) {
+            return;
+        }
+
+        if (roles.contains("HR") || roles.contains("ADMIN")) {
+            return;
+        }
+
+        if (roles.contains("MANAGER") && Objects.equals(assessment.getManagerUserId(), principal.getId())) {
+            return;
+        }
+
+        if (roles.contains("DEPARTMENT_HEAD") && Objects.equals(assessment.getDepartmentId(), principal.getDepartmentId())) {
+            return;
+        }
+
+        throw new UnauthorizedActionException("You do not have permission to view this assessment.");
+    }
+
+    private void assertOwner(EmployeeAssessment assessment) {
+        Integer userId = SecurityUtils.currentUserId();
+
+        if (!assessment.getUserId().equals(userId)) {
+            throw new UnauthorizedActionException("You can update only your own assessment.");
+        }
+    }
+
+    private void ensureEditable(EmployeeAssessment assessment) {
+        if (!AssessmentStatus.DRAFT.equals(assessment.getStatus())) {
+            throw new BadRequestException("This assessment has already been submitted and cannot be edited.");
+        }
     }
 
     private String canonicalRole(String value) {
@@ -672,192 +1143,6 @@ public class EmployeeAssessmentService {
         }
     }
 
-    private List<AssessmentFormSectionDefinition> sortedSections(AssessmentFormDefinition form) {
-        if (form.getSections() == null) {
-            return List.of();
-        }
-
-        return form.getSections()
-                .stream()
-                .sorted(Comparator.comparing(
-                        AssessmentFormSectionDefinition::getOrderNo,
-                        Comparator.nullsLast(Integer::compareTo)
-                ))
-                .toList();
-    }
-
-    private List<AssessmentFormQuestionDefinition> safeQuestions(AssessmentFormSectionDefinition section) {
-        return section.getQuestions() == null ? List.of() : section.getQuestions();
-    }
-
-    private List<AssessmentScoreBandResponse> scoreBandsFromForm(AssessmentFormDefinition form) {
-        if (form.getScoreBands() == null || form.getScoreBands().isEmpty()) {
-            return defaultScoreBands();
-        }
-
-        return form.getScoreBands()
-                .stream()
-                .sorted(Comparator.comparing(
-                        AssessmentFormScoreBandDefinition::getSortOrder,
-                        Comparator.nullsLast(Integer::compareTo)
-                ))
-                .map(band -> AssessmentScoreBandResponse.builder()
-                        .id(band.getId())
-                        .minScore(band.getMinScore())
-                        .maxScore(band.getMaxScore())
-                        .label(band.getLabel())
-                        .description(band.getDescription())
-                        .sortOrder(band.getSortOrder())
-                        .build())
-                .toList();
-    }
-
-    private List<AssessmentScoreBandResponse> defaultScoreBands() {
-        return List.of(
-                AssessmentScoreBandResponse.builder()
-                        .minScore(86)
-                        .maxScore(100)
-                        .label("Outstanding")
-                        .description("Performance exceptional and far exceeds expectations. Consistently demonstrates excellent standards in all job requirements.")
-                        .sortOrder(1)
-                        .build(),
-                AssessmentScoreBandResponse.builder()
-                        .minScore(71)
-                        .maxScore(85)
-                        .label("Good")
-                        .description("Performance is consistent. Clearly meets essential requirements of job.")
-                        .sortOrder(2)
-                        .build(),
-                AssessmentScoreBandResponse.builder()
-                        .minScore(60)
-                        .maxScore(70)
-                        .label("Meet Requirement")
-                        .description("Performance is satisfactory. Meets requirements of the job.")
-                        .sortOrder(3)
-                        .build(),
-                AssessmentScoreBandResponse.builder()
-                        .minScore(40)
-                        .maxScore(59)
-                        .label("Need Improvement")
-                        .description("Performance is inconsistent. Meets requirements of the job occasionally. Supervision and training is required for most problem areas.")
-                        .sortOrder(4)
-                        .build(),
-                AssessmentScoreBandResponse.builder()
-                        .minScore(0)
-                        .maxScore(39)
-                        .label("Unsatisfactory")
-                        .description("Performance does not meet the minimum requirement of the job.")
-                        .sortOrder(5)
-                        .build()
-        );
-    }
-
-    private EmployeeAssessment findAssessment(Long id) {
-        return assessmentRepository
-                .findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Assessment not found."));
-    }
-
-    private User currentUserEntity() {
-        Integer userId = SecurityUtils.currentUserId();
-
-        return userRepository
-                .findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
-    }
-
-    private EmployeeProfile resolveProfile(User user) {
-        Optional<Employee> employee = user.getEmployeeId() == null
-                ? Optional.empty()
-                : employeeRepository.findById(user.getEmployeeId());
-
-        String employeeName = normalizeOptional(user.getFullName());
-
-        if (employeeName == null && employee.isPresent()) {
-            String firstName = normalizeOptional(employee.get().getFirstName());
-            String lastName = normalizeOptional(employee.get().getLastName());
-
-            employeeName = String.join(
-                    " ",
-                    List.of(firstName == null ? "" : firstName, lastName == null ? "" : lastName)
-            ).trim();
-        }
-
-        if (employeeName == null || employeeName.isBlank()) {
-            employeeName = user.getEmail();
-        }
-
-        String currentPosition = user.getPosition() == null
-                ? null
-                : user.getPosition().getPositionTitle();
-
-        if (currentPosition == null && employee.isPresent() && employee.get().getPosition() != null) {
-            currentPosition = employee.get().getPosition().getPositionTitle();
-        }
-
-        Integer departmentId = user.getDepartmentId();
-        String departmentName = null;
-
-        if (departmentId != null) {
-            departmentName = departmentRepository
-                    .findById(departmentId)
-                    .map(Department::getDepartmentName)
-                    .orElse(null);
-        }
-
-        String managerName = null;
-
-        if (user.getManagerId() != null) {
-            managerName = userRepository
-                    .findById(user.getManagerId())
-                    .map(User::getFullName)
-                    .orElse(null);
-        }
-
-        return new EmployeeProfile(
-                user.getEmployeeId(),
-                employeeName,
-                normalizeOptional(user.getEmployeeCode()),
-                normalizeOptional(currentPosition),
-                departmentId,
-                departmentName,
-                normalizeOptional(managerName)
-        );
-    }
-
-    private void assertCanView(EmployeeAssessment assessment) {
-        UserPrincipal principal = SecurityUtils.currentUser();
-
-        if (assessment.getUserId().equals(principal.getId()) || canViewScoreTable(principal)) {
-            return;
-        }
-
-        throw new UnauthorizedActionException("You do not have permission to view this assessment.");
-    }
-
-    private void assertOwner(EmployeeAssessment assessment) {
-        Integer userId = SecurityUtils.currentUserId();
-
-        if (!assessment.getUserId().equals(userId)) {
-            throw new UnauthorizedActionException("You can update only your own assessment.");
-        }
-    }
-
-    private void ensureEditable(EmployeeAssessment assessment) {
-        if (AssessmentStatus.SUBMITTED.equals(assessment.getStatus())) {
-            throw new BadRequestException("Submitted assessments cannot be edited.");
-        }
-    }
-
-    private boolean canViewScoreTable(UserPrincipal principal) {
-        return currentUserTargetRoles(principal)
-                .stream()
-                .anyMatch(role -> role.equals("HR")
-                        || role.equals("ADMIN")
-                        || role.equals("MANAGER")
-                        || role.equals("DEPARTMENT_HEAD"));
-    }
-
     private String resolveResponseType(String responseType) {
         String normalized = responseType == null || responseType.isBlank()
                 ? RESPONSE_TYPE_YES_NO_RATING
@@ -897,8 +1182,11 @@ public class EmployeeAssessmentService {
         }
 
         String normalized = value.trim();
-
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String clean(String value) {
+        return normalizeOptional(value);
     }
 
     private String stableItemKey(String sectionTitle, String questionText, Integer itemOrder) {
@@ -924,6 +1212,7 @@ public class EmployeeAssessmentService {
             String currentPosition,
             Integer departmentId,
             String departmentName,
+            Integer managerUserId,
             String managerName
     ) {
     }

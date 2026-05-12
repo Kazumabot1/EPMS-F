@@ -1,5 +1,18 @@
-export type AssessmentStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
-export type AssessmentResponseType = 'RATING' | 'TEXT' | 'YES_NO' | 'YES_NO_RATING';
+export type AssessmentStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'PENDING_MANAGER'
+  | 'PENDING_DEPARTMENT_HEAD'
+  | 'PENDING_HR'
+  | 'APPROVED'
+  | 'DECLINED'
+  | 'REJECTED';
+
+export type AssessmentResponseType =
+  | 'RATING'
+  | 'TEXT'
+  | 'YES_NO'
+  | 'YES_NO_RATING';
 
 export interface AssessmentScoreBand {
   id?: number | null;
@@ -38,6 +51,7 @@ export interface EmployeeAssessment {
   assessmentFormId?: number | null;
   formName?: string;
   companyName?: string | null;
+
   userId: number;
   employeeId?: number | null;
   employeeName: string;
@@ -45,8 +59,12 @@ export interface EmployeeAssessment {
   currentPosition?: string | null;
   departmentId?: number | null;
   departmentName?: string | null;
-  assessmentDate?: string | null;
+  managerUserId?: number | null;
   managerName?: string | null;
+  departmentHeadUserId?: number | null;
+  departmentHeadName?: string | null;
+  assessmentDate?: string | null;
+
   period: string;
   status: AssessmentStatus;
   totalScore: number;
@@ -55,9 +73,40 @@ export interface EmployeeAssessment {
   performanceLabel: string;
   remarks: string;
   managerComment?: string | null;
+  hrComment?: string | null;
+  departmentHeadComment?: string | null;
+  declineReason?: string | null;
+
+  employeeSignatureId?: number | null;
+  employeeSignatureName?: string | null;
+  employeeSignatureImageData?: string | null;
+  employeeSignatureImageType?: string | null;
+  employeeSignedAt?: string | null;
+
+  managerSignatureId?: number | null;
+  managerSignatureName?: string | null;
+  managerSignatureImageData?: string | null;
+  managerSignatureImageType?: string | null;
+  managerSignedAt?: string | null;
+
+  departmentHeadSignatureId?: number | null;
+  departmentHeadSignatureName?: string | null;
+  departmentHeadSignatureImageData?: string | null;
+  departmentHeadSignatureImageType?: string | null;
+  departmentHeadSignedAt?: string | null;
+
+  hrSignatureId?: number | null;
+  hrSignatureName?: string | null;
+  hrSignatureImageData?: string | null;
+  hrSignatureImageType?: string | null;
+  hrSignedAt?: string | null;
+
   createdAt?: string | null;
   updatedAt?: string | null;
   submittedAt?: string | null;
+  approvedAt?: string | null;
+  declinedAt?: string | null;
+
   sections: AssessmentSection[];
   scoreBands?: AssessmentScoreBand[];
 }
@@ -87,15 +136,28 @@ export interface AssessmentScoreRow {
   formId?: number | null;
   assessmentFormId?: number | null;
   formName?: string | null;
+
   employeeId?: number | null;
   employeeName: string;
   employeeCode?: string | null;
+  departmentId?: number | null;
   departmentName?: string | null;
+  managerUserId?: number | null;
+  managerName?: string | null;
+
   period: string;
   status: AssessmentStatus;
   totalScore: number;
   maxScore: number;
   scorePercent: number;
   performanceLabel: string;
+
   submittedAt?: string | null;
+  approvedAt?: string | null;
+  declinedAt?: string | null;
+
+  employeeSigned?: boolean;
+  managerSigned?: boolean;
+  departmentHeadSigned?: boolean;
+  hrSigned?: boolean;
 }

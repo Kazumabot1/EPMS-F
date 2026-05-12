@@ -1,81 +1,60 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { employeeAssessmentService } from '../../services/employeeAssessmentService';
+import { signatureService } from '../../services/signatureService';
+import SignatureModal from '../../components/signature/SignatureModal';
+import type { Signature } from '../../types/signature';
 import type {
   AssessmentItem,
   AssessmentRequest,
   AssessmentScoreBand,
+  AssessmentStatus,
   EmployeeAssessment,
 } from '../../types/employeeAssessment';
+import '../appraisal/appraisal.css';
+
+const LOCKED_STATUSES: AssessmentStatus[] = [
+  'SUBMITTED',
+  'PENDING_MANAGER',
+  'PENDING_DEPARTMENT_HEAD',
+  'PENDING_HR',
+  'APPROVED',
+  'DECLINED',
+  'REJECTED',
+];
 
 const ratingOptions = [5, 4, 3, 2, 1];
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (
-      error as {
-        response?: {
-          data?: {
-            message?: string;
-            error?: string;
-          };
-        };
-      }
-    ).response;
-
+    const response = (error as { response?: { data?: { message?: string; error?: string } } }).response;
     return response?.data?.message || response?.data?.error || fallback;
   }
-
-  if (error instanceof Error) {
-    return error.message || fallback;
-  }
-
-  return fallback;
+  return error instanceof Error ? error.message || fallback : fallback;
 };
+
+const defaultScoreBands: AssessmentScoreBand[] = [
+  { minScore: 86, maxScore: 100, label: 'Outstanding', description: 'Performance exceptional and far exceeds expectations.', sortOrder: 1 },
+  { minScore: 71, maxScore: 85, label: 'Good', description: 'Performance is consistent. Clearly meets essential requirements of job.', sortOrder: 2 },
+  { minScore: 60, maxScore: 70, label: 'Meet Requirement', description: 'Performance is satisfactory.', sortOrder: 3 },
+  { minScore: 40, maxScore: 59, label: 'Need Improvement', description: 'Performance is inconsistent.', sortOrder: 4 },
+  { minScore: 0, maxScore: 39, label: 'Unsatisfactory', description: 'Performance does not meet the minimum requirement.', sortOrder: 5 },
+];
 
 const flattenItems = (assessment: EmployeeAssessment): AssessmentItem[] =>
-  assessment.sections.flatMap((section) =>
-    section.items.map((item) => ({
-      ...item,
-      sectionTitle: item.sectionTitle || section.title,
-    })),
-  );
+  assessment.sections.flatMap((s) => s.items.map((item) => ({ ...item, sectionTitle: item.sectionTitle || s.title })));
 
-const itemNeedsYesNo = (item: AssessmentItem) => {
-  const responseType = item.responseType ?? 'YES_NO_RATING';
-  return responseType === 'YES_NO' || responseType === 'YES_NO_RATING';
-};
-
-const itemNeedsRating = (item: AssessmentItem) => {
-  const responseType = item.responseType ?? 'YES_NO_RATING';
-  return responseType === 'RATING' || responseType === 'YES_NO_RATING';
-};
+const itemNeedsYesNo = (item: AssessmentItem) => { const t = item.responseType ?? 'YES_NO_RATING'; return t === 'YES_NO' || t === 'YES_NO_RATING'; };
+const itemNeedsRating = (item: AssessmentItem) => { const t = item.responseType ?? 'YES_NO_RATING'; return t === 'RATING' || t === 'YES_NO_RATING'; };
 
 const answerIsMissing = (item: AssessmentItem) => {
-  const responseType = item.responseType ?? 'YES_NO_RATING';
-
-  if (item.isRequired === false) {
-    return false;
-  }
-
-  if (responseType === 'TEXT') {
-    return !item.comment?.trim();
-  }
-
-  if (responseType === 'YES_NO') {
-    return item.yesNoAnswer === null || item.yesNoAnswer === undefined;
-  }
-
-  if (responseType === 'YES_NO_RATING') {
-    return (
-      item.yesNoAnswer === null ||
-      item.yesNoAnswer === undefined ||
-      item.rating === null ||
-      item.rating === undefined
-    );
-  }
-
-  return item.rating === null || item.rating === undefined;
+  const t = item.responseType ?? 'YES_NO_RATING';
+  if (item.isRequired === false) return false;
+  if (t === 'TEXT') return !item.comment?.trim();
+  if (t === 'YES_NO') return item.yesNoAnswer == null;
+  if (t === 'YES_NO_RATING') return item.yesNoAnswer == null || item.rating == null;
+  return item.rating == null;
 };
 
 const buildPayload = (assessment: EmployeeAssessment): AssessmentRequest => ({
@@ -84,498 +63,273 @@ const buildPayload = (assessment: EmployeeAssessment): AssessmentRequest => ({
   period: assessment.period,
   remarks: assessment.remarks || '',
   items: flattenItems(assessment).map((item) => ({
-    id: item.id ?? null,
-    questionId: item.questionId ?? null,
-    sectionTitle: item.sectionTitle,
-    questionText: item.questionText,
-    itemOrder: item.itemOrder,
-    rating: item.rating ?? null,
-    comment: item.comment || '',
-    responseType: item.responseType ?? 'YES_NO_RATING',
+    id: item.id ?? null, questionId: item.questionId ?? null,
+    sectionTitle: item.sectionTitle, questionText: item.questionText,
+    itemOrder: item.itemOrder, rating: item.rating ?? null,
+    comment: item.comment || '', responseType: item.responseType ?? 'YES_NO_RATING',
     yesNoAnswer: item.yesNoAnswer ?? null,
   })),
 });
 
-const defaultScoreBands: AssessmentScoreBand[] = [
-  {
-    minScore: 86,
-    maxScore: 100,
-    label: 'Outstanding',
-    description:
-      'Performance exceptional and far exceeds expectations. Consistently demonstrates excellent standards in all job requirements.',
-    sortOrder: 1,
-  },
-  {
-    minScore: 71,
-    maxScore: 85,
-    label: 'Good',
-    description: 'Performance is consistent. Clearly meets essential requirements of job.',
-    sortOrder: 2,
-  },
-  {
-    minScore: 60,
-    maxScore: 70,
-    label: 'Meet Requirement',
-    description: 'Performance is satisfactory. Meets requirements of the job.',
-    sortOrder: 3,
-  },
-  {
-    minScore: 40,
-    maxScore: 59,
-    label: 'Need Improvement',
-    description:
-      'Performance is inconsistent. Meets requirements of the job occasionally. Supervision and training is required for most problem areas.',
-    sortOrder: 4,
-  },
-  {
-    minScore: 0,
-    maxScore: 39,
-    label: 'Unsatisfactory',
-    description: 'Performance does not meet the minimum requirement of the job.',
-    sortOrder: 5,
-  },
-];
-
 const scoreBandForPercent = (percent: number, bands: AssessmentScoreBand[]) =>
-  bands.find((band) => percent >= band.minScore && percent <= band.maxScore) ?? null;
+  bands.find((b) => percent >= b.minScore && percent <= b.maxScore) ?? null;
 
 const formatDate = (date?: string | null) => {
-  if (!date) return '';
-
-  const parsed = new Date(date);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return date;
-  }
-
-  return parsed.toLocaleDateString();
+  if (!date) return '-';
+  const p = new Date(date);
+  return isNaN(p.getTime()) ? date : p.toLocaleDateString();
 };
+
+const signatureSrc = (imageData?: string | null, imageType?: string | null) => {
+  if (!imageData) return '';
+  return imageData.startsWith('data:') ? imageData : `data:${imageType || 'image/png'};base64,${imageData}`;
+};
+
+const statusBanner = (status: AssessmentStatus, declineReason?: string | null) => {
+  const banners: Record<string, { bg: string; icon: string; title: string; message: string }> = {
+    PENDING_MANAGER: { bg: '#fef9c3', icon: '⏳', title: 'Awaiting Manager Signature', message: 'Your self-assessment has been submitted. Your manager needs to review and sign it.' },
+    PENDING_DEPARTMENT_HEAD: { bg: '#fef3c7', icon: '🔄', title: 'Awaiting Department Head Signature', message: 'Your manager has signed. The department head needs to review and sign next.' },
+    PENDING_HR: { bg: '#dbeafe', icon: '📋', title: 'Awaiting HR Approval', message: 'All signatures collected. HR is reviewing your self-assessment.' },
+    APPROVED: { bg: '#dcfce7', icon: '✅', title: 'Approved', message: 'Your self-assessment has been approved by HR and is now final.' },
+    DECLINED: { bg: '#fee2e2', icon: '❌', title: 'Declined by HR', message: declineReason ? `Reason: ${declineReason}` : 'Your self-assessment was declined by HR.' },
+    SUBMITTED: { bg: '#ede9fe', icon: '📨', title: 'Submitted', message: 'Your self-assessment has been submitted.' },
+    REJECTED: { bg: '#fee2e2', icon: '❌', title: 'Rejected', message: declineReason || 'Your self-assessment was rejected.' },
+  };
+  return banners[status] ?? null;
+};
+
+interface SignatureSlotProps {
+  label: string;
+  imageData?: string | null;
+  imageType?: string | null;
+  name?: string | null;
+  signedAt?: string | null;
+  placeholder?: boolean;
+}
+
+const SignatureSlot = ({ label, imageData, imageType, name, signedAt, placeholder }: SignatureSlotProps) => (
+  <div className="appraisal-signature-slot">
+    {imageData ? (
+      <>
+        <img src={signatureSrc(imageData, imageType)} alt={name || label} className="appraisal-signature-image" />
+        <p className="appraisal-signature-date">Date: {formatDate(signedAt)}</p>
+        <small className="appraisal-signature-name">{name || label}</small>
+      </>
+    ) : (
+      <span className="appraisal-signature-placeholder">{placeholder ? label : `${label} — Pending`}</span>
+    )}
+  </div>
+);
 
 const EmployeeSelfAssessmentPage = () => {
   const [assessment, setAssessment] = useState<EmployeeAssessment | null>(null);
+  const [ownSignature, setOwnSignature] = useState<Signature | null>(null);
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  const loadOwnSignature = async () => {
+    const signatures = await signatureService.list();
+    setOwnSignature(signatures.find((s) => s.isDefault) ?? signatures[0] ?? null);
+  };
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError('');
-
       try {
         const data = await employeeAssessmentService.getLatestDraft();
         setAssessment(data);
+        try { await loadOwnSignature(); } catch { setOwnSignature(null); }
       } catch (err) {
         setError(getErrorMessage(err, 'Unable to load self-assessment form.'));
       } finally {
         setLoading(false);
       }
     };
-
     void load();
   }, []);
 
   const scoreBands = useMemo(() => {
-    const bands = assessment?.scoreBands?.length
-      ? assessment.scoreBands
-      : defaultScoreBands;
-
-    return [...bands].sort(
-      (a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0),
-    );
+    const bands = assessment?.scoreBands?.length ? assessment.scoreBands : defaultScoreBands;
+    return [...bands].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
   }, [assessment?.scoreBands]);
 
   const preview = useMemo(() => {
-    if (!assessment) {
-      return {
-        answered: 0,
-        total: 0,
-        totalScore: 0,
-        maxScore: 0,
-        percent: 0,
-        label: 'Not scored',
-      };
-    }
-
-    const items = flattenItems(assessment).filter((item) => item.isRequired !== false);
-    const answeredItems = items.filter((item) => !answerIsMissing(item));
-    const ratingItems = items.filter(
-      (item) => itemNeedsRating(item) && item.rating !== null && item.rating !== undefined,
-    );
-
-    const totalScore = ratingItems.reduce(
-      (sum, item) => sum + Number(item.rating || 0) * Number(item.weight || 1),
-      0,
-    );
-
-    const maxScore = ratingItems.reduce(
-      (sum, item) => sum + 5 * Number(item.weight || 1),
-      0,
-    );
-
-    const percent =
-      maxScore === 0 ? 0 : Number(((totalScore * 100) / maxScore).toFixed(2));
-
+    if (!assessment) return { answered: 0, total: 0, totalScore: 0, maxScore: 0, percent: 0, label: 'Not scored' };
+    const items = flattenItems(assessment).filter((i) => i.isRequired !== false);
+    const answeredItems = items.filter((i) => !answerIsMissing(i));
+    const ratingItems = items.filter((i) => itemNeedsRating(i) && i.rating != null);
+    const totalScore = ratingItems.reduce((s, i) => s + Number(i.rating || 0) * Number(i.weight || 1), 0);
+    const maxScore = ratingItems.reduce((s, i) => s + 5 * Number(i.weight || 1), 0);
+    const percent = maxScore === 0 ? 0 : Number(((totalScore * 100) / maxScore).toFixed(2));
     const activeBand = scoreBandForPercent(percent, scoreBands);
-
-    return {
-      answered: answeredItems.length,
-      total: items.length,
-      totalScore,
-      maxScore,
-      percent,
-      label: answeredItems.length === 0 ? 'Not scored' : activeBand?.label ?? 'Not scored',
-    };
+    return { answered: answeredItems.length, total: items.length, totalScore, maxScore, percent, label: answeredItems.length === 0 ? 'Not scored' : (activeBand?.label ?? 'Not scored') };
   }, [assessment, scoreBands]);
 
-  const updateAssessmentField = (name: 'period' | 'remarks', value: string) => {
+  const updateAssessmentField = (name: 'period' | 'remarks', value: string) =>
     setAssessment((prev) => (prev ? { ...prev, [name]: value } : prev));
-  };
 
-  const updateItem = (
-    sectionTitle: string,
-    itemOrder: number,
-    patch: Partial<Pick<AssessmentItem, 'rating' | 'comment' | 'yesNoAnswer'>>,
-  ) => {
+  const updateItem = (sectionTitle: string, itemOrder: number, patch: Partial<Pick<AssessmentItem, 'rating' | 'comment' | 'yesNoAnswer'>>) => {
     setAssessment((prev) => {
       if (!prev) return prev;
-
-      return {
-        ...prev,
-        sections: prev.sections.map((section) => {
-          if (section.title !== sectionTitle) return section;
-
-          return {
-            ...section,
-            items: section.items.map((item) =>
-              item.itemOrder === itemOrder ? { ...item, ...patch } : item,
-            ),
-          };
-        }),
-      };
+      return { ...prev, sections: prev.sections.map((section) => ({ ...section, items: section.items.map((item) => (item.sectionTitle || section.title) === sectionTitle && item.itemOrder === itemOrder ? { ...item, ...patch } : item) })) };
     });
   };
 
   const saveDraft = async () => {
     if (!assessment) return null;
-
-    setSaving(true);
-    setMessage('');
-    setError('');
-
+    if (LOCKED_STATUSES.includes(assessment.status)) {
+      setError('This self-assessment has already been submitted and cannot be edited.');
+      return null;
+    }
+    setSaving(true); setMessage(''); setError('');
     try {
-      const saved = await employeeAssessmentService.saveDraft(
-        buildPayload(assessment),
-        assessment.id,
-      );
-
+      const saved = await employeeAssessmentService.saveDraft(buildPayload(assessment), assessment.id);
       setAssessment(saved);
       setMessage('Draft saved successfully.');
       return saved;
     } catch (err) {
-      setError(
-        getErrorMessage(
-          err,
-          'Unable to save self-assessment draft. You can still try Submit Assessment.',
-        ),
-      );
+      setError(getErrorMessage(err, 'Unable to save self-assessment draft.'));
       return null;
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   const submitAssessment = async () => {
     if (!assessment) return;
-
+    if (LOCKED_STATUSES.includes(assessment.status)) { setError('You have already submitted this self-assessment.'); return; }
     const missing = flattenItems(assessment).filter(answerIsMissing);
-
-    if (missing.length) {
-      setError('Please answer every required assessment subject before submitting.');
-      return;
-    }
-
-    setSubmitting(true);
-    setMessage('');
-    setError('');
-
+    if (missing.length) { setError('Please answer every required assessment subject before submitting.'); return; }
+    if (!ownSignature) { setError('Please create and set your own default signature before submitting.'); setSignatureOpen(true); return; }
+    setSubmitting(true); setMessage(''); setError('');
     try {
       const payload = buildPayload(assessment);
       const submitted = assessment.id
         ? await employeeAssessmentService.submit(assessment.id, payload)
         : await employeeAssessmentService.submit(payload);
-
       setAssessment(submitted);
-      setMessage('Self-assessment submitted successfully. Your score table has been updated.');
+      setMessage('Self-assessment submitted. Your manager will be notified to sign.');
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to submit self-assessment.'));
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    await submitAssessment();
-  };
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); await submitAssessment(); };
+  const closeSignatureModal = () => { setSignatureOpen(false); void loadOwnSignature(); };
 
-  if (loading) {
-    return (
-      <div className="rounded-xl bg-white p-6 text-sm text-slate-600 shadow-sm">
-        Loading self-assessment...
-      </div>
-    );
-  }
+  if (loading) return <div className="appraisal-page"><div className="appraisal-card"><p className="appraisal-muted">Loading self-assessment...</p></div></div>;
+  if (error && !assessment) return <div className="appraisal-page"><div className="appraisal-card"><p style={{ color: '#b91c1c' }}>{error}</p></div></div>;
+  if (!assessment) return <div className="appraisal-page"><div className="appraisal-card"><p className="appraisal-muted">No self-assessment form is available for your role.</p></div></div>;
 
-  if (error && !assessment) {
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        {error}
-      </div>
-    );
-  }
-
-  if (!assessment) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-        No self-assessment form is available for your role.
-      </div>
-    );
-  }
-
-  const isSubmitted = assessment.status === 'SUBMITTED';
+  const isLocked = LOCKED_STATUSES.includes(assessment.status);
   const activeBand = scoreBandForPercent(preview.percent, scoreBands);
+  const banner = statusBanner(assessment.status, assessment.declineReason);
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <form
-        onSubmit={handleSubmit}
-        className="mx-auto max-w-6xl overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm"
-      >
-        <div className="border-b border-slate-300 p-6 text-center">
-          <h1 className="text-2xl font-bold text-slate-900">
-            {assessment.formName || 'Employee Self-assessment Form'}
-          </h1>
-          <p className="mt-1 text-sm font-semibold text-slate-600">
-            {assessment.companyName || 'ACE Data Systems Ltd.'}
-          </p>
+    <div className="appraisal-page">
+      <SignatureModal open={signatureOpen} onClose={closeSignatureModal} />
+
+      <form onSubmit={handleSubmit} className="appraisal-card appraisal-form-sheet">
+        <div className="appraisal-template-banner center">
+          <h2>{assessment.formName || 'Employee Self-assessment Form'}</h2>
+          <p>{assessment.companyName || 'ACE Data Systems Ltd.'}</p>
         </div>
 
-        <div className="grid grid-cols-1 border-b border-slate-300 md:grid-cols-2">
-          <div className="space-y-2 border-slate-300 p-5 md:border-r">
-            <InfoRow label="Employee Name" value={assessment.employeeName} />
-            <InfoRow label="Employee ID" value={assessment.employeeCode || ''} />
-            <InfoRow label="Current Position" value={assessment.currentPosition || ''} />
-            <InfoRow label="Department" value={assessment.departmentName || ''} />
+        {/* Workflow status banner */}
+        {banner && (
+          <div style={{ background: banner.bg, border: `1px solid ${banner.bg}`, borderRadius: 10, padding: '14px 20px', marginBottom: 18 }}>
+            <strong style={{ fontSize: '1rem' }}>{banner.icon} {banner.title}</strong>
+            <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: '#374151' }}>{banner.message}</p>
           </div>
+        )}
 
-          <div className="space-y-2 p-5">
-            <InfoRow label="Assessment Date" value={formatDate(assessment.assessmentDate)} />
-            <InfoRow label="Manager Name" value={assessment.managerName || ''} />
-            <label className="grid grid-cols-[145px_1fr] items-center gap-3 text-sm">
-              <span className="font-semibold text-slate-700">Assessment Period :</span>
-              <input
-                type="text"
-                value={assessment.period || ''}
-                disabled={isSubmitted}
-                onChange={(event) => updateAssessmentField('period', event.target.value)}
-                className="rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
-                required
-              />
-            </label>
-            <InfoRow label="Status" value={assessment.status} />
+        {/* Employee Info */}
+        <div className="appraisal-employee-info-grid">
+          <div className="appraisal-info-field"><span>Employee Name :</span><input value={assessment.employeeName || '-'} readOnly /></div>
+          <div className="appraisal-info-field"><span>Employee ID :</span><input value={assessment.employeeCode || '-'} readOnly /></div>
+          <div className="appraisal-info-field"><span>Current Position :</span><input value={assessment.currentPosition || '-'} readOnly /></div>
+          <div className="appraisal-info-field"><span>Department :</span><input value={assessment.departmentName || '-'} readOnly /></div>
+          <div className="appraisal-info-field"><span>Assessment Date :</span><input value={formatDate(assessment.assessmentDate)} readOnly /></div>
+          <div className="appraisal-info-field"><span>Manager Name :</span><input value={assessment.managerName || '-'} readOnly /></div>
+          <div className="appraisal-info-field">
+            <span>Assessment Period :</span>
+            <input value={assessment.period || ''} readOnly={isLocked} onChange={(e) => updateAssessmentField('period', e.target.value)} required />
           </div>
+          <div className="appraisal-info-field"><span>Status :</span><input value={assessment.status} readOnly /></div>
         </div>
 
-        <div className="overflow-x-auto p-5">
-          <table className="w-full min-w-[860px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-100 text-slate-800">
-                <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-left">
-                  No.
-                </th>
-                <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-left">
-                  Assessment Subject
-                </th>
-                <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-center">
-                  Yes
-                </th>
-                <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-center">
-                  No
-                </th>
-                <th colSpan={5} className="border border-slate-400 px-3 py-2 text-center">
-                  Rating
-                </th>
-              </tr>
-              <tr className="bg-slate-100 text-slate-800">
-                {ratingOptions.map((rating) => (
-                  <th key={rating} className="border border-slate-400 px-3 py-2 text-center">
-                    {rating}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {assessment.sections.map((section) =>
-                section.items.map((item) => {
-                  const sectionTitle = item.sectionTitle || section.title;
-
-                  return (
-                    <tr key={`${sectionTitle}-${item.itemOrder}`}>
-                      <td className="border border-slate-300 px-3 py-2 text-center font-semibold">
-                        {item.itemOrder}
-                      </td>
-
-                      <td className="border border-slate-300 px-3 py-2">
-                        <div className="font-medium text-slate-900">{item.questionText}</div>
-
-                        {item.responseType === 'TEXT' && (
-                          <textarea
-                            value={item.comment || ''}
-                            disabled={isSubmitted}
-                            onChange={(event) =>
-                              updateItem(sectionTitle, item.itemOrder, {
-                                comment: event.target.value,
-                              })
-                            }
-                            className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
-                            rows={2}
-                            placeholder="Write your answer..."
-                          />
-                        )}
-                      </td>
-
-                      <td className="border border-slate-300 px-3 py-2 text-center">
-                        {itemNeedsYesNo(item) ? (
-                          <input
-                            type="checkbox"
-                            checked={item.yesNoAnswer === true}
-                            disabled={isSubmitted}
-                            onChange={() =>
-                              updateItem(sectionTitle, item.itemOrder, {
-                                yesNoAnswer: item.yesNoAnswer === true ? null : true,
-                              })
-                            }
-                            className="h-5 w-5"
-                          />
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-
-                      <td className="border border-slate-300 px-3 py-2 text-center">
-                        {itemNeedsYesNo(item) ? (
-                          <input
-                            type="checkbox"
-                            checked={item.yesNoAnswer === false}
-                            disabled={isSubmitted}
-                            onChange={() =>
-                              updateItem(sectionTitle, item.itemOrder, {
-                                yesNoAnswer: item.yesNoAnswer === false ? null : false,
-                              })
-                            }
-                            className="h-5 w-5"
-                          />
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-
-                      {ratingOptions.map((rating) => (
-                        <td key={rating} className="border border-slate-300 px-3 py-2 text-center">
-                          {itemNeedsRating(item) ? (
-                            <input
-                              type="radio"
-                              name={`rating-${sectionTitle}-${item.itemOrder}`}
-                              checked={item.rating === rating}
-                              disabled={isSubmitted}
-                              onChange={() =>
-                                updateItem(sectionTitle, item.itemOrder, {
-                                  rating,
-                                })
-                              }
-                              className="h-4 w-4"
-                            />
+        {/* Assessment table */}
+        <section className="appraisal-section-card">
+          <div className="appraisal-section-header">
+            <strong>Assessment Subjects</strong>
+            <span className="appraisal-muted">{flattenItems(assessment).length} question(s)</span>
+          </div>
+          <div className="self-assessment-table-wrap">
+            <table className="self-assessment-table">
+              <thead>
+                <tr>
+                  <th rowSpan={2}>No.</th>
+                  <th rowSpan={2}>Assessment Subject</th>
+                  <th rowSpan={2}>Yes</th>
+                  <th rowSpan={2}>No</th>
+                  <th colSpan={5}>Rating</th>
+                </tr>
+                <tr>{ratingOptions.map((r) => <th key={r}>{r}</th>)}</tr>
+              </thead>
+              <tbody>
+                {assessment.sections.flatMap((section) =>
+                  section.items.map((item) => {
+                    const st = item.sectionTitle || section.title;
+                    return (
+                      <tr key={`${st}-${item.itemOrder}-${item.questionId ?? item.id ?? ''}`}>
+                        <td>{item.itemOrder}</td>
+                        <td>
+                          <strong>{item.questionText}</strong>
+                          {item.responseType === 'TEXT' ? (
+                            <textarea rows={2} disabled={isLocked} value={item.comment || ''} onChange={(e) => updateItem(st, item.itemOrder, { comment: e.target.value })} placeholder="Write your answer..." />
                           ) : (
-                            <span className="text-slate-300">-</span>
+                            <input disabled={isLocked} value={item.comment || ''} onChange={(e) => updateItem(st, item.itemOrder, { comment: e.target.value })} placeholder="Optional comment..." />
                           )}
                         </td>
-                      ))}
-                    </tr>
-                  );
-                }),
-              )}
-            </tbody>
-          </table>
+                        <td>{itemNeedsYesNo(item) ? <input type="checkbox" disabled={isLocked} checked={item.yesNoAnswer === true} onChange={() => updateItem(st, item.itemOrder, { yesNoAnswer: item.yesNoAnswer === true ? null : true })} /> : '-'}</td>
+                        <td>{itemNeedsYesNo(item) ? <input type="checkbox" disabled={isLocked} checked={item.yesNoAnswer === false} onChange={() => updateItem(st, item.itemOrder, { yesNoAnswer: item.yesNoAnswer === false ? null : false })} /> : '-'}</td>
+                        {ratingOptions.map((rating) => (
+                          <td key={rating}>{itemNeedsRating(item) ? <input type="radio" name={`rating-${st}-${item.itemOrder}`} disabled={isLocked} checked={item.rating === rating} onChange={() => updateItem(st, item.itemOrder, { rating })} /> : '-'}</td>
+                        ))}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Score summary */}
+        <div className="appraisal-summary-grid">
+          <div className="appraisal-summary-card"><strong>Score</strong><span>{preview.percent}%</span></div>
+          <div className="appraisal-summary-card"><strong>Formula</strong><span>{preview.totalScore} / {preview.maxScore || 0} x 100</span></div>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 border-t border-slate-300 p-5 lg:grid-cols-[1fr_340px]">
-          <div className="space-y-4">
-            <div>
-              <h2 className="mb-2 text-sm font-bold uppercase text-slate-700">Formula</h2>
-
-              <div className="rounded border border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
-                <div className="font-semibold">
-                  Score = Total Points / (Number of Questions Answered x 5) x 100
-                </div>
-
-                <div className="mt-2">
-                  Current score: {preview.totalScore} / {preview.maxScore || 0} ={' '}
-                  <span className="font-bold">{preview.percent}%</span>
-                </div>
-
-                <div className="mt-1">
-                  Current range:{' '}
-                  <span className="font-bold">{preview.label}</span>
-                  {activeBand?.description ? ` - ${activeBand.description}` : ''}
-                </div>
-              </div>
-            </div>
-
-            <label className="block text-sm font-semibold text-slate-700">
-              Other remarks:
-              <textarea
-                value={assessment.remarks || ''}
-                disabled={isSubmitted}
-                onChange={(event) => updateAssessmentField('remarks', event.target.value)}
-                className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
-                rows={5}
-                placeholder="Write your remarks..."
-              />
-            </label>
-
-            <div className="rounded border border-slate-300 p-4 text-sm text-slate-700">
-              <div className="font-semibold">Manager's Comment for self-assessment result:</div>
-
-              <div className="mt-8 min-h-16 border-b border-slate-300 text-slate-400">
-                {assessment.managerComment || ''}
-              </div>
-            </div>
+        <div className="appraisal-inline-grid">
+          <div className="appraisal-review-block">
+            <h4>Formula</h4>
+            <p><strong>Score = Total Points / (Questions × 5) × 100</strong></p>
+            <p>Current score: {preview.totalScore} / {preview.maxScore || 0} = <strong>{preview.percent}%</strong></p>
+            <p>Current range: <strong>{preview.label}</strong>{activeBand?.description ? ` — ${activeBand.description}` : ''}</p>
+            <p className="appraisal-muted">Answered {preview.answered} of {preview.total} required item(s).</p>
           </div>
-
-          <div>
-            <h2 className="mb-2 text-sm font-bold uppercase text-slate-700">
-              Score Explanation
-            </h2>
-
-            <table className="w-full border-collapse text-sm">
+          <div className="appraisal-review-block">
+            <h4>Score Explanation</h4>
+            <table className="self-assessment-score-table">
               <tbody>
                 {scoreBands.map((band) => (
-                  <tr key={`${band.minScore}-${band.maxScore}-${band.label}`}>
-                    <td className="w-20 border border-slate-300 px-2 py-2 font-semibold">
-                      {String(band.minScore).padStart(2, '0')}-{band.maxScore}
-                    </td>
-
-                    <td className="border border-slate-300 px-2 py-2">
-                      <div className="font-semibold">{band.label}</div>
-
-                      {band.description && (
-                        <div className="text-xs text-slate-500">{band.description}</div>
-                      )}
-                    </td>
+                  <tr key={`${band.minScore}-${band.maxScore}`}>
+                    <td><strong>{String(band.minScore).padStart(2, '0')}-{band.maxScore}</strong></td>
+                    <td><strong>{band.label}</strong><br /><span className="appraisal-muted">{band.description}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -583,53 +337,94 @@ const EmployeeSelfAssessmentPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 border-t border-slate-300 p-8 text-sm md:grid-cols-2">
-          <div className="pt-10 text-center">
-            <div className="border-t border-slate-500 pt-2 font-semibold">
-              Signature of Employee & Date
-            </div>
-          </div>
-
-          <div className="pt-10 text-center">
-            <div className="border-t border-slate-500 pt-2 font-semibold">
-              Signature of Manager & Date
-            </div>
-          </div>
+        {/* Other remarks */}
+        <div className="appraisal-review-block">
+          <h4>Other remarks</h4>
+          <label className="appraisal-field">
+            <textarea rows={4} disabled={isLocked} value={assessment.remarks || ''} onChange={(e) => updateAssessmentField('remarks', e.target.value)} placeholder="Write achievements, blockers, or development needs..." />
+          </label>
         </div>
 
-        <div className="border-t border-slate-300 p-5 text-sm">
-          <div className="font-semibold">Review by:</div>
-          <div>HR Department</div>
-        </div>
-
-        {message && (
-          <div className="mx-5 mb-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-            {message}
+        {/* Comments from reviewers */}
+        {assessment.managerComment && (
+          <div className="appraisal-review-block">
+            <h4>Manager's Comment</h4>
+            <p>{assessment.managerComment}</p>
+          </div>
+        )}
+        {assessment.departmentHeadComment && (
+          <div className="appraisal-review-block">
+            <h4>Department Head's Comment</h4>
+            <p>{assessment.departmentHeadComment}</p>
+          </div>
+        )}
+        {assessment.hrComment && (
+          <div className="appraisal-review-block">
+            <h4>HR Comment</h4>
+            <p>{assessment.hrComment}</p>
+          </div>
+        )}
+        {assessment.declineReason && assessment.status === 'DECLINED' && (
+          <div className="appraisal-review-block" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 14 }}>
+            <h4 style={{ color: '#dc2626' }}>Decline Reason</h4>
+            <p>{assessment.declineReason}</p>
           </div>
         )}
 
-        {error && (
-          <div className="mx-5 mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {error}
+        {/* 4-slot signature grid */}
+        <div className="appraisal-signature-grid self-assessment-signature-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          {/* Employee signature */}
+          <div className="appraisal-signature-slot">
+            {assessment.employeeSignatureImageData ? (
+              <>
+                <img src={signatureSrc(assessment.employeeSignatureImageData, assessment.employeeSignatureImageType)} alt="Employee signature" className="appraisal-signature-image" />
+                <p className="appraisal-signature-date">Date: {formatDate(assessment.employeeSignedAt || assessment.submittedAt)}</p>
+                <small className="appraisal-signature-name">{assessment.employeeSignatureName || 'Employee'}</small>
+              </>
+            ) : ownSignature && !isLocked ? (
+              <>
+                <img src={signatureSrc(ownSignature.imageData, ownSignature.imageType)} alt={ownSignature.name} className="appraisal-signature-image" />
+                <p className="appraisal-signature-date">Date: {formatDate(new Date().toISOString())}</p>
+                <small className="appraisal-signature-name">{ownSignature.name}</small>
+              </>
+            ) : (
+              <>
+                <span className="appraisal-signature-placeholder">Signature of Employee &amp; Date</span>
+                {!isLocked && <button type="button" className="appraisal-button secondary" style={{ marginTop: 12, width: 'fit-content' }} onClick={() => setSignatureOpen(true)}>Create Signature</button>}
+              </>
+            )}
+          </div>
+
+          {/* Manager signature */}
+          <SignatureSlot label="Signature of Manager & Date" imageData={assessment.managerSignatureImageData} imageType={assessment.managerSignatureImageType} name={assessment.managerSignatureName} signedAt={assessment.managerSignedAt} />
+
+          {/* Dept Head signature */}
+          <SignatureSlot label="Signature of Dept. Head & Date" imageData={assessment.departmentHeadSignatureImageData} imageType={assessment.departmentHeadSignatureImageType} name={assessment.departmentHeadSignatureName} signedAt={assessment.departmentHeadSignedAt} />
+
+          {/* HR signature */}
+          <SignatureSlot label="Signature of HR & Date" imageData={assessment.hrSignatureImageData} imageType={assessment.hrSignatureImageType} name={assessment.hrSignatureName} signedAt={assessment.hrSignedAt} />
+        </div>
+
+        {ownSignature && !isLocked && (
+          <div className="appraisal-button-row">
+            <button type="button" className="appraisal-button secondary" onClick={() => setSignatureOpen(true)}>Change My Signature</button>
           </div>
         )}
 
-        {!isSubmitted && (
-          <div className="flex flex-col gap-3 border-t border-slate-300 p-5 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              disabled={saving || submitting}
-              onClick={() => void saveDraft()}
-              className="rounded-lg border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-            >
+        <div className="appraisal-review-block">
+          <h4>Review by</h4>
+          <p>HR Department</p>
+        </div>
+
+        {message && <p style={{ color: '#047857', fontWeight: 700, margin: '18px' }}>{message}</p>}
+        {error && <p style={{ color: '#b91c1c', fontWeight: 700, margin: '18px' }}>{error}</p>}
+
+        {!isLocked && (
+          <div className="appraisal-button-row final-actions">
+            <button className="appraisal-button secondary" type="button" disabled={saving || submitting} onClick={() => void saveDraft()}>
               {saving ? 'Saving...' : 'Save Draft'}
             </button>
-
-            <button
-              type="submit"
-              disabled={saving || submitting}
-              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-            >
+            <button className="appraisal-button primary" type="submit" disabled={saving || submitting}>
               {submitting ? 'Submitting...' : 'Submit Assessment'}
             </button>
           </div>
@@ -638,12 +433,5 @@ const EmployeeSelfAssessmentPage = () => {
     </div>
   );
 };
-
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
-  <div className="grid grid-cols-[145px_1fr] gap-3 text-sm">
-    <span className="font-semibold text-slate-700">{label} :</span>
-    <span className="min-h-6 border-b border-slate-300 text-slate-900">{value}</span>
-  </div>
-);
 
 export default EmployeeSelfAssessmentPage;

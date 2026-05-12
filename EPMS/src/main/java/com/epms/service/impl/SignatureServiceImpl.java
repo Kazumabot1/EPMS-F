@@ -31,17 +31,26 @@ public class SignatureServiceImpl implements SignatureService {
     @Transactional
     public SignatureResponse createSignature(SignatureCreateRequest request, Long requestedUserId) {
         UserPrincipal principal = SecurityUtils.currentUser();
-        Long targetUserId = resolveTargetUserId(principal, requestedUserId != null ? requestedUserId : request.getUserId());
+        Long currentUserId = Long.valueOf(principal.getId());
 
+        validateSelfOnly(currentUserId, requestedUserId);
+        validateSelfOnly(currentUserId, request.getUserId());
         validateName(request.getName());
         validateImage(request.getImageData(), request.getImageType());
+
         if (request.getSourceType() == null) {
             throw new BadRequestException("Source type is required");
         }
 
+        SignatureRole currentRole = resolveOwnRole(principal);
+
+        if (request.getRole() != null && request.getRole() != currentRole) {
+            throw new UnauthorizedActionException("You can only create a signature for your own role.");
+        }
+
         Signature signature = new Signature();
-        signature.setUserId(targetUserId);
-        signature.setRole(resolveRole(principal, request.getRole()));
+        signature.setUserId(currentUserId);
+        signature.setRole(currentRole);
         signature.setName(request.getName().trim());
         signature.setImageData(request.getImageData().trim());
         signature.setImageType(request.getImageType().trim().toLowerCase());
@@ -50,8 +59,8 @@ public class SignatureServiceImpl implements SignatureService {
         signature.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
 
         if (Boolean.TRUE.equals(signature.getIsDefault())) {
-            unsetCurrentDefault(targetUserId);
-        } else if (signatureRepository.countByUserIdAndIsActiveTrue(targetUserId) == 0) {
+            unsetCurrentDefault(currentUserId);
+        } else if (signatureRepository.countByUserIdAndIsActiveTrue(currentUserId) == 0) {
             signature.setIsDefault(true);
         }
 
@@ -62,8 +71,11 @@ public class SignatureServiceImpl implements SignatureService {
     @Transactional(readOnly = true)
     public List<SignatureResponse> getSignatures(Long requestedUserId) {
         UserPrincipal principal = SecurityUtils.currentUser();
-        Long targetUserId = resolveTargetUserId(principal, requestedUserId);
-        return signatureRepository.findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(targetUserId)
+        Long currentUserId = Long.valueOf(principal.getId());
+
+        validateSelfOnly(currentUserId, requestedUserId);
+
+        return signatureRepository.findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(currentUserId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -73,7 +85,11 @@ public class SignatureServiceImpl implements SignatureService {
     @Transactional(readOnly = true)
     public SignatureResponse getSignatureById(Long id, Long requestedUserId) {
         UserPrincipal principal = SecurityUtils.currentUser();
-        Signature signature = getOwnedOrAdminAccessibleSignature(id, requestedUserId, principal);
+        Long currentUserId = Long.valueOf(principal.getId());
+
+        validateSelfOnly(currentUserId, requestedUserId);
+
+        Signature signature = getOwnedSignature(id, currentUserId);
         return toResponse(signature);
     }
 
@@ -81,7 +97,11 @@ public class SignatureServiceImpl implements SignatureService {
     @Transactional
     public SignatureResponse updateSignature(Long id, SignatureUpdateRequest request, Long requestedUserId) {
         UserPrincipal principal = SecurityUtils.currentUser();
-        Signature signature = getOwnedOrAdminAccessibleSignature(id, requestedUserId, principal);
+        Long currentUserId = Long.valueOf(principal.getId());
+
+        validateSelfOnly(currentUserId, requestedUserId);
+
+        Signature signature = getOwnedSignature(id, currentUserId);
 
         validateName(request.getName());
         signature.setName(request.getName().trim());
@@ -99,9 +119,11 @@ public class SignatureServiceImpl implements SignatureService {
         if (hasImageData) {
             signature.setImageData(request.getImageData().trim());
         }
+
         if (hasImageType) {
             signature.setImageType(request.getImageType().trim().toLowerCase());
         }
+
         if (request.getSourceType() != null) {
             signature.setSourceType(request.getSourceType());
         }
@@ -113,13 +135,17 @@ public class SignatureServiceImpl implements SignatureService {
     @Transactional
     public void deleteSignature(Long id, Long requestedUserId) {
         UserPrincipal principal = SecurityUtils.currentUser();
-        Signature signature = getOwnedOrAdminAccessibleSignature(id, requestedUserId, principal);
+        Long currentUserId = Long.valueOf(principal.getId());
+
+        validateSelfOnly(currentUserId, requestedUserId);
+
+        Signature signature = getOwnedSignature(id, currentUserId);
         signature.setIsActive(false);
         signature.setIsDefault(false);
         signatureRepository.save(signature);
 
-        signatureRepository.findByUserIdAndIsDefaultTrueAndIsActiveTrue(signature.getUserId())
-                .or(() -> signatureRepository.findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(signature.getUserId())
+        signatureRepository.findByUserIdAndIsDefaultTrueAndIsActiveTrue(currentUserId)
+                .or(() -> signatureRepository.findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(currentUserId)
                         .stream()
                         .findFirst())
                 .ifPresent(fallback -> {
@@ -132,30 +158,40 @@ public class SignatureServiceImpl implements SignatureService {
     @Transactional
     public SignatureResponse setDefaultSignature(Long id, Long requestedUserId) {
         UserPrincipal principal = SecurityUtils.currentUser();
-        Signature signature = getOwnedOrAdminAccessibleSignature(id, requestedUserId, principal);
-        unsetCurrentDefault(signature.getUserId());
+        Long currentUserId = Long.valueOf(principal.getId());
+
+        validateSelfOnly(currentUserId, requestedUserId);
+
+        Signature signature = getOwnedSignature(id, currentUserId);
+        unsetCurrentDefault(currentUserId);
         signature.setIsDefault(true);
+
         return toResponse(signatureRepository.save(signature));
     }
 
-    private Signature getOwnedOrAdminAccessibleSignature(Long id, Long requestedUserId, UserPrincipal principal) {
+    private Signature getOwnedSignature(Long id, Long currentUserId) {
         Signature signature = signatureRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Signature not found"));
-        Long targetUserId = resolveTargetUserId(principal, requestedUserId);
-        boolean isAdminForAllUsers = isAdmin(principal) && requestedUserId != null;
-        if (!isAdminForAllUsers && !signature.getUserId().equals(targetUserId)) {
-            throw new UnauthorizedActionException("You do not have permission to access this signature");
+
+        if (!signature.getUserId().equals(currentUserId)) {
+            throw new UnauthorizedActionException("You can only access your own signature.");
         }
+
         return signature;
     }
 
-    private SignatureRole resolveRole(UserPrincipal principal, SignatureRole requestedRole) {
-        if (requestedRole != null) {
-            return requestedRole;
+    private void validateSelfOnly(Long currentUserId, Long requestedUserId) {
+        if (requestedUserId != null && !requestedUserId.equals(currentUserId)) {
+            throw new UnauthorizedActionException("You can only manage your own signature.");
         }
+    }
+
+    private SignatureRole resolveOwnRole(UserPrincipal principal) {
         List<String> roles = principal.getRoles() == null ? List.of() : principal.getRoles();
+
         for (String role : roles) {
             String normalized = normalizeRole(role);
+
             switch (normalized) {
                 case "ADMIN":
                     return SignatureRole.ADMIN;
@@ -169,10 +205,13 @@ public class SignatureServiceImpl implements SignatureService {
                 case "CEO":
                 case "EXECUTIVE":
                     return SignatureRole.CEO;
+                case "EMPLOYEE":
+                    return SignatureRole.EMPLOYEE;
                 default:
                     break;
             }
         }
+
         return SignatureRole.EMPLOYEE;
     }
 
@@ -180,7 +219,12 @@ public class SignatureServiceImpl implements SignatureService {
         if (role == null) {
             return "";
         }
-        return role.replaceFirst("(?i)^ROLE_", "").replaceAll("[\\s-]+", "_").trim().toUpperCase();
+
+        return role
+                .replaceFirst("(?i)^ROLE_", "")
+                .replaceAll("[\\s-]+", "_")
+                .trim()
+                .toUpperCase();
     }
 
     private void validateName(String name) {
@@ -193,13 +237,17 @@ public class SignatureServiceImpl implements SignatureService {
         if (imageData == null || imageData.trim().isBlank()) {
             throw new BadRequestException("Signature image data is required");
         }
+
         if (imageData.length() > MAX_BASE64_LENGTH) {
             throw new BadRequestException("Signature image is too large");
         }
+
         if (imageType == null || imageType.trim().isBlank()) {
             throw new BadRequestException("Signature image type is required");
         }
+
         String normalizedType = imageType.trim().toLowerCase();
+
         if (!ALLOWED_IMAGE_TYPES.contains(normalizedType)) {
             throw new BadRequestException("Only png, jpg, and jpeg images are supported");
         }
@@ -210,22 +258,6 @@ public class SignatureServiceImpl implements SignatureService {
             currentDefault.setIsDefault(false);
             signatureRepository.save(currentDefault);
         });
-    }
-
-    private Long resolveTargetUserId(UserPrincipal principal, Long requestedUserId) {
-        Long currentUserId = Long.valueOf(principal.getId());
-        if (requestedUserId == null || requestedUserId.equals(currentUserId)) {
-            return currentUserId;
-        }
-        if (!isAdmin(principal)) {
-            throw new UnauthorizedActionException("Only admin can manage another user's signatures");
-        }
-        return requestedUserId;
-    }
-
-    private boolean isAdmin(UserPrincipal principal) {
-        List<String> roles = principal.getRoles() == null ? List.of() : principal.getRoles();
-        return roles.stream().map(this::normalizeRole).anyMatch("ADMIN"::equals);
     }
 
     private SignatureResponse toResponse(Signature signature) {

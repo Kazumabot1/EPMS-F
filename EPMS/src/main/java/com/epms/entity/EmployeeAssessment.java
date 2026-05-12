@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -57,6 +58,18 @@ public class EmployeeAssessment {
     @Column(name = "department_name")
     private String departmentName;
 
+    @Column(name = "manager_user_id")
+    private Integer managerUserId;
+
+    @Column(name = "manager_name")
+    private String managerName;
+
+    @Column(name = "department_head_user_id")
+    private Integer departmentHeadUserId;
+
+    @Column(name = "department_head_name")
+    private String departmentHeadName;
+
     @Column(name = "assessment_form_id")
     private Integer assessmentFormId;
 
@@ -68,9 +81,6 @@ public class EmployeeAssessment {
 
     @Column(name = "assessment_date")
     private LocalDate assessmentDate;
-
-    @Column(name = "manager_name")
-    private String managerName;
 
     @Column(name = "period_label", nullable = false)
     private String period;
@@ -97,8 +107,87 @@ public class EmployeeAssessment {
     @Column(name = "manager_comment", columnDefinition = "TEXT")
     private String managerComment;
 
+    @Column(name = "hr_comment", columnDefinition = "TEXT")
+    private String hrComment;
+
+    @Column(name = "department_head_comment", columnDefinition = "TEXT")
+    private String departmentHeadComment;
+
+    @Column(name = "decline_reason", columnDefinition = "TEXT")
+    private String declineReason;
+
+    @Column(name = "employee_signature_id")
+    private Long employeeSignatureId;
+
+    @Column(name = "employee_signature_name")
+    private String employeeSignatureName;
+
+    @Lob
+    @Column(name = "employee_signature_image_data", columnDefinition = "LONGTEXT")
+    private String employeeSignatureImageData;
+
+    @Column(name = "employee_signature_image_type", length = 50)
+    private String employeeSignatureImageType;
+
+    @Column(name = "employee_signed_at")
+    private LocalDateTime employeeSignedAt;
+
+    @Column(name = "manager_signature_id")
+    private Long managerSignatureId;
+
+    @Column(name = "manager_signature_name")
+    private String managerSignatureName;
+
+    @Lob
+    @Column(name = "manager_signature_image_data", columnDefinition = "LONGTEXT")
+    private String managerSignatureImageData;
+
+    @Column(name = "manager_signature_image_type", length = 50)
+    private String managerSignatureImageType;
+
+    @Column(name = "manager_signed_at")
+    private LocalDateTime managerSignedAt;
+
+    @Column(name = "department_head_signature_id")
+    private Long departmentHeadSignatureId;
+
+    @Column(name = "department_head_signature_name")
+    private String departmentHeadSignatureName;
+
+    @Lob
+    @Column(name = "department_head_signature_image_data", columnDefinition = "LONGTEXT")
+    private String departmentHeadSignatureImageData;
+
+    @Column(name = "department_head_signature_image_type", length = 50)
+    private String departmentHeadSignatureImageType;
+
+    @Column(name = "department_head_signed_at")
+    private LocalDateTime departmentHeadSignedAt;
+
+    @Column(name = "hr_signature_id")
+    private Long hrSignatureId;
+
+    @Column(name = "hr_signature_name")
+    private String hrSignatureName;
+
+    @Lob
+    @Column(name = "hr_signature_image_data", columnDefinition = "LONGTEXT")
+    private String hrSignatureImageData;
+
+    @Column(name = "hr_signature_image_type", length = 50)
+    private String hrSignatureImageType;
+
+    @Column(name = "hr_signed_at")
+    private LocalDateTime hrSignedAt;
+
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    @Column(name = "declined_at")
+    private LocalDateTime declinedAt;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
