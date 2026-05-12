@@ -1,3 +1,4 @@
+/*
 package com.epms.controller;
 
 import com.epms.dto.PositionLevelRequestDto;
@@ -51,6 +52,59 @@ public class PositionLevelController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletePositionLevel(@PathVariable Integer id) {
         positionLevelService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+}
+*/
+
+package com.epms.controller;
+
+import com.epms.dto.AuditReasonRequest;
+import com.epms.dto.PositionLevelRequestDto;
+import com.epms.dto.PositionLevelResponseDto;
+import com.epms.service.PositionLevelService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/position-levels")
+@RequiredArgsConstructor
+public class PositionLevelController {
+
+    private final PositionLevelService positionLevelService;
+
+    @PostMapping
+    public ResponseEntity<PositionLevelResponseDto> createPositionLevel(@Valid @RequestBody PositionLevelRequestDto requestDto) {
+        return new ResponseEntity<>(positionLevelService.create(requestDto), HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<PositionLevelResponseDto>> getAllPositionLevel() {
+        return ResponseEntity.ok(positionLevelService.getAll());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<PositionLevelResponseDto> getPositionLevelById(@PathVariable Integer id) {
+        return ResponseEntity.ok(positionLevelService.getById(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<PositionLevelResponseDto> updatePositionLevel(
+            @PathVariable Integer id,
+            @Valid @RequestBody PositionLevelRequestDto requestDto) {
+        return ResponseEntity.ok(positionLevelService.update(id, requestDto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletePositionLevel(
+            @PathVariable Integer id,
+            @RequestBody(required = false) AuditReasonRequest request) {
+        positionLevelService.delete(id, request != null ? request.getReason() : null);
         return ResponseEntity.noContent().build();
     }
 }
