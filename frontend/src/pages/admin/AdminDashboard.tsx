@@ -333,6 +333,26 @@ const AdminDashboard = () => {
             <i className="bi bi-person-plus" />{' '}
             {editingUserId ? 'Edit Login Account' : 'Login Account User'}
           </h2>
+          <button
+            className="adm-btn"
+            type="button"
+            onClick={async () => {
+              try {
+                await api.post('/users/resync-employee-links', {});
+                await loadUsers();
+                alert('User/employee links resynced successfully.');
+              } catch (err: any) {
+                alert(
+                  err?.response?.data?.message ||
+                    err?.response?.data?.error ||
+                    'Failed to resync employee links.',
+                );
+              }
+            }}
+          >
+            <i className="bi bi-arrow-repeat" />
+            Resync Employee Links
+          </button>
 
           <button
             className="adm-btn primary"
