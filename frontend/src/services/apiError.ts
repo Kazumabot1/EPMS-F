@@ -64,3 +64,32 @@ export const extractApiErrorMessage = (error: unknown, fallback: string): string
 
   return fallback;
 };
+
+
+
+export const extractErrorMessage = (error: unknown, fallback = 'Something went wrong.'): string => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as {
+      response?: {
+        data?: {
+          message?: string;
+          error?: string;
+          detail?: string;
+        };
+      };
+    }).response;
+
+    return (
+      response?.data?.message ||
+      response?.data?.error ||
+      response?.data?.detail ||
+      fallback
+    );
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+};

@@ -1,3 +1,4 @@
+/*
 package com.epms.controller;
 
 import com.epms.dto.RoleRequestDto;
@@ -52,6 +53,68 @@ public class RoleController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteRole(@PathVariable Integer id) {
         roleService.deleteRole(id);
+        return ResponseEntity.noContent().build();
+    }
+}
+*/
+
+
+
+
+
+
+
+
+
+
+package com.epms.controller;
+
+import com.epms.dto.AuditReasonRequest;
+import com.epms.dto.RoleRequestDto;
+import com.epms.dto.RoleResponseDto;
+import com.epms.service.RoleService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/roles")
+@RequiredArgsConstructor
+public class RoleController {
+
+    private final RoleService roleService;
+
+    @PostMapping
+    public ResponseEntity<RoleResponseDto> createRole(@Valid @RequestBody RoleRequestDto requestDto) {
+        return new ResponseEntity<>(roleService.createRole(requestDto), HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<RoleResponseDto>> getAllRoles() {
+        return ResponseEntity.ok(roleService.getAllRoles());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<RoleResponseDto> getRoleById(@PathVariable Integer id) {
+        return ResponseEntity.ok(roleService.getRoleById(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<RoleResponseDto> updateRole(
+            @PathVariable Integer id,
+            @Valid @RequestBody RoleRequestDto requestDto) {
+        return ResponseEntity.ok(roleService.updateRole(id, requestDto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteRole(
+            @PathVariable Integer id,
+            @RequestBody(required = false) AuditReasonRequest request) {
+        roleService.deleteRole(id, request != null ? request.getReason() : null);
         return ResponseEntity.noContent().build();
     }
 }

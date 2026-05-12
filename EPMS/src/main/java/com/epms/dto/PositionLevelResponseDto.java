@@ -1,3 +1,4 @@
+/*
 package com.epms.dto;
 
 import lombok.AllArgsConstructor;
@@ -11,4 +12,28 @@ public class PositionLevelResponseDto {
 
     private Integer id;
     private String levelCode;
+}
+*/
+
+
+
+package com.epms.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.Date;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class PositionLevelResponseDto {
+
+    private Integer id;
+    private String levelCode;
+    private Boolean active;
+    private Date createdAt;
+    private Integer createdBy;
+    private Date updatedAt;
 }
