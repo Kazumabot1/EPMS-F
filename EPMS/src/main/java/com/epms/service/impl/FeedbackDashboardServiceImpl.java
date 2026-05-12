@@ -204,23 +204,33 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
             return List.of();
         }
         return response.getItems().stream()
-                .filter(item -> item != null && item.getQuestion() != null)
+                .filter(item -> item != null && (item.getQuestion() != null || item.getAssignmentQuestion() != null))
                 .sorted((a, b) -> {
-                    Integer aSection = a.getQuestion().getSection() == null ? 0 : a.getQuestion().getSection().getOrderNo();
-                    Integer bSection = b.getQuestion().getSection() == null ? 0 : b.getQuestion().getSection().getOrderNo();
-                    int sectionCompare = Integer.compare(aSection == null ? 0 : aSection, bSection == null ? 0 : bSection);
+                    int sectionCompare = Integer.compare(resolveQuestionSectionOrder(a), resolveQuestionSectionOrder(b));
                     if (sectionCompare != 0) {
                         return sectionCompare;
                     }
-                    Integer aOrder = a.getQuestion().getQuestionOrder();
-                    Integer bOrder = b.getQuestion().getQuestionOrder();
-                    return Integer.compare(aOrder == null ? 0 : aOrder, bOrder == null ? 0 : bOrder);
+                    return Integer.compare(resolveQuestionDisplayOrder(a), resolveQuestionDisplayOrder(b));
                 })
                 .map(this::mapQuestionItem)
                 .toList();
     }
 
     private FeedbackReceivedQuestionItemResponse mapQuestionItem(FeedbackResponseItem item) {
+        if (item.getAssignmentQuestion() != null) {
+            var assignmentQuestion = item.getAssignmentQuestion();
+            return FeedbackReceivedQuestionItemResponse.builder()
+                    .questionId(assignmentQuestion.getId())
+                    .questionText(assignmentQuestion.getQuestionTextSnapshot())
+                    .questionOrder(assignmentQuestion.getDisplayOrder())
+                    .sectionTitle(assignmentQuestion.getSectionTitle())
+                    .sectionOrder(assignmentQuestion.getSectionOrder())
+                    .required(Boolean.TRUE.equals(assignmentQuestion.getRequired()))
+                    .ratingValue(item.getRatingValue())
+                    .comment(item.getComment())
+                    .build();
+        }
+
         var question = item.getQuestion();
         var section = question.getSection();
         return FeedbackReceivedQuestionItemResponse.builder()
@@ -233,6 +243,26 @@ public class FeedbackDashboardServiceImpl implements FeedbackDashboardService {
                 .ratingValue(item.getRatingValue())
                 .comment(item.getComment())
                 .build();
+    }
+
+    private int resolveQuestionSectionOrder(FeedbackResponseItem item) {
+        if (item.getAssignmentQuestion() != null && item.getAssignmentQuestion().getSectionOrder() != null) {
+            return item.getAssignmentQuestion().getSectionOrder();
+        }
+        if (item.getQuestion() != null && item.getQuestion().getSection() != null && item.getQuestion().getSection().getOrderNo() != null) {
+            return item.getQuestion().getSection().getOrderNo();
+        }
+        return 0;
+    }
+
+    private int resolveQuestionDisplayOrder(FeedbackResponseItem item) {
+        if (item.getAssignmentQuestion() != null && item.getAssignmentQuestion().getDisplayOrder() != null) {
+            return item.getAssignmentQuestion().getDisplayOrder();
+        }
+        if (item.getQuestion() != null && item.getQuestion().getQuestionOrder() != null) {
+            return item.getQuestion().getQuestionOrder();
+        }
+        return 0;
     }
 
     private List<TeamFeedbackSummaryResponse> buildTeamSummaries(List<Long> targetEmployeeIds) {

@@ -3,6 +3,7 @@ package com.epms.service.impl;
 import com.epms.dto.FeedbackCampaignCreateRequest;
 import com.epms.dto.FeedbackReminderResponse;
 import com.epms.entity.Employee;
+import com.epms.entity.FeedbackAssignmentQuestion;
 import com.epms.entity.FeedbackCampaign;
 import com.epms.entity.FeedbackEvaluatorAssignment;
 import com.epms.entity.FeedbackForm;
@@ -28,6 +29,7 @@ import com.epms.repository.FeedbackRequestRepository;
 import com.epms.repository.FeedbackResponseRepository;
 import com.epms.service.FeedbackOperationalService;
 import com.epms.service.FeedbackCampaignService;
+import com.epms.service.FeedbackQuestionResolverService;
 import com.epms.service.FeedbackSummaryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -67,6 +69,7 @@ public class FeedbackCampaignServiceImpl implements FeedbackCampaignService {
     private final EmployeeRepository employeeRepository;
     private final FeedbackOperationalService feedbackOperationalService;
     private final FeedbackSummaryService feedbackSummaryService;
+    private final FeedbackQuestionResolverService questionResolverService;
 
     @Override
     @Transactional
@@ -211,6 +214,7 @@ public class FeedbackCampaignServiceImpl implements FeedbackCampaignService {
             }
         });
         feedbackRequestRepository.saveAll(requests);
+        questionResolverService.snapshotCampaignAssignments(campaignId);
 
         FeedbackCampaignStatus oldStatus = campaign.getStatus();
         campaign.setStatus(FeedbackCampaignStatus.ACTIVE);
@@ -387,6 +391,7 @@ public class FeedbackCampaignServiceImpl implements FeedbackCampaignService {
             }
         }
         feedbackRequestRepository.saveAll(requests);
+        questionResolverService.snapshotCampaignAssignments(campaign.getId());
 
         FeedbackCampaignStatus oldStatus = campaign.getStatus();
         campaign.setStatus(FeedbackCampaignStatus.CLOSED);
@@ -419,7 +424,6 @@ public class FeedbackCampaignServiceImpl implements FeedbackCampaignService {
             return AutoSubmitCloseResult.empty();
         }
 
-        Map<Long, FeedbackQuestion> campaignQuestions = loadCampaignQuestions(campaign.getFormId());
         int submitted = 0;
         int skippedIncomplete = 0;
 
@@ -429,7 +433,7 @@ public class FeedbackCampaignServiceImpl implements FeedbackCampaignService {
                     || assignment.getStatus() == AssignmentStatus.CANCELLED) {
                 continue;
             }
-            if (!hasAllRequiredRatings(response, campaignQuestions)) {
+            if (!hasAllRequiredRatings(response, questionResolverService.findOrCreateAssignmentQuestions(assignment))) {
                 skippedIncomplete++;
                 continue;
             }
@@ -469,26 +473,33 @@ public class FeedbackCampaignServiceImpl implements FeedbackCampaignService {
                 .collect(Collectors.toMap(FeedbackQuestion::getId, question -> question, (first, duplicate) -> first));
     }
 
-    private boolean hasAllRequiredRatings(FeedbackResponse response, Map<Long, FeedbackQuestion> campaignQuestions) {
-        Set<Long> requiredQuestionIds = campaignQuestions.values().stream()
-                .filter(question -> Boolean.TRUE.equals(question.getIsRequired()))
-                .map(FeedbackQuestion::getId)
+    private boolean hasAllRequiredRatings(FeedbackResponse response, List<FeedbackAssignmentQuestion> assignmentQuestions) {
+        Set<Long> requiredAssignmentQuestionIds = assignmentQuestions.stream()
+                .filter(question -> Boolean.TRUE.equals(question.getRequired()))
+                .map(FeedbackAssignmentQuestion::getId)
                 .collect(Collectors.toSet());
-        if (requiredQuestionIds.isEmpty()) {
+        if (requiredAssignmentQuestionIds.isEmpty()) {
             return true;
         }
 
+        Map<Long, Long> assignmentQuestionIdByLegacyQuestionId = assignmentQuestions.stream()
+                .filter(question -> question.getSourceQuestion() != null && question.getSourceQuestion().getId() != null)
+                .collect(Collectors.toMap(question -> question.getSourceQuestion().getId(), FeedbackAssignmentQuestion::getId, (first, duplicate) -> first));
+
         Set<Long> answeredRequiredQuestionIds = new HashSet<>();
         for (FeedbackResponseItem item : response.getItems()) {
-            if (item == null || item.getQuestion() == null || item.getQuestion().getId() == null || item.getRatingValue() == null) {
+            if (item == null || item.getRatingValue() == null) {
                 continue;
             }
-            Long questionId = item.getQuestion().getId();
-            if (requiredQuestionIds.contains(questionId)) {
-                answeredRequiredQuestionIds.add(questionId);
+            Long assignmentQuestionId = item.getAssignmentQuestion() != null ? item.getAssignmentQuestion().getId() : null;
+            if (assignmentQuestionId == null && item.getQuestion() != null) {
+                assignmentQuestionId = assignmentQuestionIdByLegacyQuestionId.get(item.getQuestion().getId());
+            }
+            if (assignmentQuestionId != null && requiredAssignmentQuestionIds.contains(assignmentQuestionId)) {
+                answeredRequiredQuestionIds.add(assignmentQuestionId);
             }
         }
-        return answeredRequiredQuestionIds.containsAll(requiredQuestionIds);
+        return answeredRequiredQuestionIds.containsAll(requiredAssignmentQuestionIds);
     }
 
     private record AssignmentCounts(long totalAssignments, long submittedAssignments) {

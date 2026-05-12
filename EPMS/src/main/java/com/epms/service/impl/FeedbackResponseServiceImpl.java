@@ -2,6 +2,7 @@ package com.epms.service.impl;
 
 import com.epms.dto.FeedbackReceivedItemResponse;
 import com.epms.dto.FeedbackSubmissionStatusResponse;
+import com.epms.entity.FeedbackAssignmentQuestion;
 import com.epms.entity.FeedbackEvaluatorAssignment;
 import com.epms.entity.FeedbackQuestion;
 import com.epms.entity.FeedbackResponse;
@@ -27,6 +28,7 @@ import com.epms.repository.UserRepository;
 import com.epms.service.FeedbackOperationalService;
 import com.epms.util.FeedbackPrivacyUtil;
 import com.epms.util.FeedbackScoreUtil;
+import com.epms.service.FeedbackQuestionResolverService;
 import com.epms.service.FeedbackResponseService;
 import com.epms.service.FeedbackSummaryService;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,12 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class FeedbackResponseServiceImpl implements FeedbackResponseService {
 
+    private static final String RESPONSE_RATING_WITH_COMMENT = "RATING_WITH_COMMENT";
+    private static final String RESPONSE_RATING = "RATING";
+    private static final String RESPONSE_TEXT = "TEXT";
+    private static final String RESPONSE_YES_NO = "YES_NO";
+    private static final String SCORING_SCORED = "SCORED";
+
     private final FeedbackResponseRepository responseRepository;
     private final FeedbackSummaryRepository feedbackSummaryRepository;
     private final FeedbackEvaluatorAssignmentRepository assignmentRepository;
@@ -62,6 +70,7 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
     private final UserRepository userRepository;
     private final FeedbackOperationalService feedbackOperationalService;
     private final FeedbackSummaryService feedbackSummaryService;
+    private final FeedbackQuestionResolverService questionResolverService;
 
     @Override
     @Transactional
@@ -88,7 +97,7 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         if (items == null || items.isEmpty()) {
             throw new BusinessValidationException("At least one response item is required.");
         }
-        Map<Long, FeedbackQuestion> assignmentQuestions = loadAssignmentQuestions(assignment);
+        Map<Long, FeedbackAssignmentQuestion> assignmentQuestions = loadAssignmentQuestions(assignment);
         validateDraftItems(items, assignmentQuestions);
 
         Optional<FeedbackResponse> existing = responseRepository.findByEvaluatorAssignmentId(evaluatorAssignmentId);
@@ -152,7 +161,7 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         if (items == null || items.isEmpty()) {
             throw new BusinessValidationException("At least one response item is required.");
         }
-        Map<Long, FeedbackQuestion> assignmentQuestions = loadAssignmentQuestions(assignment);
+        Map<Long, FeedbackAssignmentQuestion> assignmentQuestions = loadAssignmentQuestions(assignment);
         validateSubmittedItems(items, assignmentQuestions);
 
         Double overallScore = calculateOverallScore(items, assignmentQuestions);
@@ -409,111 +418,151 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         return request.getCampaign().getEndAt();
     }
 
-    private Map<Long, FeedbackQuestion> loadAssignmentQuestions(FeedbackEvaluatorAssignment assignment) {
-        Long formId = assignment.getFeedbackRequest().getForm().getId();
-
-        List<FeedbackSection> sections =
-                feedbackFormRepository.findSectionsWithQuestionsByFormId(formId);
-
-        if (sections == null || sections.isEmpty()) {
-            throw new ResourceNotFoundException("Assigned feedback form not found.");
-        }
-
-        return sections.stream()
-                .flatMap(section ->
-                        section.getQuestions() == null
-                                ? Stream.empty()
-                                : section.getQuestions().stream()
-                )
-                .collect(Collectors.toMap(FeedbackQuestion::getId, Function.identity()));
+    private Map<Long, FeedbackAssignmentQuestion> loadAssignmentQuestions(FeedbackEvaluatorAssignment assignment) {
+        return questionResolverService.findOrCreateAssignmentQuestions(assignment).stream()
+                .collect(Collectors.toMap(FeedbackAssignmentQuestion::getId, Function.identity(), (first, duplicate) -> first));
     }
 
-    private void validateDraftItems(List<FeedbackResponseItem> items, Map<Long, FeedbackQuestion> assignmentQuestions) {
+    private void validateDraftItems(List<FeedbackResponseItem> items, Map<Long, FeedbackAssignmentQuestion> assignmentQuestions) {
         validateQuestionMembershipAndRatings(items, assignmentQuestions, false);
     }
 
-    private void validateSubmittedItems(List<FeedbackResponseItem> items, Map<Long, FeedbackQuestion> assignmentQuestions) {
+    private void validateSubmittedItems(List<FeedbackResponseItem> items, Map<Long, FeedbackAssignmentQuestion> assignmentQuestions) {
         validateQuestionMembershipAndRatings(items, assignmentQuestions, true);
 
-        Set<Long> answeredQuestionIds = items.stream()
-                .filter(item -> item.getRatingValue() != null)
-                .map(item -> item.getQuestion().getId())
+        Set<Long> answeredAssignmentQuestionIds = items.stream()
+                .filter(item -> isAnswered(item, item.getAssignmentQuestion()))
+                .map(item -> item.getAssignmentQuestion() == null ? null : item.getAssignmentQuestion().getId())
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        List<FeedbackQuestion> missingRequiredQuestions = assignmentQuestions.values().stream()
-                .filter(question -> Boolean.TRUE.equals(question.getIsRequired()))
-                .filter(question -> !answeredQuestionIds.contains(question.getId()))
-                .sorted(Comparator.comparing(FeedbackQuestion::getQuestionOrder, Comparator.nullsLast(Comparator.naturalOrder())))
+        List<FeedbackAssignmentQuestion> missingRequiredQuestions = assignmentQuestions.values().stream()
+                .filter(question -> Boolean.TRUE.equals(question.getRequired()))
+                .filter(question -> !answeredAssignmentQuestionIds.contains(question.getId()))
+                .sorted(Comparator.comparing(FeedbackAssignmentQuestion::getSectionOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(FeedbackAssignmentQuestion::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
 
         if (!missingRequiredQuestions.isEmpty()) {
             String missingLabels = missingRequiredQuestions.stream()
                     .limit(5)
-                    .map(question -> {
-                        Integer order = question.getQuestionOrder();
-                        return order != null ? "Q" + order : "question " + question.getId();
-                    })
+                    .map(question -> question.getDisplayOrder() != null
+                            ? "Q" + question.getDisplayOrder()
+                            : question.getQuestionCode())
                     .collect(Collectors.joining(", "));
             throw new BusinessValidationException(
-                    "Please rate all required feedback questions before final submission. Missing: " + missingLabels + "."
+                    "Please answer all required feedback questions before final submission. Missing: " + missingLabels + "."
             );
         }
     }
 
     private void validateQuestionMembershipAndRatings(
             List<FeedbackResponseItem> items,
-            Map<Long, FeedbackQuestion> assignmentQuestions,
-            boolean requireRatingsForRequiredQuestions
+            Map<Long, FeedbackAssignmentQuestion> assignmentQuestions,
+            boolean requireAnswersForRequiredQuestions
     ) {
-        Set<Long> seenQuestionIds = new HashSet<>();
+        Set<Long> seenAssignmentQuestionIds = new HashSet<>();
+        Map<Long, FeedbackAssignmentQuestion> byLegacyQuestionId = assignmentQuestions.values().stream()
+                .filter(question -> question.getSourceQuestion() != null && question.getSourceQuestion().getId() != null)
+                .collect(Collectors.toMap(question -> question.getSourceQuestion().getId(), Function.identity(), (first, duplicate) -> first));
 
         for (FeedbackResponseItem item : items) {
-            Long questionId = item.getQuestion() != null ? item.getQuestion().getId() : null;
-            if (questionId == null) {
-                throw new BusinessValidationException("Question ID is required for each response item.");
-            }
-            if (!seenQuestionIds.add(questionId)) {
-                throw new BusinessValidationException("Duplicate responses for the same question are not allowed.");
-            }
-            FeedbackQuestion question = assignmentQuestions.get(questionId);
-            if (question == null) {
-                throw new BusinessValidationException("Question " + questionId + " does not belong to the assigned feedback form.");
-            }
-            item.setQuestion(question);
+            FeedbackAssignmentQuestion assignmentQuestion = resolveIncomingAssignmentQuestion(item, assignmentQuestions, byLegacyQuestionId);
+            Long assignmentQuestionId = assignmentQuestion.getId();
 
+            if (!seenAssignmentQuestionIds.add(assignmentQuestionId)) {
+                throw new BusinessValidationException("Duplicate responses for the same assignment question are not allowed.");
+            }
+
+            item.setAssignmentQuestion(assignmentQuestion);
+            item.setQuestion(assignmentQuestion.getSourceQuestion());
+
+            String responseType = normalizeResponseType(assignmentQuestion.getResponseType());
             Double ratingValue = item.getRatingValue();
-            if (ratingValue == null) {
-                if (requireRatingsForRequiredQuestions && Boolean.TRUE.equals(question.getIsRequired())) {
-                    throw new BusinessValidationException("Rating value is required for required question " + questionId + ".");
+            boolean ratingQuestion = isRatingResponseType(responseType);
+
+            if (!ratingQuestion) {
+                if (ratingValue != null) {
+                    throw new BusinessValidationException("Rating value is not allowed for non-rating question " + assignmentQuestion.getQuestionCode() + ".");
+                }
+                if (requireAnswersForRequiredQuestions
+                        && Boolean.TRUE.equals(assignmentQuestion.getRequired())
+                        && isBlank(item.getComment())) {
+                    throw new BusinessValidationException("Answer is required for question " + assignmentQuestion.getQuestionCode() + ".");
                 }
                 continue;
             }
 
-            double maxRating = resolveMaxRating(question);
+            if (ratingValue == null) {
+                if (requireAnswersForRequiredQuestions && Boolean.TRUE.equals(assignmentQuestion.getRequired())) {
+                    throw new BusinessValidationException("Rating value is required for question " + assignmentQuestion.getQuestionCode() + ".");
+                }
+                continue;
+            }
+
+            double maxRating = resolveMaxRating(assignmentQuestion);
             if (ratingValue < 1.0 || ratingValue > maxRating) {
                 throw new BusinessValidationException(
-                        "Rating for question " + questionId + " must be between 1 and " + formatScore(maxRating) + "."
+                        "Rating for question " + assignmentQuestion.getQuestionCode() + " must be between 1 and " + formatScore(maxRating) + "."
                 );
             }
         }
     }
 
+    private boolean isAnswered(FeedbackResponseItem item, FeedbackAssignmentQuestion question) {
+        if (question == null) {
+            return false;
+        }
+        if (isRatingResponseType(question.getResponseType())) {
+            return item.getRatingValue() != null;
+        }
+        return !isBlank(item.getComment());
+    }
+
+    private FeedbackAssignmentQuestion resolveIncomingAssignmentQuestion(
+            FeedbackResponseItem item,
+            Map<Long, FeedbackAssignmentQuestion> assignmentQuestions,
+            Map<Long, FeedbackAssignmentQuestion> byLegacyQuestionId
+    ) {
+        Long assignmentQuestionId = item.getAssignmentQuestion() != null ? item.getAssignmentQuestion().getId() : null;
+        if (assignmentQuestionId != null) {
+            FeedbackAssignmentQuestion assignmentQuestion = assignmentQuestions.get(assignmentQuestionId);
+            if (assignmentQuestion == null) {
+                throw new BusinessValidationException("Assignment question " + assignmentQuestionId + " does not belong to this evaluator assignment.");
+            }
+            return assignmentQuestion;
+        }
+
+        Long legacyQuestionId = item.getQuestion() != null ? item.getQuestion().getId() : null;
+        if (legacyQuestionId == null) {
+            throw new BusinessValidationException("Assignment Question ID is required for each response item.");
+        }
+        FeedbackAssignmentQuestion assignmentQuestion = byLegacyQuestionId.get(legacyQuestionId);
+        if (assignmentQuestion == null) {
+            throw new BusinessValidationException("Question " + legacyQuestionId + " does not belong to the assigned feedback form.");
+        }
+        return assignmentQuestion;
+    }
+
     /**
-     * Synchronizes response items by question ID instead of clearing the collection and inserting new rows.
-     *
-     * Draft responses already have one feedback_response_items row per question. When the evaluator later
-     * submits the final response, MySQL enforces the unique key (response_id, question_id). Clearing an
-     * orphan-removal collection and then adding new child entities can make Hibernate insert the new rows
-     * before deleting the old rows, which causes duplicate-key errors such as "Duplicate entry '1-14'".
-     *
-     * Updating existing child rows in place makes draft -> final submission idempotent.
+     * Synchronizes response items by assignment-question snapshot ID. This preserves idempotent
+     * draft -> final submission while allowing HR to reuse the same master question across many
+     * campaigns and evaluator relationship contexts.
      */
     private void syncResponseItems(
             FeedbackResponse response,
             List<FeedbackResponseItem> incomingItems,
-            Map<Long, FeedbackQuestion> assignmentQuestions
+            Map<Long, FeedbackAssignmentQuestion> assignmentQuestions
     ) {
-        Map<Long, FeedbackResponseItem> existingByQuestionId = response.getItems().stream()
+        Map<Long, FeedbackResponseItem> existingByAssignmentQuestionId = response.getItems().stream()
+                .filter(item -> item.getAssignmentQuestion() != null && item.getAssignmentQuestion().getId() != null)
+                .collect(Collectors.toMap(
+                        item -> item.getAssignmentQuestion().getId(),
+                        Function.identity(),
+                        (first, duplicate) -> first
+                ));
+
+        Map<Long, FeedbackResponseItem> existingByLegacyQuestionId = response.getItems().stream()
                 .filter(item -> item.getQuestion() != null && item.getQuestion().getId() != null)
                 .collect(Collectors.toMap(
                         item -> item.getQuestion().getId(),
@@ -521,61 +570,81 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
                         (first, duplicate) -> first
                 ));
 
-        Set<Long> incomingQuestionIds = new HashSet<>();
+        Set<Long> incomingAssignmentQuestionIds = new HashSet<>();
 
         for (FeedbackResponseItem incomingItem : incomingItems) {
-            Long questionId = incomingItem.getQuestion() != null ? incomingItem.getQuestion().getId() : null;
-            if (questionId == null) {
-                throw new BusinessValidationException("Question ID is required for each response item.");
+            FeedbackAssignmentQuestion assignmentQuestion = incomingItem.getAssignmentQuestion();
+            Long assignmentQuestionId = assignmentQuestion != null ? assignmentQuestion.getId() : null;
+            if (assignmentQuestionId == null && incomingItem.getQuestion() != null) {
+                Long legacyQuestionId = incomingItem.getQuestion().getId();
+                assignmentQuestion = assignmentQuestions.values().stream()
+                        .filter(candidate -> candidate.getSourceQuestion() != null
+                                && Objects.equals(candidate.getSourceQuestion().getId(), legacyQuestionId))
+                        .findFirst()
+                        .orElse(null);
+                assignmentQuestionId = assignmentQuestion == null ? null : assignmentQuestion.getId();
+            }
+            if (assignmentQuestionId == null) {
+                throw new BusinessValidationException("Assignment Question ID is required for each response item.");
             }
 
-            incomingQuestionIds.add(questionId);
-            FeedbackQuestion question = assignmentQuestions.get(questionId);
-            if (question == null) {
-                throw new BusinessValidationException("Question " + questionId + " does not belong to the assigned feedback form.");
+            assignmentQuestion = assignmentQuestions.get(assignmentQuestionId);
+            if (assignmentQuestion == null) {
+                throw new BusinessValidationException("Assignment question " + assignmentQuestionId + " does not belong to this evaluator assignment.");
             }
 
-            FeedbackResponseItem targetItem = existingByQuestionId.get(questionId);
+            incomingAssignmentQuestionIds.add(assignmentQuestionId);
+            FeedbackResponseItem targetItem = existingByAssignmentQuestionId.get(assignmentQuestionId);
+            if (targetItem == null && assignmentQuestion.getSourceQuestion() != null) {
+                targetItem = existingByLegacyQuestionId.get(assignmentQuestion.getSourceQuestion().getId());
+            }
             if (targetItem == null) {
                 targetItem = new FeedbackResponseItem();
                 targetItem.setResponse(response);
-                targetItem.setQuestion(question);
                 response.getItems().add(targetItem);
-            } else {
-                targetItem.setQuestion(question);
             }
 
-            targetItem.setRatingValue(incomingItem.getRatingValue());
+            targetItem.setAssignmentQuestion(assignmentQuestion);
+            targetItem.setQuestion(assignmentQuestion.getSourceQuestion());
+            targetItem.setRatingValue(isRatingResponseType(assignmentQuestion.getResponseType()) ? incomingItem.getRatingValue() : null);
             targetItem.setComment(incomingItem.getComment());
         }
 
         response.getItems().removeIf(existingItem -> {
-            Long questionId = existingItem.getQuestion() != null ? existingItem.getQuestion().getId() : null;
-            return questionId == null || !incomingQuestionIds.contains(questionId);
+            Long assignmentQuestionId = existingItem.getAssignmentQuestion() != null
+                    ? existingItem.getAssignmentQuestion().getId()
+                    : null;
+            return assignmentQuestionId == null || !incomingAssignmentQuestionIds.contains(assignmentQuestionId);
         });
     }
 
-    private Double calculateOverallScore(List<FeedbackResponseItem> items, Map<Long, FeedbackQuestion> assignmentQuestions) {
+    private Double calculateOverallScore(List<FeedbackResponseItem> items, Map<Long, FeedbackAssignmentQuestion> assignmentQuestions) {
         double weightedPoints = 0.0;
         double weightedPossiblePoints = 0.0;
 
         for (FeedbackResponseItem item : items) {
-            if (item.getRatingValue() == null) {
+            if (item.getRatingValue() == null || item.getAssignmentQuestion() == null) {
                 continue;
             }
 
-            Long questionId = item.getQuestion().getId();
-            FeedbackQuestion question = assignmentQuestions.get(questionId);
+            Long assignmentQuestionId = item.getAssignmentQuestion().getId();
+            FeedbackAssignmentQuestion question = assignmentQuestions.get(assignmentQuestionId);
             if (question == null) {
-                question = questionRepository.findById(questionId)
-                        .orElseThrow(() -> new ResourceNotFoundException("Feedback question not found: " + questionId));
+                throw new ResourceNotFoundException("Feedback assignment question not found: " + assignmentQuestionId);
+            }
+
+            if (!isScoredQuestion(question)) {
+                item.setAssignmentQuestion(question);
+                item.setQuestion(question.getSourceQuestion());
+                continue;
             }
 
             double weight = question.getWeight() != null && question.getWeight() > 0 ? question.getWeight() : 1.0;
             double maxRating = resolveMaxRating(question);
             weightedPoints += item.getRatingValue() * weight;
             weightedPossiblePoints += maxRating * weight;
-            item.setQuestion(question);
+            item.setAssignmentQuestion(question);
+            item.setQuestion(question.getSourceQuestion());
         }
 
         if (weightedPossiblePoints == 0) {
@@ -584,14 +653,54 @@ public class FeedbackResponseServiceImpl implements FeedbackResponseService {
         return roundToTwoDecimals((weightedPoints / weightedPossiblePoints) * 100.0);
     }
 
-    private double resolveMaxRating(FeedbackQuestion question) {
+    private boolean isScoredQuestion(FeedbackAssignmentQuestion question) {
+        if (question == null) {
+            return false;
+        }
+        return isRatingResponseType(question.getResponseType()) && SCORING_SCORED.equals(normalizeScoringBehavior(question.getScoringBehavior()));
+    }
+
+    private boolean isRatingResponseType(String responseType) {
+        String normalized = normalizeResponseType(responseType);
+        return RESPONSE_RATING_WITH_COMMENT.equals(normalized) || RESPONSE_RATING.equals(normalized);
+    }
+
+    private String normalizeResponseType(String responseType) {
+        if (responseType == null || responseType.isBlank()) {
+            return RESPONSE_RATING_WITH_COMMENT;
+        }
+        String value = responseType.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+        if (value.equals("RATING_ONLY")) {
+            value = RESPONSE_RATING;
+        }
+        if (value.equals("WRITTEN_ANSWER") || value.equals("WRITTEN_ANSWER_ONLY")) {
+            value = RESPONSE_TEXT;
+        }
+        if (value.equals("YESNO") || value.equals("YES_OR_NO")) {
+            value = RESPONSE_YES_NO;
+        }
+        return value;
+    }
+
+    private String normalizeScoringBehavior(String scoringBehavior) {
+        if (scoringBehavior == null || scoringBehavior.isBlank()) {
+            return SCORING_SCORED;
+        }
+        return scoringBehavior.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private double resolveMaxRating(FeedbackAssignmentQuestion question) {
         Integer ratingScaleId = question.getRatingScaleId();
         if (ratingScaleId == null) {
             return 5.0;
         }
         return ratingScaleRepository.findById(ratingScaleId)
                 .map(scale -> scale.getScales() != null && scale.getScales() > 0 ? scale.getScales().doubleValue() : 5.0)
-                .orElseThrow(() -> new BusinessValidationException("Rating scale not found for question " + question.getId() + "."));
+                .orElseThrow(() -> new BusinessValidationException("Rating scale not found for question " + question.getQuestionCode() + "."));
     }
 
     private double roundToTwoDecimals(double value) {

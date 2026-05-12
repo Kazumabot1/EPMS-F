@@ -6,6 +6,7 @@ import com.epms.dto.FeedbackReceivedItemResponse;
 import com.epms.dto.FeedbackSubmissionStatusResponse;
 import com.epms.dto.FeedbackResponseSubmitRequest;
 import com.epms.dto.GenericApiResponse;
+import com.epms.entity.FeedbackAssignmentQuestion;
 import com.epms.entity.FeedbackQuestion;
 import com.epms.entity.FeedbackResponse;
 import com.epms.entity.FeedbackResponseItem;
@@ -41,13 +42,7 @@ public class FeedbackResponseController {
 
         List<FeedbackResponseItem> items = new ArrayList<>();
         for (FeedbackResponseItemRequest itemReq : request.getResponses()) {
-            FeedbackResponseItem item = new FeedbackResponseItem();
-            FeedbackQuestion question = new FeedbackQuestion();
-            question.setId(itemReq.getQuestionId());
-            item.setQuestion(question);
-            item.setRatingValue(itemReq.getRatingValue());
-            item.setComment(itemReq.getComment());
-            items.add(item);
+            items.add(toResponseItem(itemReq));
         }
 
         FeedbackResponse savedDraft = feedbackResponseService.saveDraft(
@@ -71,13 +66,7 @@ public class FeedbackResponseController {
         List<FeedbackResponseItem> items = new ArrayList<>();
 
         for (FeedbackResponseItemRequest itemReq : request.getResponses()) {
-            FeedbackResponseItem item = new FeedbackResponseItem();
-            FeedbackQuestion question = new FeedbackQuestion();
-            question.setId(itemReq.getQuestionId());
-            item.setQuestion(question);
-            item.setRatingValue(itemReq.getRatingValue());
-            item.setComment(itemReq.getComment());
-            items.add(item);
+            items.add(toResponseItem(itemReq));
         }
 
         FeedbackResponse savedResponse = feedbackResponseService.submitResponse(
@@ -89,6 +78,23 @@ public class FeedbackResponseController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(GenericApiResponse.success("Feedback submitted successfully", savedResponse.getId()));
+    }
+
+    private FeedbackResponseItem toResponseItem(FeedbackResponseItemRequest itemReq) {
+        FeedbackResponseItem item = new FeedbackResponseItem();
+        if (itemReq.getAssignmentQuestionId() != null) {
+            FeedbackAssignmentQuestion assignmentQuestion = new FeedbackAssignmentQuestion();
+            assignmentQuestion.setId(itemReq.getAssignmentQuestionId());
+            item.setAssignmentQuestion(assignmentQuestion);
+        }
+        if (itemReq.getQuestionId() != null) {
+            FeedbackQuestion question = new FeedbackQuestion();
+            question.setId(itemReq.getQuestionId());
+            item.setQuestion(question);
+        }
+        item.setRatingValue(itemReq.getRatingValue());
+        item.setComment(itemReq.getComment());
+        return item;
     }
 
     @GetMapping("/my-status")

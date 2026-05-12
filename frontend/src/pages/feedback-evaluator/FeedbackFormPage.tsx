@@ -6,12 +6,13 @@ import {
   useSaveFeedbackDraft,
   useSubmitFeedbackResponse,
 } from '../../hooks/useFeedbackEvaluator';
-import type { FeedbackRelationshipType } from '../../types/feedbackEvaluator';
+import type { FeedbackAssignmentQuestionDetail, FeedbackRatingOption, FeedbackRelationshipType } from '../../types/feedbackEvaluator';
 
 type FormValues = {
   comments: string;
   responses: Array<{
-    questionId: number;
+    assignmentQuestionId: number;
+    questionId?: number;
     ratingValue: string;
     comment: string;
   }>;
@@ -20,13 +21,33 @@ type FormValues = {
 type LayoutMode = 'comfortable' | 'compact';
 type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-const RATING_OPTIONS = [
+const DEFAULT_RATING_OPTIONS: FeedbackRatingOption[] = [
   { value: 1, label: 'Unsatisfactory' },
   { value: 2, label: 'Needs improvement' },
   { value: 3, label: 'Meet requirement' },
   { value: 4, label: 'Good' },
   { value: 5, label: 'Outstanding' },
-] as const;
+];
+
+const getQuestionRatingOptions = (question?: FeedbackAssignmentQuestionDetail | null): FeedbackRatingOption[] => {
+  if (question?.ratingOptions?.length) {
+    return question.ratingOptions;
+  }
+  const max = question?.ratingScaleMax && question.ratingScaleMax > 0 ? question.ratingScaleMax : 5;
+  return Array.from({ length: max }, (_, index) => {
+    const value = index + 1;
+    return DEFAULT_RATING_OPTIONS.find((option) => option.value === value) ?? { value, label: `Rating ${value}` };
+  });
+};
+
+const getQuestionRatingBounds = (question?: FeedbackAssignmentQuestionDetail | null) => {
+  const options = getQuestionRatingOptions(question);
+  const values = options.map((option) => option.value);
+  return {
+    min: question?.ratingScaleMin ?? Math.min(...values, 1),
+    max: question?.ratingScaleMax ?? Math.max(...values, 5),
+  };
+};
 
 const RATING_GUIDE_STORAGE_KEY = 'feedback-form-rating-guide-seen';
 const LAYOUT_STORAGE_KEY = 'feedback-form-layout-mode';
@@ -196,7 +217,8 @@ const FeedbackFormPage = () => {
     reset({
       comments: assignment.comments ?? '',
       responses: flatQuestions.map((question) => ({
-        questionId: question.id,
+        assignmentQuestionId: question.assignmentQuestionId ?? question.id,
+        questionId: question.sourceQuestionId ?? question.id,
         ratingValue:
             question.existingRatingValue != null ? String(question.existingRatingValue) : '',
         comment: question.existingComment ?? '',
@@ -240,7 +262,8 @@ const FeedbackFormPage = () => {
       responses: values.responses.map((response, index) => {
         const rawValue = response.ratingValue.trim();
         return {
-          questionId: response.questionId || flatQuestions[index]?.id,
+          assignmentQuestionId: response.assignmentQuestionId || flatQuestions[index]?.assignmentQuestionId || flatQuestions[index]?.id,
+          questionId: response.questionId || flatQuestions[index]?.sourceQuestionId || flatQuestions[index]?.id,
           ratingValue: rawValue ? Number(rawValue) : null,
           comment: response.comment.trim() || undefined,
         };
@@ -251,7 +274,9 @@ const FeedbackFormPage = () => {
   const hasInvalidDraftRating = (payload: NonNullable<ReturnType<typeof buildDraftPayload>>) =>
       payload.responses.some((response) => {
         if (response.ratingValue == null) return false;
-        return !Number.isFinite(response.ratingValue) || response.ratingValue < 1 || response.ratingValue > 5;
+        const question = flatQuestions.find((item) => (item.assignmentQuestionId ?? item.id) === response.assignmentQuestionId);
+        const bounds = getQuestionRatingBounds(question);
+        return !Number.isFinite(response.ratingValue) || response.ratingValue < bounds.min || response.ratingValue > bounds.max;
       });
 
   useEffect(() => {
@@ -303,16 +328,18 @@ const FeedbackFormPage = () => {
           }
 
           const numericValue = Number(rawValue);
-          if (!Number.isFinite(numericValue) || numericValue < 1 || numericValue > 5) {
+          const bounds = getQuestionRatingBounds(question);
+          if (!Number.isFinite(numericValue) || numericValue < bounds.min || numericValue > bounds.max) {
             setError(`responses.${index}.ratingValue`, {
               type: 'validate',
-              message: 'Ratings must be between 1 and 5.',
+              message: `Ratings must be between ${bounds.min} and ${bounds.max}.`,
             });
             hasClientError = true;
             return null;
           }
 
           return {
+            assignmentQuestionId: response.assignmentQuestionId,
             questionId: response.questionId,
             ratingValue: numericValue,
             comment: response.comment.trim() || undefined,
@@ -333,13 +360,15 @@ const FeedbackFormPage = () => {
 
     const invalidRatingIndex = payload.responses.findIndex((response) => {
       if (response.ratingValue == null) return false;
-      return !Number.isFinite(response.ratingValue) || response.ratingValue < 1 || response.ratingValue > 5;
+      const question = flatQuestions.find((item) => (item.assignmentQuestionId ?? item.id) === response.assignmentQuestionId);
+      const bounds = getQuestionRatingBounds(question);
+      return !Number.isFinite(response.ratingValue) || response.ratingValue < bounds.min || response.ratingValue > bounds.max;
     });
 
     if (invalidRatingIndex >= 0) {
       setError(`responses.${invalidRatingIndex}.ratingValue`, {
         type: 'validate',
-        message: 'Ratings must be between 1 and 5.',
+        message: 'Rating is outside the allowed scale for this question.',
       });
       return;
     }
@@ -575,7 +604,7 @@ const FeedbackFormPage = () => {
               <div className="feedback-rating-scale-copy">
                 <div>
                   <strong>Rating scale</strong>
-                  <span>{ratingGuideCollapsed ? 'Collapsed to reduce form noise.' : 'Select one score from 1 to 5 for each question. The scale appears here once and can be collapsed anytime.'}</span>
+                  <span>{ratingGuideCollapsed ? 'Collapsed to reduce form noise.' : 'Select one score from the question-specific scale. The default guide appears here and can be collapsed anytime.'}</span>
                 </div>
                 <button type="button" onClick={handleRatingGuideToggle}>
                   {ratingGuideCollapsed ? 'Show scale' : 'Hide scale'}
@@ -583,7 +612,7 @@ const FeedbackFormPage = () => {
               </div>
               {!ratingGuideCollapsed ? (
                   <div className="feedback-rating-scale-list">
-                    {RATING_OPTIONS.map((option) => (
+                    {getQuestionRatingOptions(flatQuestions[0]).map((option) => (
                         <div key={option.value} className="feedback-rating-scale-chip">
                           <strong>{option.value}</strong>
                           <span>{option.label}</span>
@@ -637,7 +666,8 @@ const FeedbackFormPage = () => {
                         {section.questions.map((question) => {
                           const formIndex = flatQuestions.findIndex((item) => item.id === question.id);
                           const selectedRating = watchedResponses?.[formIndex]?.ratingValue ?? '';
-                          const selectedOption = RATING_OPTIONS.find((option) => String(option.value) === selectedRating);
+                          const ratingOptions = getQuestionRatingOptions(question);
+                          const selectedOption = ratingOptions.find((option) => String(option.value) === selectedRating);
                           const responseCommentRegistration = register(`responses.${formIndex}.comment`);
                           return (
                               <article
@@ -658,14 +688,21 @@ const FeedbackFormPage = () => {
 
                                 <input
                                     type="hidden"
+                                    {...register(`responses.${formIndex}.assignmentQuestionId`, {
+                                      value: question.assignmentQuestionId ?? question.id,
+                                      valueAsNumber: true,
+                                    })}
+                                />
+                                <input
+                                    type="hidden"
                                     {...register(`responses.${formIndex}.questionId`, {
-                                      value: question.id,
+                                      value: question.sourceQuestionId ?? question.id,
                                       valueAsNumber: true,
                                     })}
                                 />
 
                                 <div className="feedback-rating-choice-row feedback-rating-choice-row-clean" role="radiogroup" aria-label={`Rating for ${question.questionText}`}>
-                                  {RATING_OPTIONS.map((option) => {
+                                  {ratingOptions.map((option) => {
                                     const isSelected = selectedRating === String(option.value);
                                     return (
                                         <button

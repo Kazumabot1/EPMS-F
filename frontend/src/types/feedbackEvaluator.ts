@@ -28,11 +28,24 @@ export interface FeedbackEvaluatorTask {
   submittedAt: string | null;
 }
 
+export interface FeedbackRatingOption {
+  value: number;
+  label: string;
+}
+
 export interface FeedbackAssignmentQuestionDetail {
   id: number;
+  assignmentQuestionId?: number;
+  sourceQuestionId?: number | null;
+  questionCode?: string | null;
+  competencyCode?: string | null;
+  responseType?: 'RATING' | 'RATING_WITH_COMMENT' | 'TEXT' | 'YES_NO' | 'MULTI_SELECT' | string;
   questionText: string;
   questionOrder: number;
   ratingScaleId: number | null;
+  ratingScaleMin?: number | null;
+  ratingScaleMax?: number | null;
+  ratingOptions?: FeedbackRatingOption[];
   weight: number | null;
   required: boolean;
   existingRatingValue: number | null;
@@ -41,6 +54,7 @@ export interface FeedbackAssignmentQuestionDetail {
 
 export interface FeedbackAssignmentSectionDetail {
   id: number;
+  sectionCode?: string | null;
   title: string;
   orderNo: number;
   questions: FeedbackAssignmentQuestionDetail[];
@@ -78,7 +92,8 @@ export interface SubmitFeedbackResponsePayload {
   evaluatorAssignmentId: number;
   comments?: string;
   responses: Array<{
-    questionId: number;
+    assignmentQuestionId?: number;
+    questionId?: number;
     ratingValue: number;
     comment?: string;
   }>;
@@ -88,7 +103,8 @@ export interface SaveFeedbackDraftPayload {
   evaluatorAssignmentId: number;
   comments?: string;
   responses: Array<{
-    questionId: number;
+    assignmentQuestionId?: number;
+    questionId?: number;
     ratingValue?: number | null;
     comment?: string;
   }>;

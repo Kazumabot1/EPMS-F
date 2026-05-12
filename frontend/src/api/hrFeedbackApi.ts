@@ -74,6 +74,121 @@ export interface RatingScaleOption {
   maxScore?: number;
 }
 
+
+export type FeedbackRelationshipType = 'ANY' | 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF' | 'PROJECT_STAKEHOLDER';
+export type FeedbackQuestionRuleRole = 'MANAGER' | 'PEER' | 'SUBORDINATE' | 'SELF';
+
+export interface QuestionBankItem {
+  id: number;
+  questionCode?: string;
+  competencyCode: string;
+  questionText: string;
+  responseType: string;
+  scoringBehavior?: string | null;
+  ratingScaleId?: number | null;
+  weight: number;
+  required: boolean;
+  helpText?: string | null;
+  status: string;
+  activeVersionId?: number | null;
+  activeVersionNumber?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface QuestionBankPayload {
+  questionCode?: string;
+  competencyCode: string;
+  questionText: string;
+  responseType: string;
+  scoringBehavior?: string | null;
+  ratingScaleId?: number | null;
+  weight: number;
+  required: boolean;
+  helpText?: string | null;
+  status?: string;
+}
+
+export interface QuestionRuleItem {
+  id: number;
+  questionBankId?: number | null;
+  questionVersionId: number;
+  questionCode?: string | null;
+  competencyCode?: string | null;
+  questionText?: string | null;
+  responseType?: string | null;
+  scoringBehavior?: string | null;
+  questionStatus?: string | null;
+  effectiveActive?: boolean | null;
+  targetLevelMinRank: number;
+  targetLevelMaxRank: number;
+  targetPositionId?: number | null;
+  targetDepartmentId?: number | null;
+  evaluatorRelationshipType: FeedbackRelationshipType | string;
+  evaluatorRelationshipTypes?: Array<FeedbackQuestionRuleRole | string>;
+  sectionCode: string;
+  sectionTitle: string;
+  sectionOrder: number;
+  displayOrder: number;
+  required: boolean;
+  weight: number;
+  rulePriority: number;
+  active: boolean;
+  updatedAt?: string | null;
+}
+
+export interface QuestionRulePayload {
+  questionVersionId: number;
+  targetLevelMinRank: number;
+  targetLevelMaxRank: number;
+  targetPositionId?: number | null;
+  targetDepartmentId?: number | null;
+  evaluatorRelationshipType: FeedbackRelationshipType | string;
+  evaluatorRelationshipTypes?: Array<FeedbackQuestionRuleRole | string>;
+  sectionCode: string;
+  sectionTitle: string;
+  sectionOrder: number;
+  displayOrder: number;
+  requiredOverride?: boolean | null;
+  weightOverride?: number | null;
+  rulePriority: number;
+  active: boolean;
+}
+
+export interface DynamicPreviewQuestion {
+  id?: number | null;
+  assignmentQuestionId?: number | null;
+  questionCode: string;
+  competencyCode?: string | null;
+  responseType: string;
+  scoringBehavior?: string | null;
+  questionText: string;
+  questionOrder: number;
+  ratingScaleId?: number | null;
+  ratingScaleMin?: number | null;
+  ratingScaleMax?: number | null;
+  weight: number;
+  required: boolean;
+}
+
+export interface DynamicPreviewSection {
+  id?: number | null;
+  sectionCode: string;
+  title: string;
+  orderNo: number;
+  questions: DynamicPreviewQuestion[];
+}
+
+export interface DynamicFormPreview {
+  levelCode: string;
+  levelRank: number;
+  relationshipType: string;
+  targetPositionId?: number | null;
+  targetDepartmentId?: number | null;
+  totalQuestions: number;
+  sections: DynamicPreviewSection[];
+}
+
 type ApiFeedbackCampaign = Partial<FeedbackCampaign> & {
   id: number;
   name: string;
@@ -194,6 +309,93 @@ const normalizeFormOptions = (forms: (Partial<FormOptionItem> & { id: number })[
     (forms ?? []).map(normalizeFormOption);
 
 export const hrFeedbackApi = {
+
+  async getQuestionBank(): Promise<QuestionBankItem[]> {
+    try {
+      const res = await api.get<ApiEnvelope<QuestionBankItem[]>>(`${BASE}/question-bank/questions`);
+      return unwrap(res) ?? [];
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to load the feedback question bank.'));
+    }
+  },
+
+  async createQuestionBankItem(payload: QuestionBankPayload): Promise<QuestionBankItem> {
+    try {
+      const res = await api.post<ApiEnvelope<QuestionBankItem>>(`${BASE}/question-bank/questions`, payload);
+      return unwrap(res);
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to create feedback question.'));
+    }
+  },
+
+  async updateQuestionBankItem(questionId: number, payload: QuestionBankPayload): Promise<QuestionBankItem> {
+    try {
+      const res = await api.put<ApiEnvelope<QuestionBankItem>>(`${BASE}/question-bank/questions/${questionId}`, payload);
+      return unwrap(res);
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to update feedback question.'));
+    }
+  },
+
+  async getQuestionRules(): Promise<QuestionRuleItem[]> {
+    try {
+      const res = await api.get<ApiEnvelope<QuestionRuleItem[]>>(`${BASE}/question-bank/rules`);
+      return unwrap(res) ?? [];
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to load feedback question rules.'));
+    }
+  },
+
+  async createQuestionRule(payload: QuestionRulePayload): Promise<QuestionRuleItem[]> {
+    try {
+      const res = await api.post<ApiEnvelope<QuestionRuleItem[] | QuestionRuleItem>>(`${BASE}/question-bank/rules`, payload);
+      const data = unwrap(res);
+      return Array.isArray(data) ? data : [data];
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to create feedback question rule.'));
+    }
+  },
+
+  async updateQuestionRule(ruleId: number, payload: QuestionRulePayload): Promise<QuestionRuleItem> {
+    try {
+      const res = await api.put<ApiEnvelope<QuestionRuleItem>>(`${BASE}/question-bank/rules/${ruleId}`, payload);
+      return unwrap(res);
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to update feedback question rule.'));
+    }
+  },
+
+  async deactivateQuestionRule(ruleId: number): Promise<void> {
+    try {
+      await api.delete(`${BASE}/question-bank/rules/${ruleId}`);
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to deactivate feedback question rule.'));
+    }
+  },
+
+  async activateQuestionRule(ruleId: number): Promise<QuestionRuleItem> {
+    try {
+      const res = await api.patch<ApiEnvelope<QuestionRuleItem>>(`${BASE}/question-bank/rules/${ruleId}/activate`);
+      return unwrap(res);
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to activate feedback question rule.'));
+    }
+  },
+
+  async previewDynamicForm(params: {
+    levelCode: string;
+    relationshipType: string;
+    targetPositionId?: number | null;
+    targetDepartmentId?: number | null;
+  }): Promise<DynamicFormPreview> {
+    try {
+      const res = await api.get<ApiEnvelope<DynamicFormPreview>>(`${BASE}/question-bank/preview`, { params });
+      return unwrap(res);
+    } catch (e) {
+      throw new Error(extractApiErrorMessage(e, 'Failed to generate dynamic form preview.'));
+    }
+  },
+
   async getAllForms(): Promise<FormOptionItem[]> {
     try {
       const res = await api.get<ApiEnvelope<FormOptionItem[]>>(`${BASE}/forms`);

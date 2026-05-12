@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import './hr-feedback-dashboard.css';
 import FormManagementTab from './tabs/FormManagementTab';
+import DynamicQuestionBankTab from './tabs/DynamicQuestionBankTab';
 import CampaignSetupTab from './tabs/CampaignSetupTab';
 import EmployeeTargetingTab from './tabs/EmployeeTargetingTab';
 import AssignmentPreviewTab from './tabs/AssignmentPreviewTab';
@@ -8,7 +9,7 @@ import CampaignMonitoringTab from './tabs/CampaignActivationTab';
 import AnalyticsTab from './tabs/AnalyticsTab';
 import type { FeedbackCampaign, EvaluatorConfigInput, FeedbackAssignmentGenerationResponse } from '../../types/feedbackCampaign';
 
-type TabId = 0 | 1 | 2 | 3 | 4 | 5;
+type TabId = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 interface TabDef {
   id: TabId;
@@ -25,12 +26,13 @@ interface FeedbackWorkflowDraftState {
 }
 
 const TABS: TabDef[] = [
-  { id: 0, label: 'Form Management', shortLabel: 'Forms', icon: 'bi bi-ui-checks' },
-  { id: 1, label: 'Campaign Setup', shortLabel: 'Campaigns', icon: 'bi bi-megaphone' },
-  { id: 2, label: 'Target & Evaluators', shortLabel: 'Targets', icon: 'bi bi-people' },
-  { id: 3, label: 'Assignment Preview', shortLabel: 'Preview', icon: 'bi bi-clipboard-check' },
-  { id: 4, label: 'Monitoring', shortLabel: 'Monitor', icon: 'bi bi-graph-up-arrow' },
-  { id: 5, label: 'Analytics', shortLabel: 'Analytics', icon: 'bi bi-bar-chart-line' },
+  { id: 0, label: 'Legacy Form Management', shortLabel: 'Forms', icon: 'bi bi-ui-checks' },
+  { id: 1, label: 'Dynamic Question Bank', shortLabel: 'Question Bank', icon: 'bi bi-diagram-3' },
+  { id: 2, label: 'Campaign Setup', shortLabel: 'Campaigns', icon: 'bi bi-megaphone' },
+  { id: 3, label: 'Target & Evaluators', shortLabel: 'Targets', icon: 'bi bi-people' },
+  { id: 4, label: 'Assignment Preview', shortLabel: 'Preview', icon: 'bi bi-clipboard-check' },
+  { id: 5, label: 'Monitoring', shortLabel: 'Monitor', icon: 'bi bi-graph-up-arrow' },
+  { id: 6, label: 'Analytics', shortLabel: 'Analytics', icon: 'bi bi-bar-chart-line' },
 ];
 
 const DEFAULT_EVAL_CONFIG: EvaluatorConfigInput = {
@@ -86,7 +88,7 @@ const readStoredWorkflow = (): FeedbackWorkflowDraftState => {
 
 export default function HrFeedbackDashboard() {
   const storedWorkflow = useMemo(readStoredWorkflow, []);
-  const [activeTab, setActiveTab] = useState<TabId>(0);
+  const [activeTab, setActiveTab] = useState<TabId>(1);
 
   const [campaign, setCampaign] = useState<FeedbackCampaign | null>(null);
   const [savedTargetIds, setSavedTargetIds] = useState<number[]>(storedWorkflow.savedTargetIds);
@@ -118,11 +120,12 @@ export default function HrFeedbackDashboard() {
   };
 
   const hasProgress = (id: TabId): boolean => {
-    if (id === 1) return campaign !== null;
-    if (id === 2) return savedTargetIds.length > 0;
-    if (id === 3) return assignmentResult !== null;
-    if (id === 4) return campaign !== null;
-    if (id === 5) return campaign?.status === 'CLOSED';
+    if (id === 1) return true;
+    if (id === 2) return campaign !== null;
+    if (id === 3) return savedTargetIds.length > 0;
+    if (id === 4) return assignmentResult !== null;
+    if (id === 5) return campaign !== null;
+    if (id === 6) return campaign?.status === 'CLOSED';
     return false;
   };
 
@@ -133,8 +136,8 @@ export default function HrFeedbackDashboard() {
   };
 
   const goToTab = (id: TabId) => {
-    if (targetsDirty && id >= 3) {
-      setWorkflowNotice('You have unsaved target changes. Save Targets in Tab 3 before going to Preview, Monitoring, or Analytics so the saved campaign and preview stay consistent.');
+    if (targetsDirty && id >= 4) {
+      setWorkflowNotice('You have unsaved target changes. Save Targets before going to Preview, Monitoring, or Analytics so the saved campaign and preview stay consistent.');
       setActiveTab(2);
       return;
     }
@@ -154,7 +157,7 @@ export default function HrFeedbackDashboard() {
             <i className="bi bi-arrow-repeat" />
             360-Degree Feedback
           </h1>
-          <p>HR Management Console — open any module directly. Campaign, target, and evaluator configuration now stay synchronized across tabs.</p>
+          <p>HR Management Console — manage the dynamic question bank, level/role rules, campaigns, targets, evaluator assignments, and analytics from one workflow.</p>
         </div>
 
         <div className="hfd-steps hfd-tabs-nav" role="tablist" aria-label="360 feedback modules">
@@ -191,6 +194,10 @@ export default function HrFeedbackDashboard() {
           )}
 
           {activeTab === 1 && (
+              <DynamicQuestionBankTab />
+          )}
+
+          {activeTab === 2 && (
               <CampaignSetupTab
                   onCampaignCreated={(createdCampaign) => {
                     applyCampaignSelection(createdCampaign);
@@ -198,7 +205,7 @@ export default function HrFeedbackDashboard() {
               />
           )}
 
-          {activeTab === 2 && (
+          {activeTab === 3 && (
               <EmployeeTargetingTab
                   campaign={campaign}
                   targetIds={draftTargetIds}
@@ -227,12 +234,12 @@ export default function HrFeedbackDashboard() {
                     setEvalConfig(cfg);
                     setAssignmentResult(null);
                     setWorkflowNotice('');
-                    setActiveTab(3);
+                    setActiveTab(4);
                   }}
               />
           )}
 
-          {activeTab === 3 && (
+          {activeTab === 4 && (
               <AssignmentPreviewTab
                   campaign={campaign}
                   targetIds={savedTargetIds}
@@ -244,11 +251,11 @@ export default function HrFeedbackDashboard() {
               />
           )}
 
-          {activeTab === 4 && (
+          {activeTab === 5 && (
               <CampaignMonitoringTab activeCampaign={campaign} />
           )}
 
-          {activeTab === 5 && (
+          {activeTab === 6 && (
               <AnalyticsTab />
           )}
 
