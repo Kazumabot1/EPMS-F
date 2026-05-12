@@ -1,0 +1,313 @@
+package com.epms.service.impl;
+
+import com.epms.entity.Employee;
+import com.epms.entity.FeedbackAssignmentQuestion;
+import com.epms.entity.FeedbackEvaluatorAssignment;
+import com.epms.entity.FeedbackQuestion;
+import com.epms.entity.FeedbackQuestionApplicabilityRule;
+import com.epms.entity.FeedbackQuestionBank;
+import com.epms.entity.FeedbackQuestionVersion;
+import com.epms.entity.FeedbackSection;
+import com.epms.exception.ResourceNotFoundException;
+import com.epms.repository.EmployeeRepository;
+import com.epms.repository.FeedbackAssignmentQuestionRepository;
+import com.epms.repository.FeedbackEvaluatorAssignmentRepository;
+import com.epms.repository.FeedbackFormRepository;
+import com.epms.repository.FeedbackQuestionApplicabilityRuleRepository;
+import com.epms.service.FeedbackQuestionResolverService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+@Service
+@RequiredArgsConstructor
+public class FeedbackQuestionResolverServiceImpl implements FeedbackQuestionResolverService {
+
+    private static final String LEGACY_COMPETENCY = "LEGACY_FORM";
+    private static final String DEFAULT_RESPONSE_TYPE = "RATING_WITH_COMMENT";
+    private static final String RESPONSE_RATING_WITH_COMMENT = "RATING_WITH_COMMENT";
+    private static final String RESPONSE_RATING = "RATING";
+    private static final String RESPONSE_TEXT = "TEXT";
+    private static final String RESPONSE_YES_NO = "YES_NO";
+    private static final String SCORING_SCORED = "SCORED";
+    private static final String SCORING_NON_SCORED = "NON_SCORED";
+    private static final String SCORING_HR_REVIEW = "HR_REVIEW";
+
+    private final FeedbackAssignmentQuestionRepository assignmentQuestionRepository;
+    private final FeedbackQuestionApplicabilityRuleRepository ruleRepository;
+    private final FeedbackEvaluatorAssignmentRepository assignmentRepository;
+    private final FeedbackFormRepository feedbackFormRepository;
+    private final EmployeeRepository employeeRepository;
+
+    @Override
+    @Transactional
+    public List<FeedbackAssignmentQuestion> findOrCreateAssignmentQuestions(FeedbackEvaluatorAssignment assignment) {
+        if (assignment == null || assignment.getId() == null) {
+            throw new ResourceNotFoundException("Feedback assignment not found.");
+        }
+
+        List<FeedbackAssignmentQuestion> existing = assignmentQuestionRepository.findDetailedByAssignmentId(assignment.getId());
+        if (!existing.isEmpty()) {
+            return existing;
+        }
+
+        List<FeedbackAssignmentQuestion> snapshots = resolveForAssignment(assignment);
+        if (snapshots.isEmpty()) {
+            throw new ResourceNotFoundException("No feedback questions are configured for this assignment.");
+        }
+        assignmentQuestionRepository.saveAll(snapshots);
+        return assignmentQuestionRepository.findDetailedByAssignmentId(assignment.getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FeedbackAssignmentQuestion> getAssignmentQuestions(Long assignmentId) {
+        return assignmentQuestionRepository.findDetailedByAssignmentId(assignmentId);
+    }
+
+    @Override
+    @Transactional
+    public void snapshotCampaignAssignments(Long campaignId) {
+        List<FeedbackEvaluatorAssignment> assignments = assignmentRepository.findByCampaignIdWithRequest(campaignId);
+        for (FeedbackEvaluatorAssignment assignment : assignments) {
+            findOrCreateAssignmentQuestions(assignment);
+        }
+    }
+
+    private List<FeedbackAssignmentQuestion> resolveForAssignment(FeedbackEvaluatorAssignment assignment) {
+        Employee targetEmployee = employeeRepository.findById(assignment.getFeedbackRequest().getTargetEmployeeId().intValue())
+                .orElse(null);
+        int levelRank = resolveLevelRank(targetEmployee);
+        Long positionId = targetEmployee != null && targetEmployee.getPosition() != null && targetEmployee.getPosition().getId() != null
+                ? targetEmployee.getPosition().getId().longValue()
+                : null;
+        Long departmentId = resolveDepartmentId(targetEmployee);
+
+        List<FeedbackQuestionApplicabilityRule> rules = ruleRepository.findApplicableRules(
+                levelRank,
+                positionId,
+                departmentId,
+                assignment.getRelationshipType().name(),
+                LocalDate.now()
+        );
+
+        if (!rules.isEmpty()) {
+            return snapshotRuleQuestions(assignment, rules);
+        }
+
+        return snapshotLegacyFormQuestions(assignment);
+    }
+
+    private List<FeedbackAssignmentQuestion> snapshotRuleQuestions(
+            FeedbackEvaluatorAssignment assignment,
+            List<FeedbackQuestionApplicabilityRule> rules
+    ) {
+        Map<String, FeedbackAssignmentQuestion> byQuestionCode = new LinkedHashMap<>();
+
+        for (FeedbackQuestionApplicabilityRule rule : rules) {
+            FeedbackQuestionVersion version = rule.getQuestionVersion();
+            if (version == null || version.getQuestionBank() == null) {
+                continue;
+            }
+
+            FeedbackQuestionBank bank = version.getQuestionBank();
+            String questionCode = normalizeCode(bank.getQuestionCode(), "BANK-Q-" + version.getId());
+            byQuestionCode.putIfAbsent(questionCode, fromRule(assignment, rule, version, bank, questionCode));
+        }
+
+        return byQuestionCode.values().stream()
+                .sorted(Comparator.comparing(FeedbackAssignmentQuestion::getSectionOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(FeedbackAssignmentQuestion::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(FeedbackAssignmentQuestion::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+    }
+
+    private FeedbackAssignmentQuestion fromRule(
+            FeedbackEvaluatorAssignment assignment,
+            FeedbackQuestionApplicabilityRule rule,
+            FeedbackQuestionVersion version,
+            FeedbackQuestionBank bank,
+            String questionCode
+    ) {
+        FeedbackAssignmentQuestion snapshot = new FeedbackAssignmentQuestion();
+        snapshot.setAssignment(assignment);
+        snapshot.setQuestionVersion(version);
+        snapshot.setQuestionBankId(bank.getId());
+        snapshot.setQuestionCode(questionCode);
+        snapshot.setCompetencyCode(bank.getCompetencyCode());
+        snapshot.setQuestionTextSnapshot(firstNonBlank(version.getQuestionText(), bank.getDefaultText()));
+        String responseType = normalizeResponseType(firstNonBlank(version.getResponseType(), bank.getDefaultResponseType(), DEFAULT_RESPONSE_TYPE));
+        String scoringBehavior = resolveScoringBehavior(version, bank, responseType);
+        snapshot.setResponseType(responseType);
+        snapshot.setScoringBehavior(scoringBehavior);
+        snapshot.setRatingScaleId(isRatingResponseType(responseType) ? version.getRatingScaleId() != null ? version.getRatingScaleId() : bank.getDefaultRatingScaleId() : null);
+        snapshot.setRequired(rule.getRequiredOverride() != null ? rule.getRequiredOverride() : Boolean.TRUE.equals(bank.getDefaultRequired()));
+        snapshot.setWeight(isScored(responseType, scoringBehavior) ? resolveWeight(rule.getWeightOverride(), bank.getDefaultWeight()) : 1.0);
+        snapshot.setSectionCode(normalizeCode(rule.getSectionCode(), "GENERAL"));
+        snapshot.setSectionTitle(firstNonBlank(rule.getSectionTitle(), "General Feedback"));
+        snapshot.setSectionOrder(rule.getSectionOrder());
+        snapshot.setDisplayOrder(rule.getDisplayOrder());
+        return snapshot;
+    }
+
+    private List<FeedbackAssignmentQuestion> snapshotLegacyFormQuestions(FeedbackEvaluatorAssignment assignment) {
+        Long formId = assignment.getFeedbackRequest().getForm().getId();
+        List<FeedbackSection> sections = feedbackFormRepository.findSectionsWithQuestionsByFormId(formId);
+        if (sections == null || sections.isEmpty()) {
+            return List.of();
+        }
+
+        List<FeedbackAssignmentQuestion> snapshots = new ArrayList<>();
+        for (FeedbackSection section : sections) {
+            if (section.getQuestions() == null) {
+                continue;
+            }
+            for (FeedbackQuestion question : section.getQuestions()) {
+                if (question == null || question.getId() == null) {
+                    continue;
+                }
+                FeedbackAssignmentQuestion snapshot = new FeedbackAssignmentQuestion();
+                snapshot.setAssignment(assignment);
+                snapshot.setSourceQuestion(question);
+                snapshot.setQuestionCode("LEGACY-Q-" + question.getId());
+                snapshot.setCompetencyCode(LEGACY_COMPETENCY);
+                snapshot.setQuestionTextSnapshot(question.getQuestionText());
+                snapshot.setResponseType(DEFAULT_RESPONSE_TYPE);
+                snapshot.setScoringBehavior(SCORING_SCORED);
+                snapshot.setRatingScaleId(question.getRatingScaleId());
+                snapshot.setRequired(Boolean.TRUE.equals(question.getIsRequired()));
+                snapshot.setWeight(resolveWeight(question.getWeight(), 1.0));
+                snapshot.setSectionCode("LEGACY-SECTION-" + (section.getId() == null ? section.getOrderNo() : section.getId()));
+                snapshot.setSectionTitle(firstNonBlank(section.getTitle(), "Evaluation"));
+                snapshot.setSectionOrder(section.getOrderNo() == null ? 1 : section.getOrderNo());
+                snapshot.setDisplayOrder(question.getQuestionOrder() == null ? snapshots.size() + 1 : question.getQuestionOrder());
+                snapshots.add(snapshot);
+            }
+        }
+        return snapshots;
+    }
+
+
+    private String normalizeResponseType(String responseType) {
+        String value = firstNonBlank(responseType, DEFAULT_RESPONSE_TYPE)
+                .trim()
+                .toUpperCase()
+                .replace('-', '_')
+                .replace(' ', '_');
+        if (value.equals("RATING_ONLY")) {
+            value = RESPONSE_RATING;
+        }
+        if (value.equals("WRITTEN_ANSWER") || value.equals("WRITTEN_ANSWER_ONLY")) {
+            value = RESPONSE_TEXT;
+        }
+        if (value.equals("YESNO") || value.equals("YES_OR_NO")) {
+            value = RESPONSE_YES_NO;
+        }
+        if (List.of(RESPONSE_RATING_WITH_COMMENT, RESPONSE_RATING, RESPONSE_TEXT, RESPONSE_YES_NO).contains(value)) {
+            return value;
+        }
+        return DEFAULT_RESPONSE_TYPE;
+    }
+
+    private String resolveScoringBehavior(FeedbackQuestionVersion version, FeedbackQuestionBank bank, String responseType) {
+        String scoring = firstNonBlank(
+                version == null ? null : version.getScoringBehavior(),
+                bank == null ? null : bank.getDefaultScoringBehavior(),
+                inferDefaultScoringBehavior(responseType)
+        ).trim().toUpperCase().replace('-', '_').replace(' ', '_');
+        if (!List.of(SCORING_SCORED, SCORING_NON_SCORED, SCORING_HR_REVIEW).contains(scoring)) {
+            scoring = inferDefaultScoringBehavior(responseType);
+        }
+        if (!isRatingResponseType(responseType) && SCORING_SCORED.equals(scoring)) {
+            return inferDefaultScoringBehavior(responseType);
+        }
+        return scoring;
+    }
+
+    private String inferDefaultScoringBehavior(String responseType) {
+        String normalized = normalizeResponseType(responseType);
+        if (isRatingResponseType(normalized)) {
+            return SCORING_SCORED;
+        }
+        if (RESPONSE_YES_NO.equals(normalized)) {
+            return SCORING_HR_REVIEW;
+        }
+        return SCORING_NON_SCORED;
+    }
+
+    private boolean isRatingResponseType(String responseType) {
+        String normalized = normalizeResponseType(responseType);
+        return RESPONSE_RATING_WITH_COMMENT.equals(normalized) || RESPONSE_RATING.equals(normalized);
+    }
+
+    private boolean isScored(String responseType, String scoringBehavior) {
+        return isRatingResponseType(responseType) && SCORING_SCORED.equals(scoringBehavior);
+    }
+
+
+    private Long resolveDepartmentId(Employee employee) {
+        if (employee == null || employee.getEmployeeDepartments() == null) {
+            return null;
+        }
+        return employee.getEmployeeDepartments().stream()
+                .filter(Objects::nonNull)
+                .filter(assignment -> assignment.getEnddate() == null)
+                .findFirst()
+                .map(assignment -> assignment.getParentDepartment() != null ? assignment.getParentDepartment() : assignment.getCurrentDepartment())
+                .filter(Objects::nonNull)
+                .map(department -> department.getId() == null ? null : department.getId().longValue())
+                .orElse(null);
+    }
+
+    private int resolveLevelRank(Employee employee) {
+        if (employee == null || employee.getPosition() == null || employee.getPosition().getLevel() == null) {
+            return 9;
+        }
+        String levelCode = employee.getPosition().getLevel().getLevelCode();
+        if (levelCode == null || levelCode.isBlank()) {
+            return 9;
+        }
+        String digits = levelCode.replaceAll("\\D+", "");
+        if (digits.isBlank()) {
+            return 9;
+        }
+        try {
+            int parsed = Integer.parseInt(digits);
+            return Math.max(1, Math.min(9, parsed));
+        } catch (NumberFormatException ignored) {
+            return 9;
+        }
+    }
+
+    private Double resolveWeight(Double primary, Double fallback) {
+        if (primary != null && primary > 0) {
+            return primary;
+        }
+        if (fallback != null && fallback > 0) {
+            return fallback;
+        }
+        return 1.0;
+    }
+
+    private String normalizeCode(String value, String fallback) {
+        String normalized = firstNonBlank(value, fallback);
+        return normalized.trim().replaceAll("\\s+", "_").toUpperCase();
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+}

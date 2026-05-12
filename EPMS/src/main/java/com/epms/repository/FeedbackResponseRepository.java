@@ -47,6 +47,7 @@ public interface FeedbackResponseRepository extends JpaRepository<FeedbackRespon
             "LEFT JOIN FETCH r.items item " +
             "LEFT JOIN FETCH item.question q " +
             "LEFT JOIN FETCH q.section s " +
+            "LEFT JOIN FETCH item.assignmentQuestion aq " +
             "WHERE req.targetEmployeeId = :targetEmployeeId " +
             "AND r.finalStatus = :status")
     List<FeedbackResponse> findByTargetEmployeeIdAndStatusWithItems(@Param("targetEmployeeId") Long targetEmployeeId,
@@ -63,6 +64,7 @@ public interface FeedbackResponseRepository extends JpaRepository<FeedbackRespon
             "JOIN FETCH a.feedbackRequest req " +
             "LEFT JOIN FETCH r.items item " +
             "LEFT JOIN FETCH item.question q " +
+            "LEFT JOIN FETCH item.assignmentQuestion aq " +
             "WHERE req.campaign.id = :campaignId AND r.finalStatus = :status")
     List<FeedbackResponse> findByCampaignIdAndStatusWithItems(@Param("campaignId") Long campaignId,
                                                               @Param("status") ResponseStatus status);

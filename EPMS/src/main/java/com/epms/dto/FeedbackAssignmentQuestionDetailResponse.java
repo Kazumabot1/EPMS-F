@@ -3,13 +3,28 @@ package com.epms.dto;
 import lombok.Builder;
 import lombok.Value;
 
+import java.util.List;
+
 @Value
 @Builder
 public class FeedbackAssignmentQuestionDetailResponse {
+    /**
+     * Dynamic question snapshot ID. Kept as id for backward-compatible frontend routing/state,
+     * but new clients should also send assignmentQuestionId in response payloads.
+     */
     Long id;
+    Long assignmentQuestionId;
+    Long sourceQuestionId;
+    String questionCode;
+    String competencyCode;
+    String responseType;
+    String scoringBehavior;
     String questionText;
     Integer questionOrder;
     Integer ratingScaleId;
+    Integer ratingScaleMin;
+    Integer ratingScaleMax;
+    List<FeedbackRatingOptionResponse> ratingOptions;
     Double weight;
     Boolean required;
     Double existingRatingValue;

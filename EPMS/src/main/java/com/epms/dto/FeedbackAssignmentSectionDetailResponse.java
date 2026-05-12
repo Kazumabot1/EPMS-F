@@ -9,6 +9,7 @@ import java.util.List;
 @Builder
 public class FeedbackAssignmentSectionDetailResponse {
     Long id;
+    String sectionCode;
     String title;
     Integer orderNo;
     List<FeedbackAssignmentQuestionDetailResponse> questions;

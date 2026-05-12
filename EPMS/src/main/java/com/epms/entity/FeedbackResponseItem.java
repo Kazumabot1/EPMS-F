@@ -9,7 +9,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "feedback_response_items", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"response_id", "question_id"})
+        @UniqueConstraint(columnNames = {"response_id", "question_id"}),
+        @UniqueConstraint(name = "uk_feedback_response_assignment_question", columnNames = {"response_id", "assignment_question_id"})
 })
 @Getter
 @Setter
@@ -24,9 +25,18 @@ public class FeedbackResponseItem {
     @JoinColumn(name = "response_id", nullable = false)
     private FeedbackResponse response;
 
+    /**
+     * Legacy source question reference. New dynamic forms validate and score against assignmentQuestion,
+     * while this field remains populated when the snapshot originated from an existing form question so
+     * older analytics/report queries continue to work during migration.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "question_id", nullable = false)
+    @JoinColumn(name = "question_id")
     private FeedbackQuestion question;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignment_question_id")
+    private FeedbackAssignmentQuestion assignmentQuestion;
 
     @Column(name = "rating_value")
     private Double ratingValue;

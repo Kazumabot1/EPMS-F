@@ -4,13 +4,12 @@ import com.epms.dto.FeedbackAssignmentDetailResponse;
 import com.epms.dto.FeedbackAssignmentQuestionDetailResponse;
 import com.epms.dto.FeedbackAssignmentSectionDetailResponse;
 import com.epms.dto.FeedbackEvaluatorTaskResponse;
+import com.epms.dto.FeedbackRatingOptionResponse;
 import com.epms.entity.Employee;
+import com.epms.entity.FeedbackAssignmentQuestion;
 import com.epms.entity.FeedbackEvaluatorAssignment;
-import com.epms.entity.FeedbackForm;
-import com.epms.entity.FeedbackQuestion;
 import com.epms.entity.FeedbackResponse;
 import com.epms.entity.FeedbackResponseItem;
-import com.epms.entity.FeedbackSection;
 import com.epms.entity.User;
 import com.epms.entity.enums.AssignmentStatus;
 import com.epms.entity.enums.FeedbackCampaignStatus;
@@ -20,31 +19,35 @@ import com.epms.exception.ResourceNotFoundException;
 import com.epms.exception.UnauthorizedActionException;
 import com.epms.repository.EmployeeRepository;
 import com.epms.repository.FeedbackEvaluatorAssignmentRepository;
-import com.epms.repository.FeedbackFormRepository;
 import com.epms.repository.FeedbackResponseRepository;
+import com.epms.repository.RatingScaleRepository;
 import com.epms.repository.UserRepository;
 import com.epms.service.FeedbackEvaluatorTaskService;
+import com.epms.service.FeedbackQuestionResolverService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
 public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskService {
 
     private final FeedbackEvaluatorAssignmentRepository assignmentRepository;
-    private final FeedbackFormRepository feedbackFormRepository;
     private final FeedbackResponseRepository feedbackResponseRepository;
     private final UserRepository userRepository;
     private final EmployeeRepository employeeRepository;
+    private final RatingScaleRepository ratingScaleRepository;
+    private final FeedbackQuestionResolverService questionResolverService;
 
     @Override
     @Transactional(readOnly = true)
@@ -88,20 +91,8 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
                 .toList();
     }
 
-    private FeedbackForm loadFormWithSectionsAndQuestions(Long formId) {
-        FeedbackForm form = feedbackFormRepository.findByIdWithSections(formId)
-                .orElseThrow(() -> new ResourceNotFoundException("Assigned feedback form not found."));
-
-        List<FeedbackSection> sections =
-                feedbackFormRepository.findSectionsWithQuestionsByFormId(formId);
-
-        form.setSections(sections);
-
-        return form;
-    }
-
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public FeedbackAssignmentDetailResponse getAssignmentDetail(Long assignmentId, Long userId) {
         FeedbackEvaluatorAssignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Feedback assignment not found."));
@@ -114,27 +105,18 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
         FeedbackResponse response = feedbackResponseRepository.findByEvaluatorAssignmentId(assignmentId).orElse(null);
         ensureAssignmentVisibleToEvaluator(assignment, response);
 
-        FeedbackForm form = loadFormWithSectionsAndQuestions(
-                assignment.getFeedbackRequest().getForm().getId()
-        );
-        Map<Long, FeedbackResponseItem> existingItems = response == null
-                ? Map.of()
-                : response.getItems().stream()
-                  .collect(Collectors.toMap(item -> item.getQuestion().getId(), Function.identity()));
+        List<FeedbackAssignmentQuestion> questions = questionResolverService.findOrCreateAssignmentQuestions(assignment);
+        Map<Long, FeedbackResponseItem> existingItems = mapExistingItemsByAssignmentQuestion(response, questions);
 
-        int totalQuestionCount = form.getSections().stream()
-                .mapToInt(section -> section.getQuestions() == null ? 0 : section.getQuestions().size())
-                .sum();
-        int requiredQuestionCount = form.getSections().stream()
-                .flatMap(section -> section.getQuestions() == null ? java.util.stream.Stream.<FeedbackQuestion>empty() : section.getQuestions().stream())
-                .mapToInt(question -> Boolean.TRUE.equals(question.getIsRequired()) ? 1 : 0)
-                .sum();
+        int totalQuestionCount = questions.size();
+        int requiredQuestionCount = (int) questions.stream()
+                .filter(question -> Boolean.TRUE.equals(question.getRequired()))
+                .count();
         int answeredQuestionCount = (int) existingItems.values().stream()
                 .filter(item -> item.getRatingValue() != null)
                 .count();
-        int answeredRequiredQuestionCount = (int) form.getSections().stream()
-                .flatMap(section -> section.getQuestions() == null ? java.util.stream.Stream.<FeedbackQuestion>empty() : section.getQuestions().stream())
-                .filter(question -> Boolean.TRUE.equals(question.getIsRequired()))
+        int answeredRequiredQuestionCount = (int) questions.stream()
+                .filter(question -> Boolean.TRUE.equals(question.getRequired()))
                 .filter(question -> {
                     FeedbackResponseItem item = existingItems.get(question.getId());
                     return item != null && item.getRatingValue() != null;
@@ -175,40 +157,120 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
                 .completionPercent(completionPercent)
                 .finalSubmissionReady(finalSubmissionReady)
                 .submittedLocked(submittedLocked)
-                .sections(form.getSections().stream()
-                        .sorted(Comparator.comparing(FeedbackSection::getOrderNo))
-                        .map(section -> mapSection(section, existingItems))
-                        .toList())
+                .sections(mapSections(questions, existingItems))
                 .build();
     }
 
-    private FeedbackAssignmentSectionDetailResponse mapSection(
-            FeedbackSection section,
+    private Map<Long, FeedbackResponseItem> mapExistingItemsByAssignmentQuestion(
+            FeedbackResponse response,
+            List<FeedbackAssignmentQuestion> questions
+    ) {
+        if (response == null || response.getItems() == null || response.getItems().isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Long> assignmentQuestionIdByLegacyQuestionId = questions.stream()
+                .filter(question -> question.getSourceQuestion() != null && question.getSourceQuestion().getId() != null)
+                .collect(Collectors.toMap(question -> question.getSourceQuestion().getId(), FeedbackAssignmentQuestion::getId, (first, duplicate) -> first));
+
+        Map<Long, FeedbackResponseItem> existingItems = new HashMap<>();
+        for (FeedbackResponseItem item : response.getItems()) {
+            Long assignmentQuestionId = item.getAssignmentQuestion() != null ? item.getAssignmentQuestion().getId() : null;
+            if (assignmentQuestionId == null && item.getQuestion() != null) {
+                assignmentQuestionId = assignmentQuestionIdByLegacyQuestionId.get(item.getQuestion().getId());
+            }
+            if (assignmentQuestionId != null) {
+                existingItems.putIfAbsent(assignmentQuestionId, item);
+            }
+        }
+        return existingItems;
+    }
+
+    private List<FeedbackAssignmentSectionDetailResponse> mapSections(
+            List<FeedbackAssignmentQuestion> questions,
             Map<Long, FeedbackResponseItem> existingItems
     ) {
-        return FeedbackAssignmentSectionDetailResponse.builder()
-                .id(section.getId())
-                .title(section.getTitle())
-                .orderNo(section.getOrderNo())
-                .questions(section.getQuestions().stream()
-                        .sorted(Comparator.comparing(FeedbackQuestion::getQuestionOrder))
-                        .map(question -> {
-                            FeedbackResponseItem existingItem = existingItems.get(question.getId());
-                            return FeedbackAssignmentQuestionDetailResponse.builder()
-                                    .id(question.getId())
-                                    .questionText(question.getQuestionText())
-                                    .questionOrder(question.getQuestionOrder())
-                                    .ratingScaleId(question.getRatingScaleId())
-                                    .weight(question.getWeight())
-                                    .required(Boolean.TRUE.equals(question.getIsRequired()))
-                                    .existingRatingValue(existingItem != null ? existingItem.getRatingValue() : null)
-                                    .existingComment(existingItem != null ? existingItem.getComment() : null)
-                                    .build();
-                        })
-                        .toList())
+        Map<String, List<FeedbackAssignmentQuestion>> grouped = questions.stream()
+                .sorted(Comparator.comparing(FeedbackAssignmentQuestion::getSectionOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(FeedbackAssignmentQuestion::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(FeedbackAssignmentQuestion::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                .collect(Collectors.groupingBy(
+                        question -> question.getSectionOrder() + "::" + question.getSectionCode() + "::" + question.getSectionTitle(),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        return grouped.values().stream()
+                .map(sectionQuestions -> {
+                    FeedbackAssignmentQuestion first = sectionQuestions.get(0);
+                    return FeedbackAssignmentSectionDetailResponse.builder()
+                            .id(first.getSectionOrder() == null ? 0L : first.getSectionOrder().longValue())
+                            .sectionCode(first.getSectionCode())
+                            .title(first.getSectionTitle())
+                            .orderNo(first.getSectionOrder())
+                            .questions(sectionQuestions.stream()
+                                    .map(question -> mapQuestion(question, existingItems.get(question.getId())))
+                                    .toList())
+                            .build();
+                })
+                .toList();
+    }
+
+    private FeedbackAssignmentQuestionDetailResponse mapQuestion(
+            FeedbackAssignmentQuestion question,
+            FeedbackResponseItem existingItem
+    ) {
+        int maxRating = resolveMaxRating(question.getRatingScaleId());
+        return FeedbackAssignmentQuestionDetailResponse.builder()
+                .id(question.getId())
+                .assignmentQuestionId(question.getId())
+                .sourceQuestionId(question.getSourceQuestion() != null ? question.getSourceQuestion().getId() : null)
+                .questionCode(question.getQuestionCode())
+                .competencyCode(question.getCompetencyCode())
+                .responseType(question.getResponseType())
+                .scoringBehavior(question.getScoringBehavior())
+                .questionText(question.getQuestionTextSnapshot())
+                .questionOrder(question.getDisplayOrder())
+                .ratingScaleId(question.getRatingScaleId())
+                .ratingScaleMin(1)
+                .ratingScaleMax(maxRating)
+                .ratingOptions(buildRatingOptions(maxRating))
+                .weight(question.getWeight())
+                .required(Boolean.TRUE.equals(question.getRequired()))
+                .existingRatingValue(existingItem != null ? existingItem.getRatingValue() : null)
+                .existingComment(existingItem != null ? existingItem.getComment() : null)
                 .build();
     }
 
+    private int resolveMaxRating(Integer ratingScaleId) {
+        if (ratingScaleId == null) {
+            return 5;
+        }
+        return ratingScaleRepository.findById(ratingScaleId)
+                .map(scale -> scale.getScales() != null && scale.getScales() > 0 ? scale.getScales() : 5)
+                .orElse(5);
+    }
+
+    private List<FeedbackRatingOptionResponse> buildRatingOptions(int maxRating) {
+        int boundedMax = Math.max(1, maxRating);
+        return IntStream.rangeClosed(1, boundedMax)
+                .mapToObj(value -> FeedbackRatingOptionResponse.builder()
+                        .value(value)
+                        .label(ratingLabel(value))
+                        .build())
+                .toList();
+    }
+
+    private String ratingLabel(int value) {
+        return switch (value) {
+            case 1 -> "Unsatisfactory";
+            case 2 -> "Needs improvement";
+            case 3 -> "Meet requirement";
+            case 4 -> "Good";
+            case 5 -> "Outstanding";
+            default -> "Rating " + value;
+        };
+    }
 
     private boolean isAutoSubmitCompletedDraftsOnClose(FeedbackEvaluatorAssignment assignment) {
         return assignment != null
@@ -277,7 +339,6 @@ public class FeedbackEvaluatorTaskServiceImpl implements FeedbackEvaluatorTaskSe
         LocalDateTime dueAt = resolveEffectiveDeadline(assignment);
         return dueAt == null || !now.isAfter(dueAt);
     }
-
 
     private String lifecycleMessage(FeedbackEvaluatorAssignment assignment, FeedbackResponse response) {
         if (response != null && response.getSubmittedAt() != null) {
