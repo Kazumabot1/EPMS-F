@@ -1,8 +1,10 @@
 package com.epms.config;
 
+import com.epms.security.HrKpiTemplateAuthority;
 import com.epms.security.JwtAuthenticationFilter;
 import com.epms.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,14 +20,20 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -34,10 +42,19 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    private static final Set<String> ADMIN_ROLES = Set.of("ADMIN");
+    private static final Set<String> ADMIN_ROLES = Set.of(
+            "ADMIN"
+    );
 
     private static final Set<String> HR_ROLES = Set.of(
             "HR",
+            "HUMAN_RESOURCE",
+            "HUMAN_RESOURCES",
+            "HR_MANAGER",
+            "HR_ADMIN",
+            "PEOPLE",
+            "PEOPLE_OPS",
+            "TALENT",
             "ADMIN"
     );
 
@@ -57,6 +74,13 @@ public class SecurityConfig {
 
     private static final Set<String> SCORE_TABLE_ROLES = Set.of(
             "HR",
+            "HUMAN_RESOURCE",
+            "HUMAN_RESOURCES",
+            "HR_MANAGER",
+            "HR_ADMIN",
+            "PEOPLE",
+            "PEOPLE_OPS",
+            "TALENT",
             "ADMIN",
             "DEPARTMENT_HEAD",
             "DEPARTMENTHEAD"
@@ -121,19 +145,52 @@ public class SecurityConfig {
                                 "/api/notifications",
                                 "/api/notifications/**"
                         ).authenticated()
+
                         .requestMatchers(
                                 "/api/signatures",
                                 "/api/signatures/**"
                         ).authenticated()
 
                         /*
+                         * KPI apply-to-department: Ant-style matcher is reliable across Spring Security versions.
+                         * Enforce {@link HrKpiTemplateAuthority} here (not only .authenticated()) so non-HR tokens get 403
+                         * at the filter and HR-labelled principals match the same rules as /api/hr/kpi-templates/** .
+                         */
+                        .requestMatchers(new AntPathRequestMatcher(
+                                        "/api/hr/kpi-templates/*/use-for-department",
+                                        HttpMethod.POST.name()))
+                        .access((authenticationSupplier, requestAuthorizationContext) -> {
+                            Authentication authentication = authenticationSupplier.get();
+                            AuthorizationDecision decision =
+                                    new AuthorizationDecision(HrKpiTemplateAuthority.mayManageKpiTemplates(authentication));
+                            if (!decision.isGranted()
+                                    && authentication != null
+                                    && authentication.getPrincipal() instanceof UserPrincipal up) {
+                                log.warn(
+                                        "Denied POST KPI use-for-department: userId={}, dashboard={}, roles={}",
+                                        up.getId(),
+                                        up.getDashboard(),
+                                        up.getRoles()
+                                );
+                            }
+                            return decision;
+                        })
+
+                        /*
+                         * Assessment Form Builder.
+                         *
+                         * HR/Admin only.
+                         * Your DB role ROLE_HR becomes HR in UserPrincipal roles
+                         * and ROLE_HR in Spring authorities. This checker supports both.
+                         */
+                        .requestMatchers(
+                                "/api/appraisal-forms",
+                                "/api/appraisal-forms/**"
+                        ).access((authentication, context) -> isHrOrAdmin(authentication.get()))
+
+                        /*
                          * One-on-One dependencies.
-                         *
-                         * These must be BEFORE the broad HR-only:
-                         *   /api/employees/**
-                         *   /api/departments/**
-                         *
-                         * Otherwise the employee dropdown request gets caught and blocked.
+                         * These must stay before broad /api/employees/** and /api/departments/** rules.
                          */
                         .requestMatchers(HttpMethod.GET,
                                 "/api/departments",
@@ -165,6 +222,10 @@ public class SecurityConfig {
 
                         /*
                          * HR/Admin management APIs.
+                         *
+                         * Important:
+                         * Do NOT include /api/appraisal-forms here.
+                         * It is handled above.
                          */
                         .requestMatchers(
                                 "/api/dashboard",
@@ -173,9 +234,6 @@ public class SecurityConfig {
                                 "/api/employees/**",
                                 "/api/hr/employee-accounts",
                                 "/api/hr/employee-accounts/**",
-
-                                "/api/appraisal-forms",
-                                "/api/appraisal-forms/**",
 
                                 "/api/assessment-forms",
                                 "/api/assessment-forms/**",
@@ -199,8 +257,12 @@ public class SecurityConfig {
                                 "/api/kpi-categories/**",
                                 "/api/kpi-items",
                                 "/api/kpi-items/**",
+
                                 "/api/hr/kpi-templates",
                                 "/api/hr/kpi-templates/**",
+
+                                "/api/hr/employee-kpis",
+                                "/api/hr/employee-kpis/**",
 
                                 "/api/positions",
                                 "/api/positions/**",
@@ -216,8 +278,8 @@ public class SecurityConfig {
                                 "/api/notification-templates/**",
                                 "/api/pip-updates",
                                 "/api/pip-updates/**"
-                        ).access((authentication, context) ->
-                                hasRoleDashboardOrPosition(authentication.get(), HR_ROLES, HR_DASHBOARDS)
+                        ).access((authenticationSupplier, requestAuthorizationContext) ->
+                                hrManagementApisAccess(authenticationSupplier, requestAuthorizationContext)
                         )
 
                         .requestMatchers(
@@ -276,6 +338,94 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * HR management bundle: KPI template URLs use {@link #hrKpiTemplateManagementAccess} so HR-labelled accounts
+     * in the SPA are not blocked by strict role normalization; other URLs keep the standard HR gate.
+     */
+    private AuthorizationDecision hrManagementApisAccess(
+            Supplier<Authentication> authenticationSupplier,
+            RequestAuthorizationContext context
+    ) {
+        Authentication authentication = authenticationSupplier.get();
+        HttpServletRequest request = context.getRequest();
+        String path = stripContextPath(request.getRequestURI(), request.getContextPath());
+        if (path.startsWith("/api/hr/kpi-templates")) {
+            return hrKpiTemplateManagementAccess(authentication);
+        }
+        return hasRoleDashboardOrPosition(authentication, HR_ROLES, HR_DASHBOARDS);
+    }
+
+    private static String stripContextPath(String uri, String contextPath) {
+        if (uri == null) {
+            return "";
+        }
+        if (contextPath == null || contextPath.isBlank()) {
+            return uri;
+        }
+        if (uri.startsWith(contextPath)) {
+            return uri.substring(contextPath.length());
+        }
+        return uri;
+    }
+
+    /**
+     * HR KPI template APIs should authorize the same population as other HR management routes,
+     * with an extra fallback identical to {@link #isHrOrAdmin} for HR-like job titles and dashboards.
+     */
+    private AuthorizationDecision hrKpiTemplateManagementAccess(Authentication authentication) {
+        return new AuthorizationDecision(HrKpiTemplateAuthority.mayManageKpiTemplates(authentication));
+    }
+
+    private AuthorizationDecision isHrOrAdmin(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return new AuthorizationDecision(false);
+        }
+
+        Object principal = authentication.getPrincipal();
+
+        if (principal == null || "anonymousUser".equals(principal)) {
+            return new AuthorizationDecision(false);
+        }
+
+        if (principal instanceof UserPrincipal userPrincipal) {
+            String dashboard = userPrincipal.getDashboard();
+
+            if ("HR_DASHBOARD".equals(dashboard) || "ADMIN_DASHBOARD".equals(dashboard)) {
+                return new AuthorizationDecision(true);
+            }
+
+            if (userPrincipal.getRoles() != null) {
+                for (String role : userPrincipal.getRoles()) {
+                    String normalizedRole = normalizeAuthorityName(role);
+
+                    if ("ADMIN".equals(normalizedRole) || isHrLike(normalizedRole)) {
+                        return new AuthorizationDecision(true);
+                    }
+                }
+            }
+
+            String normalizedPosition = normalizeAuthorityName(userPrincipal.getPosition());
+
+            if (isHrLike(normalizedPosition)) {
+                return new AuthorizationDecision(true);
+            }
+        }
+
+        for (GrantedAuthority authority : authentication.getAuthorities()) {
+            if (authority == null) {
+                continue;
+            }
+
+            String normalizedAuthority = normalizeAuthorityName(authority.getAuthority());
+
+            if ("ADMIN".equals(normalizedAuthority) || isHrLike(normalizedAuthority)) {
+                return new AuthorizationDecision(true);
+            }
+        }
+
+        return new AuthorizationDecision(false);
+    }
+
     private AuthorizationDecision hasRoleDashboardOrPosition(
             Authentication authentication,
             Set<String> allowedRoles,
@@ -300,7 +450,13 @@ public class SecurityConfig {
 
             if (userPrincipal.getRoles() != null) {
                 for (String role : userPrincipal.getRoles()) {
-                    if (allowedRoles.contains(normalizeAuthorityName(role))) {
+                    String normalizedRole = normalizeAuthorityName(role);
+
+                    if (allowedRoles.contains(normalizedRole)) {
+                        return new AuthorizationDecision(true);
+                    }
+
+                    if (allowedRoles.contains("HR") && isHrLike(normalizedRole)) {
                         return new AuthorizationDecision(true);
                     }
                 }
@@ -308,7 +464,7 @@ public class SecurityConfig {
 
             String normalizedPosition = normalizeAuthorityName(userPrincipal.getPosition());
 
-            if (allowedRoles.contains("HR") && normalizedPosition.contains("HR")) {
+            if (allowedRoles.contains("HR") && isHrLike(normalizedPosition)) {
                 return new AuthorizationDecision(true);
             }
 
@@ -348,9 +504,34 @@ public class SecurityConfig {
             if (allowedRoles.contains(normalizedAuthority)) {
                 return new AuthorizationDecision(true);
             }
+
+            if (allowedRoles.contains("HR") && isHrLike(normalizedAuthority)) {
+                return new AuthorizationDecision(true);
+            }
         }
 
         return new AuthorizationDecision(false);
+    }
+
+    private boolean isHrLike(String normalizedValue) {
+        if (normalizedValue == null || normalizedValue.isBlank()) {
+            return false;
+        }
+
+        return normalizedValue.equals("HR")
+                || normalizedValue.equals("HUMAN_RESOURCE")
+                || normalizedValue.equals("HUMAN_RESOURCES")
+                || normalizedValue.equals("HR_MANAGER")
+                || normalizedValue.equals("HR_ADMIN")
+                || normalizedValue.equals("PEOPLE")
+                || normalizedValue.equals("PEOPLE_OPS")
+                || normalizedValue.equals("TALENT")
+                || normalizedValue.contains("_HR")
+                || normalizedValue.contains("HR_")
+                || normalizedValue.contains("HUMAN_RESOURCE")
+                || normalizedValue.contains("HUMAN_RESOURCES")
+                || normalizedValue.contains("PEOPLE")
+                || normalizedValue.contains("TALENT");
     }
 
     private String normalizeAuthorityName(String value) {

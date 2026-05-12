@@ -174,6 +174,15 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
       ],
     },
     { label: 'Team Reports', path: '/manager/reports', icon: 'bi-file-earmark-bar-graph' },
+    {
+      label: 'KPI Management',
+      path: '/manager/kpi-scoring',
+      icon: 'bi-graph-up',
+      children: [
+        { label: 'Employee KPI', path: '/manager/kpi-scoring', icon: 'bi-pencil-square', end: true },
+        { label: 'KPI History List', path: '/manager/kpi-scoring', icon: 'bi-clock-history' },
+      ],
+    },
     { label: 'Notifications', path: '/notifications', icon: 'bi-bell' },
     {
       label: 'PIP',

@@ -9,6 +9,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(callSuper = false)
 public class KpiFormItem {
 
     @Id
@@ -17,10 +18,12 @@ public class KpiFormItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "kpi_form_id", nullable = false)
+    @EqualsAndHashCode.Exclude
     private KpiForm kpiForm;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "kpi_category_id", nullable = false)
+    @EqualsAndHashCode.Exclude
     private KpiCategory kpiCategory;
 
     /**
@@ -28,6 +31,7 @@ public class KpiFormItem {
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "kpi_item_id")
+    @EqualsAndHashCode.Exclude
     private KpiItem kpiItem;
 
     /**
@@ -38,6 +42,7 @@ public class KpiFormItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "kpi_unit_id", nullable = false)
+    @EqualsAndHashCode.Exclude
     private KpiUnit kpiUnit;
 
     @Column(nullable = false)

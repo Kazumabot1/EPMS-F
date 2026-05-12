@@ -112,6 +112,18 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
             throw new BadRequestException("Form name is required.");
         }
 
+        if (payload.getStartDate() == null) {
+            throw new BadRequestException("Start date is required.");
+        }
+
+        if (payload.getEndDate() == null) {
+            throw new BadRequestException("End date is required.");
+        }
+
+        if (payload.getStartDate().isAfter(payload.getEndDate())) {
+            throw new BadRequestException("Start date cannot be later than end date.");
+        }
+
         if (payload.getTargetRoles() == null || payload.getTargetRoles().isEmpty()) {
             throw new BadRequestException("Select at least one target role.");
         }
@@ -142,16 +154,30 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
                     throw new BadRequestException("Every question needs text.");
                 }
 
-                if (question.getWeight() != null && question.getWeight() < 0) {
-                    throw new BadRequestException("Question weight cannot be negative.");
-                }
+                validateQuestionWeight(question.getWeight());
             }
+        }
+    }
+
+    private void validateQuestionWeight(Double weight) {
+        if (weight == null) {
+            throw new BadRequestException("Question rating/weight is required.");
+        }
+
+        if (weight < 1 || weight > 5) {
+            throw new BadRequestException("Question rating/weight must be between 1 and 5.");
+        }
+
+        if (Math.floor(weight) != weight) {
+            throw new BadRequestException("Question rating/weight must be a whole number. Decimals are not allowed.");
         }
     }
 
     private void applyPayload(AssessmentFormDefinition form, AssessmentFormPayload payload) {
         form.setFormName(payload.getFormName().trim());
         form.setDescription(clean(payload.getDescription()));
+        form.setStartDate(payload.getStartDate());
+        form.setEndDate(payload.getEndDate());
         form.setActive(true);
 
         if (form.getTargetRoles() == null) {
@@ -191,7 +217,7 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
                 question.setQuestionText(questionPayload.getQuestionText().trim());
                 question.setResponseType(resolveResponseType(questionPayload.getResponseType()));
                 question.setRequired(questionPayload.getIsRequired() == null || questionPayload.getIsRequired());
-                question.setWeight(questionPayload.getWeight() != null ? questionPayload.getWeight() : 1.0);
+                question.setWeight(questionPayload.getWeight());
 
                 section.getQuestions().add(question);
             }
@@ -221,6 +247,8 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
         response.setId(form.getId());
         response.setFormName(form.getFormName());
         response.setDescription(form.getDescription());
+        response.setStartDate(form.getStartDate());
+        response.setEndDate(form.getEndDate());
         response.setIsActive(form.getActive());
         response.setTargetRoles(form.getTargetRoles() == null ? List.of() : form.getTargetRoles());
         response.setCreatedAt(form.getCreatedAt());

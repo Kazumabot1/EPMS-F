@@ -1,5 +1,6 @@
 import api from './api';
 import { extractApiErrorMessage } from './apiError';
+import type { UseKpiTemplateResult } from '../types/kpiWorkflow';
 import type { KpiTemplateRequest, KpiTemplateResponse } from '../types/kpiTemplate';
 
 const BASE = '/hr/kpi-templates';
@@ -46,6 +47,30 @@ export const kpiTemplateService = {
       return response.data;
     } catch (error) {
       throw new Error(extractApiErrorMessage(error, 'Failed to load KPI template.'));
+    }
+  },
+
+  async useForDepartment(
+    templateId: number,
+    payload:
+      | { applyToAllDepartments: true }
+      | { departmentIds: number[] }
+      | { departmentId: number },
+  ): Promise<UseKpiTemplateResult> {
+    try {
+      const body =
+        'applyToAllDepartments' in payload && payload.applyToAllDepartments
+          ? { applyToAllDepartments: true }
+          : 'departmentIds' in payload
+            ? { departmentIds: payload.departmentIds }
+            : { departmentId: payload.departmentId };
+      const response = await api.post<UseKpiTemplateResult>(
+        `${BASE}/${templateId}/use-for-department`,
+        body,
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Could not apply KPI to department.'));
     }
   },
 };

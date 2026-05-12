@@ -1,8 +1,17 @@
 // Modified by KHN — Manager / Project Manager Dashboard
+import { Link } from 'react-router-dom';
+
+type Section = {
+  icon: string;
+  label: string;
+  live: boolean;
+  to?: string;
+};
+
 const ManagerDashboard = () => {
-  const sections = [
+  const sections: Section[] = [
     { icon:'bi-diagram-3',          label:'My Team',               live:false },
-    { icon:'bi-clipboard-data',     label:'Team KPIs',             live:false },
+    { icon:'bi-clipboard-data',     label:'Employee KPI',          live:true, to:'/manager/kpi-scoring' },
     { icon:'bi-clipboard-check',    label:'Appraisals',            live:false },
     { icon:'bi-exclamation-triangle',label:'PIP Tracking',         live:false },
     { icon:'bi-calendar-check',     label:'1-on-1 Meetings',       live:false },
@@ -25,13 +34,36 @@ const ManagerDashboard = () => {
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:'1.25rem' }}>
-        {sections.map(s => (
-          <div key={s.label} style={{ background:'#fff', border:'1.5px dashed #e2e8f0', borderRadius:'14px', padding:'1.5rem', opacity:.7 }}>
-            <i className={`bi ${s.icon}`} style={{ fontSize:'1.5rem', color:'#059669', marginBottom:'.6rem', display:'block' }} />
-            <strong style={{ display:'block', color:'#1e293b', fontSize:'.9rem', fontWeight:600 }}>{s.label}</strong>
-            <small style={{ color:'#94a3b8', fontSize:'.78rem' }}>This function has not been implemented yet.</small>
-          </div>
-        ))}
+        {sections.map(s => {
+          const inner = (
+            <>
+              <i className={`bi ${s.icon}`} style={{ fontSize:'1.5rem', color:'#059669', marginBottom:'.6rem', display:'block' }} />
+              <strong style={{ display:'block', color:'#1e293b', fontSize:'.9rem', fontWeight:600 }}>{s.label}</strong>
+              <small style={{ color:'#94a3b8', fontSize:'.78rem' }}>
+                {s.live ? 'Open scoring workspace.' : 'This function has not been implemented yet.'}
+              </small>
+            </>
+          );
+          const cardStyle = {
+            background:'#fff',
+            border: s.live ? '1.5px solid #bbf7d0' : '1.5px dashed #e2e8f0',
+            borderRadius:'14px',
+            padding:'1.5rem',
+            opacity: s.live ? 1 : .7,
+            textDecoration:'none',
+            color:'inherit',
+            display:'block',
+          } as const;
+          return s.to ? (
+            <Link key={s.label} to={s.to} style={cardStyle}>
+              {inner}
+            </Link>
+          ) : (
+            <div key={s.label} style={{ ...cardStyle, cursor:'default' }}>
+              {inner}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

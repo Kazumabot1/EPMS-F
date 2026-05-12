@@ -13,6 +13,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(callSuper = false)
 public class EmployeeKpiScore {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -20,10 +21,12 @@ public class EmployeeKpiScore {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_kpi_form_id", nullable = false)
+    @EqualsAndHashCode.Exclude
     private EmployeeKpiForm employeeKpiForm;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "kpi_form_item_id", nullable = false)
+    @EqualsAndHashCode.Exclude
     private KpiFormItem kpiFormItem;
 
     @Column(name = "actual_value")
@@ -53,6 +56,8 @@ public class EmployeeKpiScore {
     public void calculateWeightedScore() {
         if (score != null && kpiFormItem != null && kpiFormItem.getWeight() != null) {
             this.weightedScore = (score * kpiFormItem.getWeight()) / 100.0;
+        } else {
+            this.weightedScore = null;
         }
         if (evaluatedAt == null && actualValue != null) {
             evaluatedAt = LocalDateTime.now();

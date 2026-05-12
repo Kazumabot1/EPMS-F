@@ -1,10 +1,3 @@
-/* Sidebar.tsx
-   - Uses authStorage to determine dashboard/role.
-   - Shows role-specific nav items.
-   - Supports Admin, HR, Employee, Manager, DepartmentHead, Executive.
-   - PIP dropdown: HR/Admin only sees Past Plans; Manager/DeptHead sees Create + Past Plans.
-*/
-
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { authStorage } from '../../services/authStorage';
@@ -139,8 +132,15 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
           },
         ],
       },
-      { to: '/hr/assessment-scores', label: 'Assessment Scores', icon: 'bi bi-clipboard-data' },
-      { to: '/hr/assessment-forms', label: 'Assessment Forms', icon: 'bi bi-ui-checks-grid' },
+      {
+        to: '/hr/assessment-scores',
+        label: 'Assessment',
+        icon: 'bi bi-clipboard-data',
+        children: [
+          { to: '/hr/assessment-scores', label: 'Scores', icon: 'bi bi-clipboard-data', end: true },
+          { to: '/hr/assessment-forms', label: 'Form Create', icon: 'bi bi-ui-checks-grid', end: true },
+        ],
+      },
       {
         to: '/hr/appraisal',
         label: 'Appraisals',
@@ -155,16 +155,6 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
         ],
       },
       { to: '/hr/feedback/dashboard', label: '360 Feedback', icon: 'bi bi-chat-square-dots' },
-      {
-        to: '/user-roles',
-        label: 'Access Control',
-        icon: 'bi bi-shield-lock',
-        children: [
-          { to: '/user-roles', label: 'User Roles', icon: 'bi bi-person-gear' },
-          { to: '/role-permissions', label: 'Role Permissions', icon: 'bi bi-shield-check' },
-          { to: '/permissions', label: 'Permissions', icon: 'bi bi-key' },
-        ],
-      },
       {
         to: '/one-on-one-meetings',
         label: 'One-on-One',
@@ -200,6 +190,7 @@ const Sidebar = ({ collapsed, onToggle, variant }: SidebarProps) => {
           { to: '/hr/performance-kpi/category', label: 'KPI Categories', icon: 'bi bi-tags' },
           { to: '/hr/performance-kpi/item', label: 'KPI Items', icon: 'bi bi-card-checklist' },
           { to: '/hr/kpi-template', label: 'KPI Templates', icon: 'bi bi-ui-checks-grid' },
+          { to: '/hr/employee-kpis', label: 'Employee KPI', icon: 'bi bi-people-fill' },
         ],
       },
     ];

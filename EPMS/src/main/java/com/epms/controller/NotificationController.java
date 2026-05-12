@@ -87,7 +87,8 @@ public class NotificationController {
                 n.getMessage(),
                 n.getType(),
                 n.getIsRead(),
-                n.getCreatedAt()
+                n.getCreatedAt(),
+                n.getReferenceId()
         );
     }
 }

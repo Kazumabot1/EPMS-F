@@ -2,18 +2,22 @@ package com.epms.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "employee")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(callSuper = false)
 public class Employee {
 
     @Id
@@ -49,7 +53,8 @@ public class Employee {
 
     // Many-to-Many with Department is managed through EmployeeDepartment (supports history tracking)
     @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<EmployeeDepartment> employeeDepartments;
+    @EqualsAndHashCode.Exclude
+    private Set<EmployeeDepartment> employeeDepartments = new LinkedHashSet<>();
 
     /** Many employees reference one job position. Inverse: Position.employees. */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -57,5 +62,6 @@ public class Employee {
     private Position position;
 
     @OneToMany(mappedBy = "employee", fetch = FetchType.LAZY)
+    @EqualsAndHashCode.Exclude
     private List<EmployeeKpiForm> employeeKpiForms = new ArrayList<>();
 }

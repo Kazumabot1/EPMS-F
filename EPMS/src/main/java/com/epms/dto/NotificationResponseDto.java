@@ -14,4 +14,6 @@ public class NotificationResponseDto {
     private String type;
     private Boolean isRead;
     private Date createdAt;
+    /** Optional deep-link target (e.g. KPI template id when type is KPI_*). */
+    private Integer referenceId;
 }

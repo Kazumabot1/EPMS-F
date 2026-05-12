@@ -14,12 +14,14 @@ import java.util.List;
 /**
  * HR Assessment Form Builder endpoint.
  *
- * Frontend service calls:
- *   GET    /api/appraisal-forms
- *   GET    /api/appraisal-forms/{id}
- *   POST   /api/appraisal-forms
- *   PUT    /api/appraisal-forms/{id}
- *   DELETE /api/appraisal-forms/{id}
+ * Frontend calls:
+ * GET    /api/appraisal-forms
+ * GET    /api/appraisal-forms/{id}
+ * POST   /api/appraisal-forms
+ * PUT    /api/appraisal-forms/{id}
+ * DELETE /api/appraisal-forms/{id}
+ *
+ * SecurityConfig protects this endpoint.
  */
 @RestController
 @RequestMapping("/api/appraisal-forms")
@@ -37,7 +39,9 @@ public class AssessmentFormDefinitionController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<GenericApiResponse<AssessmentFormResponse>> getById(@PathVariable Integer id) {
+    public ResponseEntity<GenericApiResponse<AssessmentFormResponse>> getById(
+            @PathVariable Integer id
+    ) {
         return ResponseEntity.ok(
                 GenericApiResponse.success("Assessment form fetched", service.getById(id))
         );
@@ -62,8 +66,11 @@ public class AssessmentFormDefinitionController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<GenericApiResponse<String>> deactivate(@PathVariable Integer id) {
+    public ResponseEntity<GenericApiResponse<String>> deactivate(
+            @PathVariable Integer id
+    ) {
         service.deactivate(id);
+
         return ResponseEntity.ok(
                 GenericApiResponse.success("Assessment form deactivated", "OK")
         );

@@ -3,8 +3,11 @@ import toast from 'react-hot-toast';
 import '../../../components/hr/kpi-template/kpi-template.css';
 import { kpiStatusBadgeClass } from '../../../components/hr/kpi-template/kpiTemplateUi';
 import KpiTemplateCreateModal from '../../../components/hr/kpi-template/KpiTemplateCreateModal';
+import UseKpiDepartmentModal from '../../../components/hr/kpi-template/UseKpiDepartmentModal';
 import { kpiTemplateService } from '../../../services/kpiTemplateService';
 import type { KpiTemplateResponse } from '../../../types/kpiTemplate';
+
+const canUseTemplate = (status: string | undefined) => status === 'ACTIVE' || status === 'FINALIZED';
 
 const formatDate = (value: string | null) => {
   if (!value) return '—';
@@ -20,6 +23,8 @@ const KpiTemplateListPage = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'view' | 'edit'>('create');
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [useKpiOpen, setUseKpiOpen] = useState(false);
+  const [useKpiTemplate, setUseKpiTemplate] = useState<{ id: number; title: string } | null>(null);
 
   const load = async () => {
     try {
@@ -74,6 +79,11 @@ const KpiTemplateListPage = () => {
     setModalMode('edit');
     setSelectedTemplateId(id);
     setCreateOpen(true);
+  };
+
+  const openUseKpi = (template: KpiTemplateResponse) => {
+    setUseKpiTemplate({ id: template.id, title: template.title });
+    setUseKpiOpen(true);
   };
 
   return (
@@ -215,6 +225,19 @@ const KpiTemplateListPage = () => {
                             <div className="flex justify-end gap-1.5">
                               <button
                                 type="button"
+                                onClick={() => openUseKpi(template)}
+                                disabled={!canUseTemplate(template.status)}
+                                className="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-xl border border-transparent px-2 text-xs font-semibold text-emerald-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                                title={
+                                  canUseTemplate(template.status)
+                                    ? 'Assign to department & notify managers'
+                                    : 'Set template to ACTIVE or FINALIZED first'
+                                }
+                              >
+                                Use KPI
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => openView(template.id)}
                                 className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent text-gray-500 transition hover:border-gray-200 hover:bg-white hover:text-violet-700 hover:shadow-sm"
                                 title="View"
@@ -258,6 +281,13 @@ const KpiTemplateListPage = () => {
         templateId={selectedTemplateId}
         onClose={() => setCreateOpen(false)}
         onSaved={load}
+      />
+      <UseKpiDepartmentModal
+        open={useKpiOpen}
+        templateId={useKpiTemplate?.id ?? null}
+        templateTitle={useKpiTemplate?.title ?? ''}
+        onClose={() => setUseKpiOpen(false)}
+        onApplied={load}
       />
     </div>
   );

@@ -211,6 +211,17 @@
   line-height: 1.45;
 }
 
+.notif-kpi-title-link {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.notif-kpi-title-link:hover {
+  color: #1d4ed8;
+}
+
 .notif-card-time {
   font-size: 0.8rem;
   color: #9ca3af;
