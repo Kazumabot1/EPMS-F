@@ -22,20 +22,32 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public void send(Integer userId, String title, String message, String type) {
-        saveAndPush(userId, title, message, type);
+        saveAndPush(userId, title, message, type, null);
+    }
+
+    @Override
+    @Transactional
+    public void send(Integer userId, String title, String message, String type, Integer referenceId) {
+        saveAndPush(userId, title, message, type, referenceId);
     }
 
     @Override
     @Transactional
     public boolean sendOnce(Integer userId, String title, String message, String type) {
+        return sendOnce(userId, title, message, type, null);
+    }
+
+    @Override
+    @Transactional
+    public boolean sendOnce(Integer userId, String title, String message, String type, Integer referenceId) {
         if (notificationRepo.existsByUser_IdAndTypeAndTitleAndMessage(userId, type, title, message)) {
             return false;
         }
-        saveAndPush(userId, title, message, type);
+        saveAndPush(userId, title, message, type, referenceId);
         return true;
     }
 
-    private void saveAndPush(Integer userId, String title, String message, String type) {
+    private void saveAndPush(Integer userId, String title, String message, String type, Integer referenceId) {
         User user = userRepo.findById(userId).orElseThrow();
 
         Notification n = new Notification();
@@ -43,6 +55,7 @@ public class NotificationServiceImpl implements NotificationService {
         n.setTitle(title);
         n.setMessage(message);
         n.setType(type);
+        n.setReferenceId(referenceId);
         n.setIsRead(false);
 
         Notification saved = notificationRepo.save(n);
@@ -53,7 +66,8 @@ public class NotificationServiceImpl implements NotificationService {
                 saved.getMessage(),
                 saved.getType(),
                 saved.getIsRead(),
-                saved.getCreatedAt()
+                saved.getCreatedAt(),
+                saved.getReferenceId()
         );
 
         messagingTemplate.convertAndSendToUser(user.getEmail(), "/queue/notifications", dto);

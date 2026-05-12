@@ -120,7 +120,8 @@ public class EmployeeKpiWorkflowServiceImpl implements EmployeeKpiWorkflowServic
                     "KPI scoring requested",
                     "HR applied KPI template \"" + form.getTitle() + "\" " + notifyDetail
                             + ". Enter scores for assigned employees in your department.",
-                    TYPE_KPI_MANAGER_ASSIGNMENT
+                    TYPE_KPI_MANAGER_ASSIGNMENT,
+                    form.getId()
             );
         }
 
@@ -532,7 +533,8 @@ public class EmployeeKpiWorkflowServiceImpl implements EmployeeKpiWorkflowServic
                             u.getId(),
                             "KPI results finalized",
                             empDetail,
-                            TYPE_KPI_FINALIZED_EMPLOYEE
+                            TYPE_KPI_FINALIZED_EMPLOYEE,
+                            form.getId()
                     )
             );
         }
@@ -552,7 +554,7 @@ public class EmployeeKpiWorkflowServiceImpl implements EmployeeKpiWorkflowServic
                     : ("KPI \"" + form.getTitle() + "\" finalized for "
                             + finalizedThisRun.size() + " employee(s): " + summary + ".");
             for (User hr : hrUsers) {
-                notificationService.send(hr.getId(), "KPI finalized", hrMessage, TYPE_KPI_FINALIZED_HR);
+                notificationService.send(hr.getId(), "KPI finalized", hrMessage, TYPE_KPI_FINALIZED_HR, form.getId());
             }
         }
     }
