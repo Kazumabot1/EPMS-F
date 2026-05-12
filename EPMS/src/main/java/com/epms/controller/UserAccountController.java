@@ -1,4 +1,5 @@
 
+
 package com.epms.controller;
 
 import com.epms.dto.AccountProvisionResult;
@@ -119,6 +120,21 @@ public class UserAccountController {
                 : "Onboarding email could not be sent";
 
         return ResponseEntity.ok(GenericApiResponse.success(summary, result));
+    }
+
+    /**
+     * Admin-only repair endpoint for old records.
+     *
+     * It syncs users -> employee -> employee_department for all existing users.
+     * SecurityConfig already protects /api/users/** as Admin-only.
+     */
+    @PostMapping("/resync-employee-links")
+    public ResponseEntity<GenericApiResponse<Integer>> resyncEmployeeLinks() {
+        int synced = hrEmployeeAccountService.resyncAllUserEmployeeLinks();
+
+        return ResponseEntity.ok(
+                GenericApiResponse.success("User and employee records resynced", synced)
+        );
     }
 
     private AdminUserAccountResponse toResponse(User user) {

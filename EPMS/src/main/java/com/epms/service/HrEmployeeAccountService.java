@@ -246,6 +246,17 @@ public class HrEmployeeAccountService {
             String position = value(row, "Position", "positionName");
             String firstName = value(row, "FirstName", "firstName");
             String lastName = value(row, "LastName", "lastName");
+            String roleName = value(
+                    row,
+                    "Role",
+                    "RoleName",
+                    "role",
+                    "roleName",
+                    "UserRole",
+                    "userRole",
+                    "AccountRole",
+                    "accountRole"
+            );
 
             HrImportRowResult rowResult = HrImportRowResult.builder()
                     .rowNumber(rowNumber)
@@ -271,7 +282,7 @@ public class HrEmployeeAccountService {
             request.setEmail(email);
             request.setDepartmentName(department);
             request.setPositionName(position);
-            request.setRoleName("EMPLOYEE");
+            request.setRoleName(roleName);
             request.setFirstName(firstName);
             request.setLastName(lastName);
             request.setSendTemporaryPasswordEmail(true);
@@ -302,6 +313,65 @@ public class HrEmployeeAccountService {
     @Transactional
     public AccountProvisionResult resendTemporaryPassword(Integer userId) {
         return userAccountProvisioningService.resendTemporaryPassword(userId);
+    }
+
+    /**
+     * One-time/manual repair for old data created before the sync rule existed.
+     *
+     * It makes every login user with a valid email have a matching employee master row,
+     * links users.employee_id to employee.id, copies core fields both ways, and syncs
+     * employee_department from users.department_id.
+     */
+    @Transactional
+    public int resyncAllUserEmployeeLinks() {
+        int synced = 0;
+
+        for (User user : userRepository.findAll()) {
+            String email = cleanEmail(user.getEmail());
+
+            if (email == null) {
+                continue;
+            }
+
+            String fullName = clean(user.getFullName());
+
+            if (fullName == null) {
+                fullName = email.substring(0, email.indexOf('@'));
+            }
+
+            String employeeCode = clean(user.getEmployeeCode());
+            Position position = user.getPosition();
+
+            Department department = null;
+
+            if (user.getDepartmentId() != null) {
+                department = departmentRepository.findById(user.getDepartmentId()).orElse(null);
+            }
+
+            Employee employee = findOrCreateEmployeeForUser(user, email, fullName, employeeCode, position);
+            employee.setActive(user.getActive() == null || user.getActive());
+            employee = employeeRepository.save(employee);
+
+            if (employee.getActive() == null || employee.getActive()) {
+                syncEmployeeDepartment(employee, department, "System Resync");
+            } else {
+                closeActiveEmployeeDepartmentAssignments(employee);
+            }
+
+            user.setEmail(email);
+            user.setFullName(fullName);
+            user.setEmployeeCode(employeeCode);
+            user.setEmployeeId(employee.getId());
+            user.setDepartmentId(department == null ? null : department.getId());
+            user.setPosition(position);
+            user.setActive(user.getActive() == null || user.getActive());
+            user.setUpdatedAt(new Date());
+
+            userRepository.save(user);
+            synced++;
+        }
+
+        return synced;
     }
 
     private Department findDepartment(HrEmployeeAccountCreateRequest request) {
