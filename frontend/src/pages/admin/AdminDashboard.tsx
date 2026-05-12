@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import api from '../../services/api';
 import { exportToExcel, todayStr } from '../../utils/exportExcel';
 import './admin-dashboard.css';
@@ -48,21 +48,76 @@ const unwrap = <T,>(payload: any, fallback: T): T =>
   payload?.data?.data ?? payload?.data ?? fallback;
 
 const normalizeRoleName = (role?: string | null) => {
-  const value = (role || 'EMPLOYEE')
+  const value = String(role || 'EMPLOYEE')
     .replace(/^ROLE_/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
     .replace(/[\s-]+/g, '_')
+    .trim()
     .toUpperCase();
 
-  if (value === 'PROJECT_MANAGER' || value === 'PROJECTMANAGER' || value === 'PM') {
+  if (
+    value === 'PROJECT_MANAGER' ||
+    value === 'PROJECTMANAGER' ||
+    value === 'TEAM_MANAGER' ||
+    value === 'PM'
+  ) {
     return 'MANAGER';
   }
 
-  if (value === 'DEPARTMENTHEAD') {
+  if (
+    value === 'DEPARTMENTHEAD' ||
+    value === 'DEPT_HEAD' ||
+    value === 'HEAD_OF_DEPARTMENT'
+  ) {
     return 'DEPARTMENT_HEAD';
   }
 
-  return value;
+  if (value === 'EXECUTIVE' || value === 'CEO') {
+    return 'CEO';
+  }
+
+  if (
+    value === 'ADMIN' ||
+    value === 'HR' ||
+    value === 'MANAGER' ||
+    value === 'DEPARTMENT_HEAD' ||
+    value === 'EMPLOYEE'
+  ) {
+    return value;
+  }
+
+  return 'EMPLOYEE';
 };
+
+const roleDisplayName = (role?: string | null) => {
+  const normalized = normalizeRoleName(role);
+
+  switch (normalized) {
+    case 'DEPARTMENT_HEAD':
+      return 'Department Head';
+    case 'EMPLOYEE':
+      return 'Employee';
+    case 'MANAGER':
+      return 'Manager';
+    case 'ADMIN':
+      return 'Admin';
+    case 'HR':
+      return 'HR';
+    case 'CEO':
+      return 'CEO';
+    default:
+      return normalized;
+  }
+};
+
+const coreRoles: RoleOption[] = [
+  { id: 1, name: 'EMPLOYEE' },
+  { id: 2, name: 'HR' },
+  { id: 3, name: 'ADMIN' },
+  { id: 4, name: 'MANAGER' },
+  { id: 5, name: 'DEPARTMENT_HEAD' },
+  { id: 6, name: 'CEO' },
+];
 
 const AdminDashboard = () => {
   const [options, setOptions] = useState<CreateOptions>({
@@ -149,30 +204,12 @@ const AdminDashboard = () => {
   }, []);
 
   const roleOptions = useMemo(() => {
-    const excludedRoles = ['CEO', 'ROLE_CEO', 'EXECUTIVE', 'ROLE_EXECUTIVE'];
+    const source = [...coreRoles, ...options.roles];
 
-    const fallbackRoles: RoleOption[] = [
-      { id: 1, name: 'EMPLOYEE' },
-      { id: 2, name: 'HR' },
-      { id: 3, name: 'ADMIN' },
-      { id: 4, name: 'MANAGER' },
-      { id: 5, name: 'DEPARTMENT_HEAD' },
-    ];
-
-    const source = options.roles.length ? options.roles : fallbackRoles;
-
-    const cleaned = source
-      .map((role) => ({
-        ...role,
-        name: normalizeRoleName(role.name),
-      }))
-      .filter((role) => !excludedRoles.includes(role.name))
-      .filter(
-        (role) =>
-          role.name !== 'PROJECT_MANAGER' &&
-          role.name !== 'PROJECTMANAGER' &&
-          role.name !== 'PM',
-      );
+    const cleaned = source.map((role) => ({
+      ...role,
+      name: normalizeRoleName(role.name),
+    }));
 
     const unique = new Map<string, RoleOption>();
 
@@ -182,7 +219,11 @@ const AdminDashboard = () => {
       }
     });
 
-    return Array.from(unique.values());
+    const order = ['EMPLOYEE', 'HR', 'ADMIN', 'MANAGER', 'DEPARTMENT_HEAD', 'CEO'];
+
+    return Array.from(unique.values()).sort(
+      (a, b) => order.indexOf(a.name) - order.indexOf(b.name),
+    );
   }, [options.roles]);
 
   const openCreate = () => {
@@ -231,7 +272,7 @@ const AdminDashboard = () => {
     sendTemporaryPasswordEmail: !editingUserId,
   });
 
-  const handleSave = async (event: React.FormEvent) => {
+  const handleSave = async (event: FormEvent) => {
     event.preventDefault();
 
     const validationError = validate();
@@ -469,7 +510,7 @@ const AdminDashboard = () => {
 
                       return (
                         <option key={`${role.id}-${roleName}`} value={roleName}>
-                          {roleName}
+                          {roleDisplayName(roleName)}
                         </option>
                       );
                     })}
@@ -544,7 +585,7 @@ const AdminDashboard = () => {
 
                   <div>
                     <span>Role</span>
-                    <strong>{savedUser.roleName || form.roleName}</strong>
+                    <strong>{roleDisplayName(savedUser.roleName || form.roleName)}</strong>
                   </div>
                 </div>
 
@@ -579,7 +620,7 @@ const AdminDashboard = () => {
                   employeeCode: user.employeeCode ?? '',
                   departmentName: user.departmentName ?? '',
                   positionName: user.positionName ?? '',
-                  roleName: user.roleName ?? '',
+                  roleName: roleDisplayName(user.roleName ?? ''),
                   status: user.active === false ? 'Inactive' : 'Active',
                 })) as any,
                 [
@@ -635,7 +676,7 @@ const AdminDashboard = () => {
                     <td>{user.employeeCode ?? '—'}</td>
                     <td>{user.departmentName ?? '—'}</td>
                     <td>{user.positionName ?? '—'}</td>
-                    <td>{user.roleName ?? '—'}</td>
+                    <td>{roleDisplayName(user.roleName ?? '—')}</td>
                     <td>
                       <span
                         className={`adm-badge ${

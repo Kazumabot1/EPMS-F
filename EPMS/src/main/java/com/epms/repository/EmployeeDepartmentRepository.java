@@ -1,3 +1,4 @@
+
 package com.epms.repository;
 
 import com.epms.entity.EmployeeDepartment;
@@ -9,6 +10,19 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface EmployeeDepartmentRepository extends JpaRepository<EmployeeDepartment, Integer> {
+
+    @Query("""
+        SELECT ed
+        FROM EmployeeDepartment ed
+        LEFT JOIN FETCH ed.currentDepartment cd
+        LEFT JOIN FETCH ed.parentDepartment pd
+        WHERE ed.employee.id = :employeeId
+          AND ed.enddate IS NULL
+        ORDER BY ed.startdate DESC, ed.id DESC
+        """)
+    List<EmployeeDepartment> findActiveAssignmentsForEmployeeId(
+            @Param("employeeId") Integer employeeId
+    );
 
     /*
      * Used by One-on-One employee dropdown.

@@ -1,16 +1,15 @@
+
 package com.epms.controller;
 
 import com.epms.dto.AccountProvisionResult;
 import com.epms.dto.GenericApiResponse;
 import com.epms.dto.HrEmployeeAccountCreateRequest;
 import com.epms.entity.Department;
-import com.epms.entity.Position;
 import com.epms.entity.Role;
 import com.epms.entity.User;
 import com.epms.entity.UserRole;
 import com.epms.exception.BadRequestException;
 import com.epms.repository.DepartmentRepository;
-import com.epms.repository.PositionRepository;
 import com.epms.repository.RoleRepository;
 import com.epms.repository.UserRepository;
 import com.epms.repository.UserRoleRepository;
@@ -18,11 +17,17 @@ import com.epms.service.HrEmployeeAccountService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Comparator;
-import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api/users")
@@ -34,7 +39,6 @@ public class UserAccountController {
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
     private final DepartmentRepository departmentRepository;
-    private final PositionRepository positionRepository;
 
     @GetMapping
     public ResponseEntity<GenericApiResponse<List<AdminUserAccountResponse>>> getUsers() {
@@ -54,9 +58,11 @@ public class UserAccountController {
     public ResponseEntity<GenericApiResponse<AdminUserAccountResponse>> createUser(
             @RequestBody HrEmployeeAccountCreateRequest request
     ) {
+        request.setRoleName(normalizeRoleName(request.getRoleName()));
+
         AccountProvisionResult result = hrEmployeeAccountService.createOrUpdateEmployeeAccount(request);
 
-        if (!result.isSuccess() || result.getUserId() == null) {
+        if (result.getUserId() == null) {
             AdminUserAccountResponse response = new AdminUserAccountResponse();
             response.setUserId(result.getUserId());
             response.setTemporaryPasswordEmailSent(result.isTemporaryPasswordEmailSent());
@@ -86,45 +92,16 @@ public class UserAccountController {
             @PathVariable Integer id,
             @RequestBody AdminUserAccountUpdateRequest request
     ) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new BadRequestException("User not found"));
-
-        String email = cleanEmail(request.getEmail());
-
-        if (email == null) {
-            throw new BadRequestException("Email is required");
-        }
-
-        userRepository.findByEmail(email).ifPresent(existing -> {
-            if (!existing.getId().equals(id)) {
-                throw new BadRequestException("Email is already used by another user");
-            }
-        });
-
-        String fullName = clean(request.getFullName());
-
-        if (fullName == null) {
-            throw new BadRequestException("Full name is required");
-        }
-
-        user.setFullName(fullName);
-        user.setEmail(email);
-        user.setEmployeeCode(clean(request.getEmployeeCode()));
-        user.setDepartmentId(request.getDepartmentId());
-        user.setActive(request.getActive() == null || request.getActive());
-        user.setUpdatedAt(new Date());
-
-        if (request.getPositionId() != null) {
-            Position position = positionRepository.findById(request.getPositionId())
-                    .orElseThrow(() -> new BadRequestException("Position not found"));
-            user.setPosition(position);
-        } else {
-            user.setPosition(null);
-        }
-
-        user = userRepository.save(user);
-
-        replaceUserRole(user.getId(), normalizeRoleName(request.getRoleName()));
+        User user = hrEmployeeAccountService.updateAdminUserAccount(
+                id,
+                request.getFullName(),
+                request.getEmail(),
+                request.getEmployeeCode(),
+                request.getDepartmentId(),
+                request.getPositionId(),
+                request.getRoleName(),
+                request.getActive()
+        );
 
         return ResponseEntity.ok(
                 GenericApiResponse.success("User account updated", toResponse(user))
@@ -151,6 +128,7 @@ public class UserAccountController {
         response.setFullName(user.getFullName());
         response.setEmail(user.getEmail());
         response.setEmployeeCode(user.getEmployeeCode());
+        response.setEmployeeId(user.getEmployeeId());
         response.setDepartmentId(user.getDepartmentId());
         response.setActive(user.getActive() == null || user.getActive());
         response.setAccountStatus(user.getAccountStatus());
@@ -183,41 +161,6 @@ public class UserAccountController {
         return response;
     }
 
-    private void replaceUserRole(Integer userId, String roleName) {
-        if (userId == null) {
-            return;
-        }
-
-        Role role = getOrCreateRole(roleName);
-
-        List<UserRole> existingRoles = userRoleRepository.findByUserId(userId);
-
-        if (!existingRoles.isEmpty()) {
-            userRoleRepository.deleteAll(existingRoles);
-        }
-
-        UserRole userRole = new UserRole();
-        userRole.setUserId(userId);
-        userRole.setRoleId(role.getId());
-
-        userRoleRepository.save(userRole);
-    }
-
-    private Role getOrCreateRole(String roleName) {
-        String normalizedRole = normalizeRoleName(roleName);
-
-        return roleRepository.findAll()
-                .stream()
-                .filter(role -> normalizeRoleName(role.getName()).equals(normalizedRole))
-                .findFirst()
-                .orElseGet(() -> {
-                    Role role = new Role();
-                    role.setName(normalizedRole);
-                    role.setDescription("Auto-created by Admin user edit");
-                    return roleRepository.save(role);
-                });
-    }
-
     private String normalizeRoleName(String roleName) {
         String value = clean(roleName);
 
@@ -227,26 +170,23 @@ public class UserAccountController {
 
         String normalized = value
                 .replaceFirst("(?i)^ROLE_", "")
-                .replaceAll("[\\s-]+", "_")
+                .replaceAll("([a-z])([A-Z])", "$1_$2")
+                .replaceAll("[\\s/-]+", "_")
+                .replaceAll("^_+|_+$", "")
                 .trim()
-                .toUpperCase();
+                .toUpperCase(Locale.ROOT);
 
         return switch (normalized) {
-            case "PROJECT_MANAGER", "PROJECTMANAGER", "PM" -> "MANAGER";
-            case "DEPARTMENTHEAD" -> "DEPARTMENT_HEAD";
+            case "PROJECT_MANAGER", "PROJECTMANAGER", "TEAM_MANAGER", "PM" -> "MANAGER";
+            case "DEPARTMENTHEAD", "DEPT_HEAD", "HEAD_OF_DEPARTMENT" -> "DEPARTMENT_HEAD";
+            case "EXECUTIVE", "CEO" -> "CEO";
             case "ADMIN" -> "ADMIN";
             case "HR" -> "HR";
             case "MANAGER" -> "MANAGER";
             case "DEPARTMENT_HEAD" -> "DEPARTMENT_HEAD";
-            case "EXECUTIVE", "CEO" -> "EXECUTIVE";
             case "EMPLOYEE" -> "EMPLOYEE";
             default -> "EMPLOYEE";
         };
-    }
-
-    private String cleanEmail(String value) {
-        String cleaned = clean(value);
-        return cleaned == null ? null : cleaned.toLowerCase();
     }
 
     private String clean(String value) {
@@ -281,6 +221,7 @@ public class UserAccountController {
     @Data
     public static class AdminUserAccountResponse {
         private Integer userId;
+        private Integer employeeId;
         private String fullName;
         private String email;
         private String employeeCode;

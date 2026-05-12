@@ -1,3 +1,4 @@
+
 package com.epms.config;
 
 import com.epms.security.JwtAuthenticationFilter;
@@ -111,15 +112,14 @@ public class SecurityConfig {
     );
 
     private static final Set<String> EXECUTIVE_DASHBOARDS = Set.of(
-            "EXECUTIVE_DASHBOARD"
+            "EXECUTIVE_DASHBOARD",
+            "CEO_DASHBOARD"
     );
 
     private static final Set<String> SCORE_TABLE_DASHBOARDS = Set.of(
             "HR_DASHBOARD",
             "ADMIN_DASHBOARD",
-
             "MANAGER_DASHBOARD",
-
             "DEPARTMENT_HEAD_DASHBOARD",
             "DEPARTMENTHEAD_DASHBOARD",
             "DEPT_HEAD_DASHBOARD"
@@ -136,9 +136,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        /*
-                         * WebSocket / SockJS handshake endpoint.
-                         */
                         .requestMatchers(
                                 "/ws",
                                 "/ws/**"
@@ -163,20 +160,11 @@ public class SecurityConfig {
                                 "/api/signatures/**"
                         ).authenticated()
 
-                        /*
-                         * Assessment Form Builder.
-                         *
-                         * HR/Admin only.
-                         */
                         .requestMatchers(
                                 "/api/appraisal-forms",
                                 "/api/appraisal-forms/**"
                         ).access((authentication, context) -> isHrOrAdmin(authentication.get()))
 
-                        /*
-                         * One-on-One dependencies.
-                         * These must stay before broad /api/employees/** and /api/departments/** rules.
-                         */
                         .requestMatchers(HttpMethod.GET,
                                 "/api/departments",
                                 "/api/departments/**",
@@ -190,6 +178,10 @@ public class SecurityConfig {
                                 "/api/one-on-one-action-items/**"
                         ).authenticated()
 
+                        /*
+                         * Admin user/access-control APIs.
+                         * This explicitly covers GET/POST/PUT/PATCH/DELETE for /api/users/**.
+                         */
                         .requestMatchers(
                                 "/api/users",
                                 "/api/users/**",
@@ -205,13 +197,6 @@ public class SecurityConfig {
                                 hasRoleDashboardOrPosition(authentication.get(), ADMIN_ROLES, ADMIN_DASHBOARDS)
                         )
 
-                        /*
-                         * HR/Admin management APIs.
-                         *
-                         * Important:
-                         * Do NOT include /api/appraisal-forms here.
-                         * It is handled above.
-                         */
                         .requestMatchers(
                                 "/api/dashboard",
                                 "/api/dashboard/**",
@@ -284,9 +269,13 @@ public class SecurityConfig {
                                 hasRoleDashboardOrPosition(authentication.get(), EXECUTIVE_ROLES, EXECUTIVE_DASHBOARDS)
                         )
 
-                        /*
-                         * Employee self-assessment endpoints.
-                         */
+                        .requestMatchers(
+                                "/api/appraisal-reviews",
+                                "/api/appraisal-reviews/**"
+                        ).access((authentication, context) ->
+                                hasRoleDashboardOrPosition(authentication.get(), EXECUTIVE_ROLES, EXECUTIVE_DASHBOARDS)
+                        )
+
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/template").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/my-latest-draft").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/my-scores").authenticated()
@@ -294,15 +283,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/employee-assessments/{id}").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/submit").authenticated()
 
-                        /*
-                         * Self-assessment review table.
-                         *
-                         * HR sees all.
-                         * Manager sees their team's assessments.
-                         * Department Head sees department assessments.
-                         *
-                         * Actual row-level filtering is handled by backend service/controller.
-                         */
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/score-table")
                         .access((authentication, context) ->
                                 hasRoleDashboardOrPosition(authentication.get(), SCORE_TABLE_ROLES, SCORE_TABLE_DASHBOARDS)
@@ -313,9 +293,6 @@ public class SecurityConfig {
                                 hasRoleDashboardOrPosition(authentication.get(), SCORE_TABLE_ROLES, SCORE_TABLE_DASHBOARDS)
                         )
 
-                        /*
-                         * Self-assessment workflow actions.
-                         */
                         .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/manager-sign")
                         .access((authentication, context) ->
                                 hasRoleDashboardOrPosition(authentication.get(), MANAGER_ROLES, MANAGER_DASHBOARDS)

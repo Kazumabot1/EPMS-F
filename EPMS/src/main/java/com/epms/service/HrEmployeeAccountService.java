@@ -1,19 +1,45 @@
+
 package com.epms.service;
 
+import com.epms.dto.AccountProvisionResult;
 import com.epms.dto.HrEmployeeAccountCreateRequest;
 import com.epms.dto.HrImportResult;
 import com.epms.dto.HrImportRowResult;
-import com.epms.dto.AccountProvisionResult;
-import com.epms.entity.*;
+import com.epms.entity.Department;
+import com.epms.entity.Employee;
+import com.epms.entity.EmployeeDepartment;
+import com.epms.entity.Position;
+import com.epms.entity.Role;
+import com.epms.entity.User;
+import com.epms.entity.UserRole;
 import com.epms.exception.BadRequestException;
-import com.epms.repository.*;
+import com.epms.repository.DepartmentRepository;
+import com.epms.repository.EmployeeDepartmentRepository;
+import com.epms.repository.EmployeeRepository;
+import com.epms.repository.PositionRepository;
+import com.epms.repository.RoleRepository;
+import com.epms.repository.UserRepository;
+import com.epms.repository.UserRoleRepository;
 import jakarta.transaction.Transactional;
-import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
-import java.util.*;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 public class HrEmployeeAccountService {
@@ -24,6 +50,7 @@ public class HrEmployeeAccountService {
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
     private final EmployeeRepository employeeRepository;
+    private final EmployeeDepartmentRepository employeeDepartmentRepository;
     private final UserAccountProvisioningService userAccountProvisioningService;
 
     public HrEmployeeAccountService(
@@ -33,6 +60,7 @@ public class HrEmployeeAccountService {
             RoleRepository roleRepository,
             UserRoleRepository userRoleRepository,
             EmployeeRepository employeeRepository,
+            EmployeeDepartmentRepository employeeDepartmentRepository,
             UserAccountProvisioningService userAccountProvisioningService
     ) {
         this.userRepository = userRepository;
@@ -41,61 +69,70 @@ public class HrEmployeeAccountService {
         this.roleRepository = roleRepository;
         this.userRoleRepository = userRoleRepository;
         this.employeeRepository = employeeRepository;
+        this.employeeDepartmentRepository = employeeDepartmentRepository;
         this.userAccountProvisioningService = userAccountProvisioningService;
     }
-    private Department findDepartment(HrEmployeeAccountCreateRequest request) {
-        if (request.getDepartmentId() != null) {
-            return departmentRepository.findById(request.getDepartmentId())
-                    .orElse(null);
-        }
 
-        return getOrCreateDepartment(request.getDepartmentName());
-    }
-
-    private Position findPosition(HrEmployeeAccountCreateRequest request) {
-        if (request.getPositionId() != null) {
-            return positionRepository.findById(request.getPositionId())
-                    .orElse(null);
-        }
-
-        return findPosition(request.getPositionName());
-    }
-
+    /**
+     * Admin/HR account creation must keep these tables in sync:
+     * users -> employee -> employee_department.
+     *
+     * Before this fix, Admin could create a login user without a matching employee master row
+     * or without an active employee_department assignment. HR pages read employee data, so those
+     * users looked "missing" even though they existed in users.
+     */
     @Transactional
     public AccountProvisionResult createOrUpdateEmployeeAccount(HrEmployeeAccountCreateRequest request) {
         String email = cleanEmail(request.getEmail());
         String employeeCode = clean(request.getEmployeeCode());
+        String fullName = clean(request.getFullName());
+        String normalizedRole = normalizeRoleName(request.getRoleName());
 
         if (email == null) {
             throw new BadRequestException("Email is required");
         }
 
-        Employee employee = findOrCreateEmployeeForAccount(request);
-        AccountProvisionResult provision = userAccountProvisioningService.provisionFromEmployee(
-                employee,
-                clean(request.getRoleName()) != null ? request.getRoleName() : "EMPLOYEE",
-                Boolean.TRUE.equals(request.getSendTemporaryPasswordEmail())
-        );
-        if (!provision.isSuccess() || provision.getUserId() == null) {
-            return provision;
+        if (fullName == null) {
+            fullName = joinName(clean(request.getFirstName()), clean(request.getLastName()));
         }
-        User user = userRepository.findById(provision.getUserId()).orElseThrow();
-        user.setEmail(email);
-        user.setEmployeeCode(employeeCode);
-        user.setFullName(clean(request.getFullName()));
-        user.setUpdatedAt(new Date());
+
+        if (fullName == null) {
+            throw new BadRequestException("Full name is required");
+        }
 
         Department department = findDepartment(request);
-        if (department != null) {
-            user.setDepartmentId(department.getId());
-        }
-
         Position position = findPosition(request);
-        if (position != null) {
-            user.setPosition(position);
+
+        Employee employee = findOrCreateEmployeeForAccount(request, email, fullName, employeeCode, position);
+        employee.setActive(true);
+        employee = employeeRepository.save(employee);
+
+        syncEmployeeDepartment(employee, department, "Admin");
+
+        AccountProvisionResult provision = userAccountProvisioningService.provisionFromEmployee(
+                employee,
+                normalizedRole,
+                Boolean.TRUE.equals(request.getSendTemporaryPasswordEmail())
+        );
+
+        if (provision.getUserId() == null) {
+            return provision;
         }
 
+        User user = userRepository.findById(provision.getUserId())
+                .orElseThrow(() -> new BadRequestException("User was created but could not be loaded"));
+
+        user.setEmail(email);
+        user.setEmployeeId(employee.getId());
+        user.setEmployeeCode(employeeCode);
+        user.setFullName(fullName);
+        user.setDepartmentId(department == null ? null : department.getId());
+        user.setPosition(position);
+        user.setActive(true);
+        user.setUpdatedAt(new Date());
         user = userRepository.save(user);
+
+        replaceUserRole(user.getId(), normalizedRole, "Auto-created by Admin user management");
 
         return AccountProvisionResult.builder()
                 .userId(user.getId())
@@ -108,12 +145,88 @@ public class HrEmployeeAccountService {
                 .build();
     }
 
+    /**
+     * Used by Admin Dashboard edit. This intentionally updates both user login data and employee
+     * master data so HR Employee, Manager, Department Head, and self-assessment pages all see the
+     * same person.
+     */
+    @Transactional
+    public User updateAdminUserAccount(
+            Integer userId,
+            String fullNameRaw,
+            String emailRaw,
+            String employeeCodeRaw,
+            Integer departmentId,
+            Integer positionId,
+            String roleNameRaw,
+            Boolean activeRaw
+    ) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+
+        String email = cleanEmail(emailRaw);
+        String fullName = clean(fullNameRaw);
+        String employeeCode = clean(employeeCodeRaw);
+        String normalizedRole = normalizeRoleName(roleNameRaw);
+        boolean active = activeRaw == null || activeRaw;
+
+        if (email == null) {
+            throw new BadRequestException("Email is required");
+        }
+
+        if (fullName == null) {
+            throw new BadRequestException("Full name is required");
+        }
+
+        userRepository.findByEmail(email).ifPresent(existing -> {
+            if (!existing.getId().equals(userId)) {
+                throw new BadRequestException("Email is already used by another user");
+            }
+        });
+
+        Department department = null;
+        if (departmentId != null) {
+            department = departmentRepository.findById(departmentId)
+                    .orElseThrow(() -> new BadRequestException("Department not found"));
+        }
+
+        Position position = null;
+        if (positionId != null) {
+            position = positionRepository.findById(positionId)
+                    .orElseThrow(() -> new BadRequestException("Position not found"));
+        }
+
+        Employee employee = findOrCreateEmployeeForUser(user, email, fullName, employeeCode, position);
+        employee.setActive(active);
+        employee = employeeRepository.save(employee);
+
+        if (active) {
+            syncEmployeeDepartment(employee, department, "Admin");
+        } else {
+            closeActiveEmployeeDepartmentAssignments(employee);
+        }
+
+        user.setEmail(email);
+        user.setFullName(fullName);
+        user.setEmployeeCode(employeeCode);
+        user.setEmployeeId(employee.getId());
+        user.setDepartmentId(department == null ? null : department.getId());
+        user.setPosition(position);
+        user.setActive(active);
+        user.setUpdatedAt(new Date());
+        user = userRepository.save(user);
+
+        replaceUserRole(user.getId(), normalizedRole, "Auto-created by Admin user edit");
+
+        return user;
+    }
+
     @Transactional
     public HrImportResult importEmployeeAccounts(MultipartFile file) throws Exception {
         HrImportResult result = new HrImportResult();
 
         List<Map<String, String>> rows;
-        String filename = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
+        String filename = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
 
         if (filename.endsWith(".xlsx")) {
             rows = readXlsx(file);
@@ -133,6 +246,7 @@ public class HrEmployeeAccountService {
             String position = value(row, "Position", "positionName");
             String firstName = value(row, "FirstName", "firstName");
             String lastName = value(row, "LastName", "lastName");
+
             HrImportRowResult rowResult = HrImportRowResult.builder()
                     .rowNumber(rowNumber)
                     .email(cleanEmail(email))
@@ -171,11 +285,14 @@ public class HrEmployeeAccountService {
                 result.setCreated(result.getCreated() + 1);
                 rowResult.setAccountAction("created");
             }
+
             rowResult.setEmployeeAction("created_or_updated");
             rowResult.setEmailAction(provision.isTemporaryPasswordEmailSent() ? "sent" : "failed");
+
             if (!provision.isSuccess() && provision.getMessage() != null) {
                 rowResult.getValidationErrors().add(provision.getMessage());
             }
+
             result.getRows().add(rowResult);
         }
 
@@ -187,74 +304,286 @@ public class HrEmployeeAccountService {
         return userAccountProvisioningService.resendTemporaryPassword(userId);
     }
 
+    private Department findDepartment(HrEmployeeAccountCreateRequest request) {
+        if (request.getDepartmentId() != null) {
+            return departmentRepository.findById(request.getDepartmentId())
+                    .orElseThrow(() -> new BadRequestException("Department not found"));
+        }
+
+        return getOrCreateDepartment(request.getDepartmentName());
+    }
+
+    private Position findPosition(HrEmployeeAccountCreateRequest request) {
+        if (request.getPositionId() != null) {
+            return positionRepository.findById(request.getPositionId())
+                    .orElseThrow(() -> new BadRequestException("Position not found"));
+        }
+
+        return findPosition(request.getPositionName());
+    }
+
     private Department getOrCreateDepartment(String name) {
         String departmentName = clean(name);
-        if (departmentName == null) return null;
 
-        return departmentRepository.findByDepartmentName(departmentName)
+        if (departmentName == null) {
+            return null;
+        }
+
+        return departmentRepository.findByDepartmentNameIgnoreCase(departmentName)
                 .orElseGet(() -> {
-                    Department d = new Department();
-                    d.setDepartmentName(departmentName);
-                    d.setStatus(true);
-                    d.setCreatedAt(new Date());
-                    d.setCreatedBy("HR Import");
-                    return departmentRepository.save(d);
+                    Department department = new Department();
+                    department.setDepartmentName(departmentName);
+                    department.setStatus(true);
+                    department.setCreatedAt(new Date());
+                    department.setCreatedBy("Admin/HR Import");
+                    return departmentRepository.save(department);
                 });
     }
 
     private Position findPosition(String name) {
         String positionName = clean(name);
-        if (positionName == null) return null;
+
+        if (positionName == null) {
+            return null;
+        }
 
         return positionRepository.findByPositionTitleIgnoreCase(positionName)
                 .orElse(null);
     }
 
-    private Role getOrCreateRole(String name) {
-        String roleName = clean(name);
-        if (roleName == null) roleName = "EMPLOYEE";
+    private Employee findOrCreateEmployeeForAccount(
+            HrEmployeeAccountCreateRequest request,
+            String email,
+            String fullName,
+            String employeeCode,
+            Position position
+    ) {
+        Employee employee = null;
 
-        String finalRoleName = roleName;
+        if (request.getEmployeeId() != null) {
+            employee = employeeRepository.findById(request.getEmployeeId()).orElse(null);
+        }
 
-        return roleRepository.findAll()
+        if (employee == null) {
+            employee = findEmployeeByEmailIgnoreCase(email).orElse(null);
+        }
+
+        if (employee == null) {
+            employee = new Employee();
+        }
+
+        syncEmployeeBasicFields(employee, email, fullName, employeeCode, position);
+
+        return employee;
+    }
+
+    private Employee findOrCreateEmployeeForUser(
+            User user,
+            String email,
+            String fullName,
+            String employeeCode,
+            Position position
+    ) {
+        Employee employee = null;
+
+        if (user.getEmployeeId() != null) {
+            employee = employeeRepository.findById(user.getEmployeeId()).orElse(null);
+        }
+
+        if (employee == null) {
+            employee = findEmployeeByEmailIgnoreCase(email).orElse(null);
+        }
+
+        if (employee == null) {
+            employee = new Employee();
+        }
+
+        syncEmployeeBasicFields(employee, email, fullName, employeeCode, position);
+
+        return employee;
+    }
+
+    private void syncEmployeeBasicFields(
+            Employee employee,
+            String email,
+            String fullName,
+            String employeeCode,
+            Position position
+    ) {
+        employee.setEmail(email);
+        employee.setFirstName(deriveFirstName(fullName));
+        employee.setLastName(deriveLastName(fullName));
+        employee.setStaffNrc(employeeCode);
+        employee.setPosition(position);
+    }
+
+    private void syncEmployeeDepartment(Employee employee, Department department, String assignBy) {
+        if (employee == null || employee.getId() == null) {
+            return;
+        }
+
+        if (department == null) {
+            closeActiveEmployeeDepartmentAssignments(employee);
+            return;
+        }
+
+        List<EmployeeDepartment> activeAssignments = employeeDepartmentRepository
+                .findActiveAssignmentsForEmployeeId(employee.getId());
+
+        for (EmployeeDepartment assignment : activeAssignments) {
+            Integer currentDepartmentId = assignment.getCurrentDepartment() == null
+                    ? null
+                    : assignment.getCurrentDepartment().getId();
+            Integer parentDepartmentId = assignment.getParentDepartment() == null
+                    ? null
+                    : assignment.getParentDepartment().getId();
+            Integer workingDepartmentId = parentDepartmentId != null ? parentDepartmentId : currentDepartmentId;
+
+            if (Objects.equals(workingDepartmentId, department.getId())) {
+                assignment.setCurrentDepartment(department);
+                assignment.setParentDepartment(null);
+                assignment.setAssignBy(assignBy == null ? "Admin" : assignBy);
+                if (assignment.getStartdate() == null) {
+                    assignment.setStartdate(new Date());
+                }
+                assignment.setEnddate(null);
+                employeeDepartmentRepository.save(assignment);
+                return;
+            }
+        }
+
+        closeActiveEmployeeDepartmentAssignments(employee);
+
+        EmployeeDepartment newAssignment = new EmployeeDepartment();
+        newAssignment.setEmployee(employee);
+        newAssignment.setCurrentDepartment(department);
+        newAssignment.setParentDepartment(null);
+        newAssignment.setAssignBy(assignBy == null ? "Admin" : assignBy);
+        newAssignment.setStartdate(new Date());
+        newAssignment.setEnddate(null);
+
+        employeeDepartmentRepository.save(newAssignment);
+    }
+
+    private void closeActiveEmployeeDepartmentAssignments(Employee employee) {
+        if (employee == null || employee.getId() == null) {
+            return;
+        }
+
+        List<EmployeeDepartment> activeAssignments = employeeDepartmentRepository
+                .findActiveAssignmentsForEmployeeId(employee.getId());
+
+        Date endDate = new Date();
+
+        for (EmployeeDepartment assignment : activeAssignments) {
+            assignment.setEnddate(endDate);
+            employeeDepartmentRepository.save(assignment);
+        }
+    }
+
+    private Optional<Employee> findEmployeeByEmailIgnoreCase(String email) {
+        String normalizedEmail = cleanEmail(email);
+
+        if (normalizedEmail == null) {
+            return Optional.empty();
+        }
+
+        Optional<Employee> exact = employeeRepository.findByEmail(normalizedEmail);
+
+        if (exact.isPresent()) {
+            return exact;
+        }
+
+        return employeeRepository.findAll()
                 .stream()
-                .filter(r -> r.getName().equalsIgnoreCase(finalRoleName))
-                .findFirst()
+                .filter(employee -> employee.getEmail() != null)
+                .filter(employee -> employee.getEmail().trim().equalsIgnoreCase(normalizedEmail))
+                .findFirst();
+    }
+
+    private void replaceUserRole(Integer userId, String roleName, String description) {
+        if (userId == null) {
+            return;
+        }
+
+        Role role = getOrCreateRole(roleName, description);
+        List<UserRole> existingRoles = userRoleRepository.findByUserId(userId);
+
+        if (!existingRoles.isEmpty()) {
+            userRoleRepository.deleteAll(existingRoles);
+        }
+
+        UserRole userRole = new UserRole();
+        userRole.setUserId(userId);
+        userRole.setRoleId(role.getId());
+
+        userRoleRepository.save(userRole);
+    }
+
+    private Role getOrCreateRole(String name, String description) {
+        String roleName = normalizeRoleName(name);
+
+        return roleRepository.findByNameIgnoreCase(roleName)
                 .orElseGet(() -> {
                     Role role = new Role();
-                    role.setName(finalRoleName.toUpperCase());
-                    role.setDescription("Auto-created by HR employee import");
+                    role.setName(roleName);
+                    role.setDescription(description == null ? "Auto-created during user provisioning" : description);
                     return roleRepository.save(role);
                 });
     }
 
-    private Employee findOrCreateEmployeeForAccount(HrEmployeeAccountCreateRequest request) {
-        String email = cleanEmail(request.getEmail());
-        return employeeRepository.findByEmail(email).orElseGet(() -> {
-            Employee employee = new Employee();
-            employee.setEmail(email);
-            employee.setFirstName(clean(request.getFirstName()) != null ? clean(request.getFirstName()) : deriveFirstName(request.getFullName()));
-            employee.setLastName(clean(request.getLastName()) != null ? clean(request.getLastName()) : deriveLastName(request.getFullName()));
-            employee.setStaffNrc(clean(request.getEmployeeCode()));
-            Position position = findPosition(request.getPositionName());
-            employee.setPosition(position);
-            employee.setActive(true);
-            return employeeRepository.save(employee);
-        });
+    private String normalizeRoleName(String roleName) {
+        String value = clean(roleName);
+
+        if (value == null) {
+            return "EMPLOYEE";
+        }
+
+        String normalized = value
+                .replaceFirst("(?i)^ROLE_", "")
+                .replaceAll("([a-z])([A-Z])", "$1_$2")
+                .replaceAll("[\\s/-]+", "_")
+                .replaceAll("^_+|_+$", "")
+                .toUpperCase(Locale.ROOT);
+
+        return switch (normalized) {
+            case "PROJECT_MANAGER", "PROJECTMANAGER", "TEAM_MANAGER", "PM" -> "MANAGER";
+            case "DEPARTMENTHEAD", "DEPT_HEAD", "HEAD_OF_DEPARTMENT" -> "DEPARTMENT_HEAD";
+            case "EXECUTIVE", "CEO" -> "CEO";
+            case "ADMIN" -> "ADMIN";
+            case "HR" -> "HR";
+            case "MANAGER" -> "MANAGER";
+            case "DEPARTMENT_HEAD" -> "DEPARTMENT_HEAD";
+            case "EMPLOYEE" -> "EMPLOYEE";
+            default -> "EMPLOYEE";
+        };
     }
 
     private String deriveFirstName(String fullName) {
         String value = clean(fullName);
-        if (value == null) return "Employee";
+
+        if (value == null) {
+            return "Employee";
+        }
+
         String[] parts = value.split("\\s+");
         return parts.length > 0 ? parts[0] : "Employee";
     }
 
     private String deriveLastName(String fullName) {
         String value = clean(fullName);
-        if (value == null) return "User";
+
+        if (value == null) {
+            return "User";
+        }
+
         String[] parts = value.split("\\s+");
         return parts.length > 1 ? parts[parts.length - 1] : "User";
+    }
+
+    private String joinName(String firstName, String lastName) {
+        String joined = ((firstName == null ? "" : firstName.trim()) + " " + (lastName == null ? "" : lastName.trim())).trim();
+        return joined.isBlank() ? null : joined;
     }
 
     private List<Map<String, String>> readCsv(MultipartFile file) throws Exception {
@@ -265,12 +594,16 @@ public class HrEmployeeAccountService {
         );
 
         String headerLine = reader.readLine();
-        if (headerLine == null) return rows;
+
+        if (headerLine == null) {
+            return rows;
+        }
 
         headerLine = headerLine.replace("\uFEFF", "");
         List<String> headers = parseCsvLine(headerLine);
 
         String line;
+
         while ((line = reader.readLine()) != null) {
             List<String> values = parseCsvLine(line);
             Map<String, String> row = new HashMap<>();
@@ -293,7 +626,11 @@ public class HrEmployeeAccountService {
         Sheet sheet = workbook.getSheetAt(0);
 
         Row headerRow = sheet.getRow(0);
-        if (headerRow == null) return rows;
+
+        if (headerRow == null) {
+            workbook.close();
+            return rows;
+        }
 
         List<String> headers = new ArrayList<>();
         DataFormatter formatter = new DataFormatter();
@@ -304,7 +641,10 @@ public class HrEmployeeAccountService {
 
         for (int i = 1; i <= sheet.getLastRowNum(); i++) {
             Row excelRow = sheet.getRow(i);
-            if (excelRow == null) continue;
+
+            if (excelRow == null) {
+                continue;
+            }
 
             Map<String, String> row = new HashMap<>();
 
@@ -344,30 +684,35 @@ public class HrEmployeeAccountService {
 
     private String value(Map<String, String> row, String... keys) {
         for (String key : keys) {
-            if (row.containsKey(key)) return row.get(key);
+            if (row.containsKey(key)) {
+                return row.get(key);
+            }
         }
+
         return null;
     }
 
     private String clean(String value) {
-        if (value == null) return null;
-
-        String v = value.trim();
-
-        if (v.isEmpty()
-                || v.equalsIgnoreCase("null")
-                || v.equalsIgnoreCase("nil")
-                || v.equalsIgnoreCase("n/a")
-                || v.equalsIgnoreCase("xxx")
-                || v.equals("-")) {
+        if (value == null) {
             return null;
         }
 
-        return v;
+        String cleaned = value.trim();
+
+        if (cleaned.isEmpty()
+                || cleaned.equalsIgnoreCase("null")
+                || cleaned.equalsIgnoreCase("nil")
+                || cleaned.equalsIgnoreCase("n/a")
+                || cleaned.equalsIgnoreCase("xxx")
+                || cleaned.equals("-")) {
+            return null;
+        }
+
+        return cleaned;
     }
 
     private String cleanEmail(String email) {
         String value = clean(email);
-        return value == null ? null : value.toLowerCase();
+        return value == null ? null : value.toLowerCase(Locale.ROOT);
     }
 }
