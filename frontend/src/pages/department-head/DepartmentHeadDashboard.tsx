@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   createDepartmentHeadTeam,
   fetchDepartmentHeadCandidateMembers,
@@ -29,6 +30,8 @@ const getExistingMemberIds = (team: TeamResponse | null): number[] => {
 };
 
 const DepartmentHeadDashboard = () => {
+  const navigate = useNavigate();
+
   const [departmentName, setDepartmentName] = useState('');
   const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
   const [teams, setTeams] = useState<TeamResponse[]>([]);
@@ -49,7 +52,7 @@ const DepartmentHeadDashboard = () => {
 
   const activeEmployees = useMemo(
     () => employees.filter((employee) => employee.active !== false).length,
-    [employees]
+    [employees],
   );
 
   const loadPage = async () => {
@@ -73,7 +76,7 @@ const DepartmentHeadDashboard = () => {
       setError(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
-          'Failed to load department dashboard.'
+          'Failed to load department dashboard.',
       );
     } finally {
       setLoading(false);
@@ -81,7 +84,7 @@ const DepartmentHeadDashboard = () => {
   };
 
   useEffect(() => {
-    loadPage();
+    void loadPage();
   }, []);
 
   const resetForm = () => {
@@ -126,9 +129,7 @@ const DepartmentHeadDashboard = () => {
 
     if (!available && !isExisting) {
       setFormMessage(
-        `${member.name} is already in a team: ${
-          member.currentTeamName || 'Unknown Team'
-        }`
+        `${member.name} is already in a team: ${member.currentTeamName || 'Unknown Team'}`,
       );
       return;
     }
@@ -141,7 +142,7 @@ const DepartmentHeadDashboard = () => {
     setMemberUserIds((prev) =>
       prev.includes(id)
         ? prev.filter((memberId) => memberId !== id)
-        : [...prev, id]
+        : [...prev, id],
     );
   };
 
@@ -154,21 +155,17 @@ const DepartmentHeadDashboard = () => {
     }
 
     const selectedLeader = leaders.find(
-      (leader) => leader.id === Number(teamLeaderId)
+      (leader) => leader.id === Number(teamLeaderId),
     );
 
     const isCurrentLeader =
       editingTeam && editingTeam.teamLeaderId === Number(teamLeaderId);
 
-    if (
-      selectedLeader &&
-      !getCandidateAvailable(selectedLeader) &&
-      !isCurrentLeader
-    ) {
+    if (selectedLeader && !getCandidateAvailable(selectedLeader) && !isCurrentLeader) {
       setFormMessage(
         `${selectedLeader.name} is already in a team: ${
           selectedLeader.currentTeamName || 'Unknown Team'
-        }`
+        }`,
       );
       return;
     }
@@ -187,7 +184,7 @@ const DepartmentHeadDashboard = () => {
       setFormMessage(
         `${unavailableMember.name} is already in a team: ${
           unavailableMember.currentTeamName || 'Unknown Team'
-        }`
+        }`,
       );
       return;
     }
@@ -222,7 +219,7 @@ const DepartmentHeadDashboard = () => {
       setFormMessage(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
-          'Failed to save team.'
+          'Failed to save team.',
       );
     } finally {
       setSaving(false);
@@ -247,8 +244,25 @@ const DepartmentHeadDashboard = () => {
           <i className="bi bi-building-check" />
           Department Head
         </span>
+
         <h1>{departmentName || 'My Department'}</h1>
-        <p>Manage teams and employees from your own department only.</p>
+        <p>Manage teams, employees, and self-assessment reviews from your department.</p>
+
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
+          <button
+            className="team-btn primary"
+            type="button"
+            onClick={() => navigate('/department-head/assessment-scores')}
+          >
+            <i className="bi bi-clipboard-check" />
+            Self-Assessment Review
+          </button>
+
+          <button className="team-btn secondary" type="button" onClick={loadPage}>
+            <i className="bi bi-arrow-clockwise" />
+            Refresh Dashboard
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -279,26 +293,59 @@ const DepartmentHeadDashboard = () => {
           </div>
 
           <div className="row g-3 mb-4">
-            <div className="col-md-4">
+            <div className="col-md-3">
               <div className="team-card">
                 <strong>{activeEmployees}</strong>
                 <span>Active Employees</span>
               </div>
             </div>
 
-            <div className="col-md-4">
+            <div className="col-md-3">
               <div className="team-card">
                 <strong>{teams.length}</strong>
                 <span>Teams</span>
               </div>
             </div>
 
-            <div className="col-md-4">
+            <div className="col-md-3">
               <div className="team-card">
                 <strong>{departmentName || '-'}</strong>
                 <span>Department</span>
               </div>
             </div>
+
+            <div className="col-md-3">
+              <button
+                type="button"
+                className="team-card"
+                onClick={() => navigate('/department-head/assessment-scores')}
+                style={{
+                  width: '100%',
+                  cursor: 'pointer',
+                  border: 'none',
+                  textAlign: 'left',
+                }}
+              >
+                <strong>
+                  <i className="bi bi-clipboard-check" /> Review
+                </strong>
+                <span>Self-Assessments</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="team-alert" style={{ marginBottom: 24 }}>
+            <strong>Self-assessment approval flow:</strong>{' '}
+            Employee submits → Manager signs → Department Head signs → HR approves or declines.
+            Department Head signing is available from{' '}
+            <button
+              type="button"
+              className="team-btn ghost"
+              onClick={() => navigate('/department-head/assessment-scores')}
+              style={{ marginLeft: 8 }}
+            >
+              Assessment Review
+            </button>
           </div>
 
           <h3>Teams</h3>
@@ -343,10 +390,7 @@ const DepartmentHeadDashboard = () => {
                       <td>{team.members?.length ?? 0}</td>
                       <td>{team.teamGoal || '-'}</td>
                       <td>
-                        <button
-                          className="team-btn ghost"
-                          onClick={() => openEdit(team)}
-                        >
+                        <button className="team-btn ghost" onClick={() => openEdit(team)}>
                           <i className="bi bi-pencil-square" />
                           Edit
                         </button>
@@ -364,6 +408,11 @@ const DepartmentHeadDashboard = () => {
             <div className="team-state">
               <i className="bi bi-person" />
               <p>No employees found in your department.</p>
+              <small className="text-muted">
+                If the employee exists in Admin but does not appear here, check that the
+                employee is assigned to this department and that the linked login user has
+                the same department.
+              </small>
             </div>
           ) : (
             <div className="team-table-wrap">
@@ -384,9 +433,7 @@ const DepartmentHeadDashboard = () => {
                         <strong>{getEmployeeName(employee)}</strong>
                       </td>
                       <td>{employee.email || '-'}</td>
-                      <td>
-                        {employee.positionTitle || employee.positionName || '-'}
-                      </td>
+                      <td>{employee.positionTitle || employee.positionName || '-'}</td>
                       <td>
                         <span
                           className={`team-pill ${
@@ -409,11 +456,7 @@ const DepartmentHeadDashboard = () => {
         <div className="team-modal-overlay">
           <div className="team-modal-content">
             <div className="team-modal-header">
-              <h2>
-                {editingTeam
-                  ? `Edit Team: ${editingTeam.teamName}`
-                  : 'Create Team'}
-              </h2>
+              <h2>{editingTeam ? `Edit Team: ${editingTeam.teamName}` : 'Create Team'}</h2>
 
               <button className="team-btn ghost" onClick={closeForm}>
                 <i className="bi bi-x-lg" />
@@ -421,9 +464,7 @@ const DepartmentHeadDashboard = () => {
             </div>
 
             <div className="team-modal-body">
-              {formMessage && (
-                <div className="team-alert error">{formMessage}</div>
-              )}
+              {formMessage && <div className="team-alert error">{formMessage}</div>}
 
               <form
                 id="department-head-team-form"
@@ -455,25 +496,18 @@ const DepartmentHeadDashboard = () => {
                     className="team-select"
                     value={teamLeaderId}
                     onChange={(event) =>
-                      setTeamLeaderId(
-                        event.target.value ? Number(event.target.value) : ''
-                      )
+                      setTeamLeaderId(event.target.value ? Number(event.target.value) : '')
                     }
                     required
                   >
                     <option value="">Select leader</option>
                     {leaders.map((leader) => {
-                      const isCurrentLeader =
-                        editingTeam?.teamLeaderId === leader.id;
+                      const isCurrentLeader = editingTeam?.teamLeaderId === leader.id;
                       const available = getCandidateAvailable(leader);
                       const disabled = !available && !isCurrentLeader;
 
                       return (
-                        <option
-                          key={leader.id}
-                          value={leader.id}
-                          disabled={disabled}
-                        >
+                        <option key={leader.id} value={leader.id} disabled={disabled}>
                           {leader.name}
                           {disabled
                             ? ` ⚠️ (already in a team: ${
@@ -525,9 +559,7 @@ const DepartmentHeadDashboard = () => {
                       return (
                         <label
                           key={member.id}
-                          className={`team-member-item ${
-                            disabled ? 'disabled' : ''
-                          }`}
+                          className={`team-member-item ${disabled ? 'disabled' : ''}`}
                           title={
                             isLeader
                               ? 'Team leader cannot also be a member'
@@ -564,11 +596,7 @@ const DepartmentHeadDashboard = () => {
             </div>
 
             <div className="team-modal-footer">
-              <button
-                className="team-btn secondary"
-                onClick={closeForm}
-                disabled={saving}
-              >
+              <button className="team-btn secondary" onClick={closeForm} disabled={saving}>
                 Cancel
               </button>
 

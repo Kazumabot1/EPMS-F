@@ -155,6 +155,13 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
 
   Manager: [
     { label: 'Manager Dashboard', path: '/manager/dashboard', icon: 'bi-person-workspace', end: true },
+
+    {
+      label: 'Assessment Review',
+      path: '/manager/assessment-review',
+      icon: 'bi-person-check',
+    },
+
     {
       label: 'Team Appraisals',
       path: '/manager/appraisals',
@@ -194,8 +201,9 @@ export const roleNavigation: Record<UserRole, NavItem[]> = {
 };
 
 const normalizeRoleName = (role: string) =>
-  role
+  String(role ?? '')
     .replace(/^ROLE_/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
     .replace(/[\s-]+/g, '_')
     .toUpperCase();
 
@@ -203,7 +211,7 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
   if (!user) return 'Employee';
 
   const normalizedRoles = (user.roles ?? []).map(normalizeRoleName);
-  const dashboard = user.dashboard ?? '';
+  const dashboard = normalizeRoleName(user.dashboard ?? '');
 
   if (normalizedRoles.includes('ADMIN') || dashboard === 'ADMIN_DASHBOARD') {
     return 'Admin';
@@ -212,7 +220,10 @@ export const resolveUserRole = (user?: UserLike | null): UserRole => {
   if (
     normalizedRoles.includes('DEPARTMENT_HEAD') ||
     normalizedRoles.includes('DEPARTMENTHEAD') ||
-    dashboard === 'DEPARTMENT_HEAD_DASHBOARD'
+    normalizedRoles.includes('DEPT_HEAD') ||
+    dashboard === 'DEPARTMENT_HEAD_DASHBOARD' ||
+    dashboard === 'DEPARTMENTHEAD_DASHBOARD' ||
+    dashboard === 'DEPT_HEAD_DASHBOARD'
   ) {
     return 'DepartmentHead';
   }

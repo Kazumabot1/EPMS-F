@@ -24,7 +24,9 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
@@ -51,12 +53,16 @@ public class SecurityConfig {
     );
 
     private static final Set<String> MANAGER_ROLES = Set.of(
-            "MANAGER"
+            "MANAGER",
+            "PROJECT_MANAGER",
+            "TEAM_MANAGER"
     );
 
     private static final Set<String> DEPARTMENT_HEAD_ROLES = Set.of(
             "DEPARTMENT_HEAD",
-            "DEPARTMENTHEAD"
+            "DEPARTMENTHEAD",
+            "DEPT_HEAD",
+            "HEAD_OF_DEPARTMENT"
     );
 
     private static final Set<String> EXECUTIVE_ROLES = Set.of(
@@ -74,8 +80,15 @@ public class SecurityConfig {
             "PEOPLE_OPS",
             "TALENT",
             "ADMIN",
+
+            "MANAGER",
+            "PROJECT_MANAGER",
+            "TEAM_MANAGER",
+
             "DEPARTMENT_HEAD",
-            "DEPARTMENTHEAD"
+            "DEPARTMENTHEAD",
+            "DEPT_HEAD",
+            "HEAD_OF_DEPARTMENT"
     );
 
     private static final Set<String> ADMIN_DASHBOARDS = Set.of(
@@ -92,7 +105,9 @@ public class SecurityConfig {
     );
 
     private static final Set<String> DEPARTMENT_HEAD_DASHBOARDS = Set.of(
-            "DEPARTMENT_HEAD_DASHBOARD"
+            "DEPARTMENT_HEAD_DASHBOARD",
+            "DEPARTMENTHEAD_DASHBOARD",
+            "DEPT_HEAD_DASHBOARD"
     );
 
     private static final Set<String> EXECUTIVE_DASHBOARDS = Set.of(
@@ -102,7 +117,12 @@ public class SecurityConfig {
     private static final Set<String> SCORE_TABLE_DASHBOARDS = Set.of(
             "HR_DASHBOARD",
             "ADMIN_DASHBOARD",
-            "DEPARTMENT_HEAD_DASHBOARD"
+
+            "MANAGER_DASHBOARD",
+
+            "DEPARTMENT_HEAD_DASHBOARD",
+            "DEPARTMENTHEAD_DASHBOARD",
+            "DEPT_HEAD_DASHBOARD"
     );
 
     @Bean
@@ -147,8 +167,6 @@ public class SecurityConfig {
                          * Assessment Form Builder.
                          *
                          * HR/Admin only.
-                         * Your DB role ROLE_HR becomes HR in UserPrincipal roles
-                         * and ROLE_HR in Spring authorities. This checker supports both.
                          */
                         .requestMatchers(
                                 "/api/appraisal-forms",
@@ -266,6 +284,9 @@ public class SecurityConfig {
                                 hasRoleDashboardOrPosition(authentication.get(), EXECUTIVE_ROLES, EXECUTIVE_DASHBOARDS)
                         )
 
+                        /*
+                         * Employee self-assessment endpoints.
+                         */
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/template").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/my-latest-draft").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/my-scores").authenticated()
@@ -273,6 +294,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/employee-assessments/{id}").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/submit").authenticated()
 
+                        /*
+                         * Self-assessment review table.
+                         *
+                         * HR sees all.
+                         * Manager sees their team's assessments.
+                         * Department Head sees department assessments.
+                         *
+                         * Actual row-level filtering is handled by backend service/controller.
+                         */
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/score-table")
                         .access((authentication, context) ->
                                 hasRoleDashboardOrPosition(authentication.get(), SCORE_TABLE_ROLES, SCORE_TABLE_DASHBOARDS)
@@ -281,6 +311,29 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/{id}")
                         .access((authentication, context) ->
                                 hasRoleDashboardOrPosition(authentication.get(), SCORE_TABLE_ROLES, SCORE_TABLE_DASHBOARDS)
+                        )
+
+                        /*
+                         * Self-assessment workflow actions.
+                         */
+                        .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/manager-sign")
+                        .access((authentication, context) ->
+                                hasRoleDashboardOrPosition(authentication.get(), MANAGER_ROLES, MANAGER_DASHBOARDS)
+                        )
+
+                        .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/department-head-sign")
+                        .access((authentication, context) ->
+                                hasRoleDashboardOrPosition(authentication.get(), DEPARTMENT_HEAD_ROLES, DEPARTMENT_HEAD_DASHBOARDS)
+                        )
+
+                        .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/hr-approve")
+                        .access((authentication, context) ->
+                                hasRoleDashboardOrPosition(authentication.get(), HR_ROLES, HR_DASHBOARDS)
+                        )
+
+                        .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/hr-decline")
+                        .access((authentication, context) ->
+                                hasRoleDashboardOrPosition(authentication.get(), HR_ROLES, HR_DASHBOARDS)
                         )
 
                         .requestMatchers(
@@ -313,7 +366,7 @@ public class SecurityConfig {
         }
 
         if (principal instanceof UserPrincipal userPrincipal) {
-            String dashboard = userPrincipal.getDashboard();
+            String dashboard = normalizeAuthorityName(userPrincipal.getDashboard());
 
             if ("HR_DASHBOARD".equals(dashboard) || "ADMIN_DASHBOARD".equals(dashboard)) {
                 return new AuthorizationDecision(true);
@@ -366,10 +419,20 @@ public class SecurityConfig {
             return new AuthorizationDecision(false);
         }
 
-        if (principal instanceof UserPrincipal userPrincipal) {
-            String dashboard = userPrincipal.getDashboard();
+        Set<String> normalizedAllowedRoles = allowedRoles
+                .stream()
+                .map(this::normalizeAuthorityName)
+                .collect(Collectors.toSet());
 
-            if (dashboard != null && allowedDashboards.contains(dashboard)) {
+        Set<String> normalizedAllowedDashboards = allowedDashboards
+                .stream()
+                .map(this::normalizeAuthorityName)
+                .collect(Collectors.toSet());
+
+        if (principal instanceof UserPrincipal userPrincipal) {
+            String dashboard = normalizeAuthorityName(userPrincipal.getDashboard());
+
+            if (normalizedAllowedDashboards.contains(dashboard)) {
                 return new AuthorizationDecision(true);
             }
 
@@ -377,11 +440,23 @@ public class SecurityConfig {
                 for (String role : userPrincipal.getRoles()) {
                     String normalizedRole = normalizeAuthorityName(role);
 
-                    if (allowedRoles.contains(normalizedRole)) {
+                    if (normalizedAllowedRoles.contains(normalizedRole)) {
                         return new AuthorizationDecision(true);
                     }
 
-                    if (allowedRoles.contains("HR") && isHrLike(normalizedRole)) {
+                    if (normalizedAllowedRoles.contains("HR") && isHrLike(normalizedRole)) {
+                        return new AuthorizationDecision(true);
+                    }
+
+                    if (normalizedAllowedRoles.contains("MANAGER") && isManagerLike(normalizedRole)) {
+                        return new AuthorizationDecision(true);
+                    }
+
+                    if (normalizedAllowedRoles.contains("DEPARTMENT_HEAD") && isDepartmentHeadLike(normalizedRole)) {
+                        return new AuthorizationDecision(true);
+                    }
+
+                    if (normalizedAllowedRoles.contains("CEO") && isExecutiveLike(normalizedRole)) {
                         return new AuthorizationDecision(true);
                     }
                 }
@@ -389,32 +464,19 @@ public class SecurityConfig {
 
             String normalizedPosition = normalizeAuthorityName(userPrincipal.getPosition());
 
-            if (allowedRoles.contains("HR") && isHrLike(normalizedPosition)) {
+            if (normalizedAllowedRoles.contains("HR") && isHrLike(normalizedPosition)) {
                 return new AuthorizationDecision(true);
             }
 
-            if (allowedRoles.contains("MANAGER") && normalizedPosition.contains("MANAGER")) {
+            if (normalizedAllowedRoles.contains("MANAGER") && isManagerLike(normalizedPosition)) {
                 return new AuthorizationDecision(true);
             }
 
-            if (
-                    allowedRoles.contains("DEPARTMENT_HEAD")
-                            && (
-                            normalizedPosition.contains("DEPARTMENT_HEAD")
-                                    || normalizedPosition.contains("DEPARTMENTHEAD")
-                                    || normalizedPosition.contains("HEAD")
-                    )
-            ) {
+            if (normalizedAllowedRoles.contains("DEPARTMENT_HEAD") && isDepartmentHeadLike(normalizedPosition)) {
                 return new AuthorizationDecision(true);
             }
 
-            if (
-                    allowedRoles.contains("CEO")
-                            && (
-                            normalizedPosition.contains("CEO")
-                                    || normalizedPosition.contains("EXECUTIVE")
-                    )
-            ) {
+            if (normalizedAllowedRoles.contains("CEO") && isExecutiveLike(normalizedPosition)) {
                 return new AuthorizationDecision(true);
             }
         }
@@ -426,11 +488,23 @@ public class SecurityConfig {
 
             String normalizedAuthority = normalizeAuthorityName(authority.getAuthority());
 
-            if (allowedRoles.contains(normalizedAuthority)) {
+            if (normalizedAllowedRoles.contains(normalizedAuthority)) {
                 return new AuthorizationDecision(true);
             }
 
-            if (allowedRoles.contains("HR") && isHrLike(normalizedAuthority)) {
+            if (normalizedAllowedRoles.contains("HR") && isHrLike(normalizedAuthority)) {
+                return new AuthorizationDecision(true);
+            }
+
+            if (normalizedAllowedRoles.contains("MANAGER") && isManagerLike(normalizedAuthority)) {
+                return new AuthorizationDecision(true);
+            }
+
+            if (normalizedAllowedRoles.contains("DEPARTMENT_HEAD") && isDepartmentHeadLike(normalizedAuthority)) {
+                return new AuthorizationDecision(true);
+            }
+
+            if (normalizedAllowedRoles.contains("CEO") && isExecutiveLike(normalizedAuthority)) {
                 return new AuthorizationDecision(true);
             }
         }
@@ -459,6 +533,43 @@ public class SecurityConfig {
                 || normalizedValue.contains("TALENT");
     }
 
+    private boolean isManagerLike(String normalizedValue) {
+        if (normalizedValue == null || normalizedValue.isBlank()) {
+            return false;
+        }
+
+        return normalizedValue.equals("MANAGER")
+                || normalizedValue.equals("PROJECT_MANAGER")
+                || normalizedValue.equals("TEAM_MANAGER")
+                || normalizedValue.contains("MANAGER");
+    }
+
+    private boolean isDepartmentHeadLike(String normalizedValue) {
+        if (normalizedValue == null || normalizedValue.isBlank()) {
+            return false;
+        }
+
+        return normalizedValue.equals("DEPARTMENT_HEAD")
+                || normalizedValue.equals("DEPARTMENTHEAD")
+                || normalizedValue.equals("DEPT_HEAD")
+                || normalizedValue.equals("HEAD_OF_DEPARTMENT")
+                || normalizedValue.contains("DEPARTMENT_HEAD")
+                || normalizedValue.contains("DEPARTMENTHEAD")
+                || normalizedValue.contains("DEPT_HEAD")
+                || normalizedValue.contains("HEAD_OF_DEPARTMENT");
+    }
+
+    private boolean isExecutiveLike(String normalizedValue) {
+        if (normalizedValue == null || normalizedValue.isBlank()) {
+            return false;
+        }
+
+        return normalizedValue.equals("CEO")
+                || normalizedValue.equals("EXECUTIVE")
+                || normalizedValue.contains("CEO")
+                || normalizedValue.contains("EXECUTIVE");
+    }
+
     private String normalizeAuthorityName(String value) {
         if (value == null) {
             return "";
@@ -467,9 +578,10 @@ public class SecurityConfig {
         return value
                 .replaceFirst("(?i)^ROLE_", "")
                 .trim()
+                .replaceAll("([a-z])([A-Z])", "$1_$2")
                 .replaceAll("[^A-Za-z0-9]+", "_")
                 .replaceAll("^_+|_+$", "")
-                .toUpperCase();
+                .toUpperCase(Locale.ROOT);
     }
 
     @Bean

@@ -53,8 +53,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
      * Used by Department Head employee pages.
      *
      * Working department rule:
-     * - parentDepartment if present
-     * - otherwise currentDepartment
+     * - employee_department.parentDepartment if present
+     * - otherwise employee_department.currentDepartment
+     * - fallback users.department_id for older/login-linked data
      */
     @EntityGraph(attributePaths = {
             "employeeDepartments",
@@ -66,12 +67,22 @@ public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
     @Query("""
        SELECT DISTINCT e
        FROM Employee e
-       JOIN e.employeeDepartments ed
+       LEFT JOIN e.employeeDepartments ed
        LEFT JOIN ed.parentDepartment pd
        LEFT JOIN ed.currentDepartment cd
-       WHERE ed.enddate IS NULL
-         AND (:includeInactive = true OR e.active IS NULL OR e.active = true)
-         AND COALESCE(pd.id, cd.id) = :departmentId
+       LEFT JOIN User u ON u.employeeId = e.id
+       WHERE (:includeInactive = true OR e.active IS NULL OR e.active = true)
+         AND (
+              (
+                  ed.enddate IS NULL
+                  AND COALESCE(pd.id, cd.id) = :departmentId
+              )
+              OR (
+                  (u.active IS NULL OR u.active = true)
+                  AND u.departmentId = :departmentId
+              )
+         )
+       ORDER BY e.firstName ASC, e.lastName ASC
        """)
     List<Employee> findCurrentByWorkingDepartmentId(
             @Param("departmentId") Integer departmentId,
