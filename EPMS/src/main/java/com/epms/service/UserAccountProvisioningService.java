@@ -1,3 +1,4 @@
+
 package com.epms.service;
 
 import com.epms.dto.AccountProvisionResult;
@@ -53,7 +54,7 @@ public class UserAccountProvisioningService {
         }
 
         String email = employee.getEmail().trim().toLowerCase();
-        User user = userRepository.findByEmail(email).orElse(null);
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
         String normalizedRole = roleName == null || roleName.isBlank() ? "EMPLOYEE" : roleName.trim().toUpperCase();
 
         if (user == null) {

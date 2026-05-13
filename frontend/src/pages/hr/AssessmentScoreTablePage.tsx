@@ -212,8 +212,7 @@ const SignatureSlot = ({
 const SignatureBadges = ({ row }: { row: AssessmentScoreRow }) => {
   const badges = [
     { label: 'Employee', signed: row.employeeSigned },
-    { label: 'Manager', signed: row.managerSigned },
-    { label: 'Dept Head', signed: row.departmentHeadSigned },
+      { label: 'Dept Head', signed: row.departmentHeadSigned },
     { label: 'HR', signed: row.hrSigned },
   ];
 
@@ -252,7 +251,7 @@ const AssessmentDetailModal = ({
     : defaultScoreBands;
 
   const items = flattenItems(assessment);
-  const canDeptHeadSign = roleFlags.isDepartmentHead && assessment.status === 'PENDING_DEPARTMENT_HEAD';
+  const canDeptHeadSign = roleFlags.isDepartmentHead && ['PENDING_DEPARTMENT_HEAD', 'PENDING_MANAGER', 'SUBMITTED'].includes(assessment.status);
   const canHrAct = roleFlags.isHr && assessment.status === 'PENDING_HR';
 
   const [deptHeadComment, setDeptHeadComment] = useState('');
@@ -372,7 +371,7 @@ const AssessmentDetailModal = ({
               <div className="appraisal-review-block">
                 <h4>Assessment Information</h4>
                 <p><strong>Assessment Date:</strong> {formatDate(assessment.assessmentDate)}</p>
-                <p><strong>Manager Name:</strong> {assessment.managerName || '-'}</p>
+                <p><strong>Assigned Manager:</strong> {assessment.managerName || '-'}</p>
                 <p><strong>Department Head:</strong> {assessment.departmentHeadName || '-'}</p>
                 <p><strong>Period:</strong> {assessment.period || '-'}</p>
                 <p>
@@ -459,8 +458,8 @@ const AssessmentDetailModal = ({
 
             <div className="appraisal-inline-grid">
               <div className="appraisal-review-block">
-                <h4>Manager's Comment</h4>
-                <p>{assessment.managerComment || 'No manager comment yet.'}</p>
+                <h4>Manager's Remarks</h4>
+                <p>{assessment.managerComment || 'No manager remarks yet.'}</p>
               </div>
 
               <div className="appraisal-review-block">
@@ -481,20 +480,13 @@ const AssessmentDetailModal = ({
               </div>
             </div>
 
-            <div className="appraisal-signature-grid self-assessment-signature-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(160px, 1fr))' }}>
+            <div className="appraisal-signature-grid self-assessment-signature-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))' }}>
               <SignatureSlot
                 label="Signature of Employee & Date"
                 imageData={assessment.employeeSignatureImageData}
                 imageType={assessment.employeeSignatureImageType}
                 name={assessment.employeeSignatureName || assessment.employeeName}
                 signedAt={assessment.employeeSignedAt || assessment.submittedAt}
-              />
-              <SignatureSlot
-                label="Signature of Manager & Date"
-                imageData={assessment.managerSignatureImageData}
-                imageType={assessment.managerSignatureImageType}
-                name={assessment.managerSignatureName || assessment.managerName}
-                signedAt={assessment.managerSignedAt}
               />
               <SignatureSlot
                 label="Signature of Dept. Head & Date"
@@ -737,7 +729,7 @@ const AssessmentScoreTablePage = () => {
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100">
-                Review self-assessments, signatures, manager comments, department head approval, and HR final actions.
+                Review self-assessments, manager remarks, department head signature, and HR final actions.
               </p>
             </div>
 
@@ -966,4 +958,3 @@ const AssessmentScoreTablePage = () => {
 };
 
 export default AssessmentScoreTablePage;
-

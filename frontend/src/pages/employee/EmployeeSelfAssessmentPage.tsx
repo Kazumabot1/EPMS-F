@@ -87,9 +87,9 @@ const signatureSrc = (imageData?: string | null, imageType?: string | null) => {
 
 const statusBanner = (status: AssessmentStatus, declineReason?: string | null) => {
   const banners: Record<string, { bg: string; icon: string; title: string; message: string }> = {
-    PENDING_MANAGER: { bg: '#fef9c3', icon: '⏳', title: 'Awaiting Manager Signature', message: 'Your self-assessment has been submitted. Your manager needs to review and sign it.' },
-    PENDING_DEPARTMENT_HEAD: { bg: '#fef3c7', icon: '🔄', title: 'Awaiting Department Head Signature', message: 'Your manager has signed. The department head needs to review and sign next.' },
-    PENDING_HR: { bg: '#dbeafe', icon: '📋', title: 'Awaiting HR Approval', message: 'All signatures collected. HR is reviewing your self-assessment.' },
+    PENDING_MANAGER: { bg: '#fef9c3', icon: '⏳', title: 'Awaiting Department Head Review', message: 'Your self-assessment was submitted under the old manager step. It is now ready for department head review.' },
+    PENDING_DEPARTMENT_HEAD: { bg: '#fef3c7', icon: '🔄', title: 'Awaiting Department Head Signature', message: 'Your self-assessment has been submitted. Your manager may add remarks, and your department head needs to sign before HR review.' },
+    PENDING_HR: { bg: '#dbeafe', icon: '📋', title: 'Awaiting HR Approval', message: 'Department head signature is complete. HR is reviewing your self-assessment.' },
     APPROVED: { bg: '#dcfce7', icon: '✅', title: 'Approved', message: 'Your self-assessment has been approved by HR and is now final.' },
     DECLINED: { bg: '#fee2e2', icon: '❌', title: 'Declined by HR', message: declineReason ? `Reason: ${declineReason}` : 'Your self-assessment was declined by HR.' },
     SUBMITTED: { bg: '#ede9fe', icon: '📨', title: 'Submitted', message: 'Your self-assessment has been submitted.' },
@@ -211,7 +211,7 @@ const EmployeeSelfAssessmentPage = () => {
         ? await employeeAssessmentService.submit(assessment.id, payload)
         : await employeeAssessmentService.submit(payload);
       setAssessment(submitted);
-      setMessage('Self-assessment submitted. Your manager will be notified to sign.');
+      setMessage('Self-assessment submitted. It is now waiting for department head signature. Your manager can still view it and add remarks.');
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to submit self-assessment.'));
     } finally { setSubmitting(false); }
@@ -348,7 +348,7 @@ const EmployeeSelfAssessmentPage = () => {
         {/* Comments from reviewers */}
         {assessment.managerComment && (
           <div className="appraisal-review-block">
-            <h4>Manager's Comment</h4>
+            <h4>Manager's Remarks</h4>
             <p>{assessment.managerComment}</p>
           </div>
         )}
@@ -371,8 +371,8 @@ const EmployeeSelfAssessmentPage = () => {
           </div>
         )}
 
-        {/* 4-slot signature grid */}
-        <div className="appraisal-signature-grid self-assessment-signature-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        {/* Signature grid: employee, department head, HR. Manager gives remarks only. */}
+        <div className="appraisal-signature-grid self-assessment-signature-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           {/* Employee signature */}
           <div className="appraisal-signature-slot">
             {assessment.employeeSignatureImageData ? (
@@ -394,9 +394,6 @@ const EmployeeSelfAssessmentPage = () => {
               </>
             )}
           </div>
-
-          {/* Manager signature */}
-          <SignatureSlot label="Signature of Manager & Date" imageData={assessment.managerSignatureImageData} imageType={assessment.managerSignatureImageType} name={assessment.managerSignatureName} signedAt={assessment.managerSignedAt} />
 
           {/* Dept Head signature */}
           <SignatureSlot label="Signature of Dept. Head & Date" imageData={assessment.departmentHeadSignatureImageData} imageType={assessment.departmentHeadSignatureImageType} name={assessment.departmentHeadSignatureName} signedAt={assessment.departmentHeadSignedAt} />

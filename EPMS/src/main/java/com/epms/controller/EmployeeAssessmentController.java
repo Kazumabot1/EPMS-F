@@ -1,3 +1,4 @@
+
 package com.epms.controller;
 
 import com.epms.dto.EmployeeAssessmentDtos.AssessmentRequest;
@@ -101,8 +102,21 @@ public class EmployeeAssessmentController {
     ) {
         return ResponseEntity.ok(
                 GenericApiResponse.success(
-                        "Assessment submitted and sent to manager",
+                        "Assessment submitted and sent to department head",
                         assessmentService.submit(id, request)
+                )
+        );
+    }
+
+    @PostMapping("/{id}/manager-remark")
+    public ResponseEntity<GenericApiResponse<AssessmentResponse>> managerRemark(
+            @PathVariable Long id,
+            @RequestBody(required = false) ReviewActionRequest request
+    ) {
+        return ResponseEntity.ok(
+                GenericApiResponse.success(
+                        "Manager remarks saved",
+                        assessmentService.managerRemark(id, request)
                 )
         );
     }
@@ -114,7 +128,7 @@ public class EmployeeAssessmentController {
     ) {
         return ResponseEntity.ok(
                 GenericApiResponse.success(
-                        "Manager signed assessment",
+                        "Manager remarks saved",
                         assessmentService.managerSign(id, request)
                 )
         );

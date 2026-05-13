@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import {
   assessmentFormService,
@@ -20,6 +21,7 @@ const RESPONSE_TYPE_LABELS: Record<AssessmentResponseType, string> = {
   RATING: 'Rating',
   TEXT: 'Text',
   YES_NO: 'Yes / No',
+  YES_NO_RATING: 'Yes / No + Rating',
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -36,6 +38,7 @@ const emptyForm = (): AssessmentFormPayload => ({
   startDate: today(),
   endDate: defaultEndDate(),
   targetRoles: ['Employee'],
+  scoreBands: [],
   sections: [
     {
       title: 'Performance',
@@ -142,6 +145,7 @@ const AssessmentFormBuilderPage = () => {
       startDate: item.startDate ?? today(),
       endDate: item.endDate ?? defaultEndDate(),
       targetRoles: item.targetRoles?.length ? item.targetRoles : ['Employee'],
+      scoreBands: item.scoreBands ?? [],
       sections: item.sections?.length
         ? item.sections.map((section, sectionIndex) => ({
             id: section.id,
@@ -567,10 +571,12 @@ const AssessmentFormBuilderPage = () => {
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
+                            disabled
                             onClick={() => openEdit(item)}
-                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                            title="Assessment forms are locked after creation. Create a new form if changes are needed."
+                            className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500 shadow-sm"
                           >
-                            Edit
+                            Locked
                           </button>
 
                           {item.isActive !== false && (

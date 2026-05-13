@@ -1,3 +1,4 @@
+
 package com.epms.service.impl;
 
 import com.epms.dto.AssessmentFormDtos.AssessmentFormPayload;
@@ -69,36 +70,7 @@ public class AssessmentFormDefinitionServiceImpl implements AssessmentFormDefini
 
     @Override
     public AssessmentFormResponse update(Integer id, AssessmentFormPayload payload) {
-        validate(payload);
-
-        AssessmentFormDefinition form = getEntity(id);
-        String formName = payload.getFormName().trim();
-
-        if (repository.existsByFormNameIgnoreCaseAndIdNot(formName, id)) {
-            throw new BadRequestException("Assessment form name already exists.");
-        }
-
-        if (form.getTargetRoles() == null) {
-            form.setTargetRoles(new ArrayList<>());
-        } else {
-            form.getTargetRoles().clear();
-        }
-
-        if (form.getSections() == null) {
-            form.setSections(new ArrayList<>());
-        } else {
-            form.getSections().clear();
-        }
-
-        if (form.getScoreBands() == null) {
-            form.setScoreBands(new ArrayList<>());
-        } else {
-            form.getScoreBands().clear();
-        }
-
-        applyPayload(form, payload);
-
-        return toResponse(repository.save(form));
+        throw new BadRequestException("Assessment forms are locked after creation. Create a new form instead of editing an existing one.");
     }
 
     @Override

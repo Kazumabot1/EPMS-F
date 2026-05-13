@@ -1,5 +1,4 @@
 
-
 package com.epms.controller;
 
 import com.epms.dto.AccountProvisionResult;
@@ -59,6 +58,17 @@ public class UserAccountController {
     public ResponseEntity<GenericApiResponse<AdminUserAccountResponse>> createUser(
             @RequestBody HrEmployeeAccountCreateRequest request
     ) {
+        String email = cleanEmail(request.getEmail());
+
+        if (email == null) {
+            throw new BadRequestException("Email is required");
+        }
+
+        if (userRepository.findByEmailIgnoreCase(email).isPresent()) {
+            throw new BadRequestException("Email is already used by another user");
+        }
+
+        request.setEmail(email);
         request.setRoleName(normalizeRoleName(request.getRoleName()));
 
         AccountProvisionResult result = hrEmployeeAccountService.createOrUpdateEmployeeAccount(request);
@@ -203,6 +213,11 @@ public class UserAccountController {
             case "EMPLOYEE" -> "EMPLOYEE";
             default -> "EMPLOYEE";
         };
+    }
+
+    private String cleanEmail(String value) {
+        String cleaned = clean(value);
+        return cleaned == null ? null : cleaned.toLowerCase(Locale.ROOT);
     }
 
     private String clean(String value) {
