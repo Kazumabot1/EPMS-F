@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +26,18 @@ public interface AppraisalCycleRepository extends JpaRepository<AppraisalCycle, 
 
     @EntityGraph(attributePaths = {"template"})
     List<AppraisalCycle> findByStatusOrderByStartDateDesc(AppraisalCycleStatus status);
+
+    @Query("""
+        SELECT c
+        FROM AppraisalCycle c
+        WHERE c.status = :status
+          AND (c.locked IS NULL OR c.locked = false)
+          AND c.endDate <= :today
+        """)
+    List<AppraisalCycle> findExpiredUnlockedCycles(
+            @Param("status") AppraisalCycleStatus status,
+            @Param("today") LocalDate today
+    );
 
     @Query("""
         SELECT DISTINCT c

@@ -34,7 +34,9 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
     @Override
     public AppraisalTemplateResponse createTemplate(AppraisalTemplateRequest request, Integer createdByUserId) {
         validateTemplateRequest(request);
-        ensureUniqueTemplateNameForCreate(request.getTemplateName());
+        if (!Boolean.TRUE.equals(request.getCycleSpecificCopy())) {
+            ensureUniqueTemplateNameForCreate(request.getTemplateName());
+        }
 
         AppraisalFormTemplate template = new AppraisalFormTemplate();
         template.setTemplateName(request.getTemplateName().trim());
@@ -46,6 +48,7 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
         template.setFormType(request.getFormType() != null ? request.getFormType() : com.epms.entity.enums.AppraisalCycleType.ANNUAL);
         template.setTargetAllDepartments(request.getTargetAllDepartments() == null || Boolean.TRUE.equals(request.getTargetAllDepartments()));
         template.setStatus(AppraisalTemplateStatus.DRAFT);
+        template.setCycleSpecificCopy(Boolean.TRUE.equals(request.getCycleSpecificCopy()));
 
         if (createdByUserId != null) {
             User createdBy = userRepository.findById(createdByUserId)
@@ -100,8 +103,8 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
     @Transactional(readOnly = true)
     public List<AppraisalTemplateResponse> getTemplates(AppraisalTemplateStatus status) {
         List<AppraisalFormTemplate> templates = status == null
-                ? templateRepository.findAll()
-                : templateRepository.findByStatus(status);
+                ? templateRepository.findByCycleSpecificCopyFalse()
+                : templateRepository.findByStatusAndCycleSpecificCopyFalse(status);
         return templates.stream()
                 .sorted(Comparator.comparing(AppraisalFormTemplate::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(template -> mapTemplate(template, true))
@@ -279,6 +282,9 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
         response.setTargetAllDepartments(template.getTargetAllDepartments());
         response.setStatus(template.getStatus());
         response.setVersionNo(template.getVersionNo());
+        response.setCreatedByUserId(template.getCreatedByUser() != null ? template.getCreatedByUser().getId() : null);
+        response.setCreatedByEmployeeId(displayEmployeeId(template.getCreatedByUser()));
+        response.setCycleSpecificCopy(Boolean.TRUE.equals(template.getCycleSpecificCopy()));
         response.setCreatedAt(template.getCreatedAt());
         response.setUpdatedAt(template.getUpdatedAt());
 
@@ -331,6 +337,20 @@ public class AppraisalTemplateServiceImpl implements AppraisalTemplateService {
         }
 
         return response;
+    }
+
+
+    private String displayEmployeeId(User user) {
+        if (user == null) {
+            return null;
+        }
+        if (user.getEmployeeCode() != null && !user.getEmployeeCode().isBlank()) {
+            return user.getEmployeeCode();
+        }
+        if (user.getEmployeeId() != null) {
+            return String.valueOf(user.getEmployeeId());
+        }
+        return user.getId() != null ? String.valueOf(user.getId()) : null;
     }
 
     private List<AppraisalScoreBandRequest> normalizeScoreBandRequests(List<AppraisalScoreBandRequest> bands) {

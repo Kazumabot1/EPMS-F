@@ -58,6 +58,13 @@ public class AppraisalFormTemplate {
     @Column(nullable = false)
     private Integer versionNo = 1;
 
+    /**
+     * true = internal template copy created only for a re-used appraisal cycle.
+     * These records must stay hidden from the HR Template Forms master list.
+     */
+    @Column(nullable = false)
+    private Boolean cycleSpecificCopy = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_user_id")
     private User createdByUser;
@@ -97,6 +104,9 @@ public class AppraisalFormTemplate {
         }
         if (this.targetAllDepartments == null) {
             this.targetAllDepartments = false;
+        }
+        if (this.cycleSpecificCopy == null) {
+            this.cycleSpecificCopy = false;
         }
         if (this.signatureDateFormat == null || this.signatureDateFormat.isBlank()) {
             this.signatureDateFormat = "DD/MM/YYYY";

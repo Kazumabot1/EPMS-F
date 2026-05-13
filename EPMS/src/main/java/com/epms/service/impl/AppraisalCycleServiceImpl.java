@@ -12,6 +12,7 @@ import com.epms.exception.ResourceNotFoundException;
 import com.epms.repository.*;
 import com.epms.service.AppraisalCycleService;
 import com.epms.service.AppraisalTemplateService;
+import com.epms.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,9 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +35,7 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
     private final AppraisalTemplateService appraisalTemplateService;
+    private final NotificationService notificationService;
 
     @Override
     public AppraisalCycleResponse createTemplateAndCycle(AppraisalTemplateCycleRequest request, Integer createdByUserId) {
@@ -70,7 +75,7 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         cycle.setPeriodNo(dates.periodNo());
         cycle.setStartDate(dates.startDate());
         cycle.setEndDate(dates.endDate());
-        cycle.setSubmissionDeadline(request.getSubmissionDeadline() != null ? request.getSubmissionDeadline() : dates.endDate());
+        cycle.setSubmissionDeadline(request.getSubmissionDeadline());
         cycle.setStatus(AppraisalCycleStatus.DRAFT);
         cycle.setLocked(false);
 
@@ -85,8 +90,8 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public AppraisalCycleResponse getCycle(Integer cycleId) {
+        autoLockExpiredActiveCycles();
         AppraisalCycle cycle = getCycleEntity(cycleId);
         return mapCycle(cycle);
     }
@@ -115,7 +120,7 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         cycle.setPeriodNo(dates.periodNo());
         cycle.setStartDate(dates.startDate());
         cycle.setEndDate(dates.endDate());
-        cycle.setSubmissionDeadline(request.getSubmissionDeadline() != null ? request.getSubmissionDeadline() : dates.endDate());
+        cycle.setSubmissionDeadline(request.getSubmissionDeadline());
         cycle.getCycleDepartments().clear();
         applyCycleDepartments(cycle, request, template);
 
@@ -123,10 +128,30 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<AppraisalCycleResponse> getCycles(AppraisalCycleStatus status) {
+        autoLockExpiredActiveCycles();
         List<AppraisalCycle> cycles = status == null ? cycleRepository.findAll() : cycleRepository.findByStatus(status);
         return cycles.stream().map(this::mapCycle).toList();
+    }
+
+
+    @Override
+    public int autoLockExpiredActiveCycles() {
+        List<AppraisalCycle> expiredCycles = cycleRepository.findExpiredUnlockedCycles(
+                AppraisalCycleStatus.ACTIVE,
+                LocalDate.now()
+        );
+
+        expiredCycles.forEach(cycle -> {
+            cycle.setLocked(true);
+            cycle.setStatus(AppraisalCycleStatus.LOCKED);
+        });
+
+        if (!expiredCycles.isEmpty()) {
+            cycleRepository.saveAll(expiredCycles);
+        }
+
+        return expiredCycles.size();
     }
 
     @Override
@@ -140,7 +165,9 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         }
         cycle.setStatus(AppraisalCycleStatus.ACTIVE);
         cycle.setActivatedAt(new Date());
-        return mapCycle(cycleRepository.save(cycle));
+        AppraisalCycle saved = cycleRepository.save(cycle);
+        notifyManagersAboutActiveCycle(saved);
+        return mapCycle(saved);
     }
 
     @Override
@@ -178,6 +205,30 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         return createCycle(request, createdByUserId);
     }
 
+    private void notifyManagersAboutActiveCycle(AppraisalCycle cycle) {
+        Set<Integer> targetDepartmentIds = cycle.getCycleDepartments() == null
+                ? Set.of()
+                : cycle.getCycleDepartments()
+                .stream()
+                .map(AppraisalCycleDepartment::getDepartment)
+                .filter(Objects::nonNull)
+                .map(Department::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (targetDepartmentIds.isEmpty()) {
+            return;
+        }
+
+        List<User> managers = userRepository.findActiveUsersByNormalizedRoleNames(List.of("MANAGER", "PROJECT_MANAGER", "PM"));
+        String title = "Appraisal Cycle Activated";
+        String message = cycle.getCycleName() + " is now active. Please review your team employees.";
+
+        managers.stream()
+                .filter(manager -> manager.getDepartmentId() != null && targetDepartmentIds.contains(manager.getDepartmentId()))
+                .forEach(manager -> notificationService.sendOnce(manager.getId(), title, message, "APPRAISAL"));
+    }
+
     private AppraisalCycle getCycleEntity(Integer cycleId) {
         return cycleRepository.findById(cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Appraisal cycle not found with id: " + cycleId));
@@ -213,6 +264,17 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
             if (request.getEndDate().isBefore(request.getStartDate())) {
                 throw new BadRequestException("End date cannot be before start date.");
             }
+        }
+
+        CycleDates dates = calculateCycleDates(request);
+        if (request.getSubmissionDeadline() == null) {
+            throw new BadRequestException("Submission deadline is required.");
+        }
+        if (request.getSubmissionDeadline().isBefore(dates.startDate())) {
+            throw new BadRequestException("Submission deadline cannot be before start date.");
+        }
+        if (!request.getSubmissionDeadline().isBefore(dates.endDate())) {
+            throw new BadRequestException("Submission deadline must be before end date.");
         }
     }
 
@@ -286,6 +348,8 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
         response.setSubmissionDeadline(cycle.getSubmissionDeadline());
         response.setStatus(cycle.getStatus());
         response.setLocked(cycle.getLocked());
+        response.setCreatedByUserId(cycle.getCreatedByUser() != null ? cycle.getCreatedByUser().getId() : null);
+        response.setCreatedByEmployeeId(displayEmployeeId(cycle.getCreatedByUser()));
         response.setActivatedAt(cycle.getActivatedAt());
         response.setCompletedAt(cycle.getCompletedAt());
         response.setCreatedAt(cycle.getCreatedAt());
@@ -298,6 +362,20 @@ public class AppraisalCycleServiceImpl implements AppraisalCycleService {
             });
         }
         return response;
+    }
+
+
+    private String displayEmployeeId(User user) {
+        if (user == null) {
+            return null;
+        }
+        if (user.getEmployeeCode() != null && !user.getEmployeeCode().isBlank()) {
+            return user.getEmployeeCode();
+        }
+        if (user.getEmployeeId() != null) {
+            return String.valueOf(user.getEmployeeId());
+        }
+        return user.getId() != null ? String.valueOf(user.getId()) : null;
     }
 
     private record CycleDates(Integer cycleYear, Integer periodNo, LocalDate startDate, LocalDate endDate) {}

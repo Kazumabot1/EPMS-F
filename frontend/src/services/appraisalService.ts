@@ -2,6 +2,7 @@ import api from './api';
 import type {
   AppraisalCycleRequest,
   AppraisalCycleResponse,
+  AppraisalEmployeeOptionResponse,
   AppraisalCycleStatus,
   AppraisalReturnRequest,
   AppraisalReviewSubmitRequest,
@@ -119,6 +120,20 @@ export const appraisalCycleService = {
 };
 
 export const appraisalWorkflowService = {
+  getPmEligibleEmployees: async (cycleId: number) => {
+    const response = await api.get<ApiEnvelope<AppraisalEmployeeOptionResponse[]>>(
+      `/appraisal/workflow/pm/cycles/${cycleId}/employees`,
+    );
+    return unwrap<AppraisalEmployeeOptionResponse[]>(response);
+  },
+
+  getPmCycleTemplate: async (cycleId: number) => {
+    const response = await api.get<ApiEnvelope<AppraisalTemplateResponse>>(
+      `/appraisal/workflow/pm/cycles/${cycleId}/template-form`,
+    );
+    return unwrap<AppraisalTemplateResponse>(response);
+  },
+
   createPmDraft: async (cycleId: number, employeeId: number) => {
     const response = await api.post<ApiEnvelope<EmployeeAppraisalFormResponse>>(
       `/appraisal/workflow/pm/cycles/${cycleId}/employees/${employeeId}/draft`,

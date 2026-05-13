@@ -27,8 +27,11 @@ public class AppraisalTemplateResponse {
     private List<String> departmentNames = new ArrayList<>();
     private AppraisalTemplateStatus status;
     private Integer versionNo;
+    private Integer createdByUserId;
+    private String createdByEmployeeId;
     private Date createdAt;
     private Date updatedAt;
     private List<AppraisalSectionResponse> sections = new ArrayList<>();
     private List<AppraisalScoreBandResponse> scoreBands = new ArrayList<>();
+    private Boolean cycleSpecificCopy = false;
 }

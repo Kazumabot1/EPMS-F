@@ -30,6 +30,8 @@ public class AppraisalCycleResponse {
     private Boolean locked;
     private List<Integer> departmentIds = new ArrayList<>();
     private List<String> departmentNames = new ArrayList<>();
+    private Integer createdByUserId;
+    private String createdByEmployeeId;
     private Date activatedAt;
     private Date completedAt;
     private Date createdAt;

@@ -42,6 +42,7 @@ export interface AppraisalTemplateRequest {
   departmentIds: number[];
   sections: AppraisalSectionRequest[];
   scoreBands?: AppraisalScoreBandRequest[];
+  cycleSpecificCopy?: boolean;
 }
 
 export interface AppraisalCriterionResponse extends AppraisalCriterionRequest {
@@ -69,10 +70,13 @@ export interface AppraisalTemplateResponse {
   departmentNames: string[];
   status: AppraisalTemplateStatus;
   versionNo: number;
+  createdByUserId?: number | null;
+  createdByEmployeeId?: string | null;
   createdAt?: string;
   updatedAt?: string;
   sections: AppraisalSectionResponse[];
   scoreBands?: AppraisalScoreBandResponse[];
+  cycleSpecificCopy?: boolean;
 }
 
 export interface AppraisalCycleRequest {
@@ -109,6 +113,8 @@ export interface AppraisalCycleResponse {
   locked: boolean;
   departmentIds: number[];
   departmentNames: string[];
+  createdByUserId?: number | null;
+  createdByEmployeeId?: string | null;
   activatedAt?: string | null;
   completedAt?: string | null;
   createdAt?: string | null;
@@ -124,11 +130,28 @@ export interface PmAppraisalSubmitRequest {
   ratings: AppraisalRatingInput[];
   recommendation: string;
   comment: string;
+  managerSignatureId?: number | null;
+  managerSignatureImageData?: string | null;
+  managerSignatureImageType?: string | null;
+}
+
+export interface AppraisalEmployeeOptionResponse {
+  employeeId: number;
+  employeeName: string;
+  employeeCode?: string | null;
+  departmentId: number;
+  departmentName: string;
+  positionName?: string | null;
+  existingFormId?: number | null;
+  existingStatus?: EmployeeAppraisalStatus | null;
 }
 
 export interface AppraisalReviewSubmitRequest {
   recommendation: string;
   comment: string;
+  signatureId?: number | null;
+  signatureImageData?: string | null;
+  signatureImageType?: string | null;
 }
 
 export interface AppraisalReturnRequest {
@@ -140,8 +163,11 @@ export interface AppraisalReviewResponse {
   reviewStage: AppraisalReviewStage;
   reviewerUserId?: number | null;
   reviewerName?: string | null;
+  reviewerEmployeeId?: string | null;
   recommendation?: string | null;
   comment?: string | null;
+  signatureImageData?: string | null;
+  signatureImageType?: string | null;
   decision?: AppraisalDecision | null;
   submittedAt?: string | null;
 }
@@ -150,6 +176,12 @@ export interface EmployeeAppraisalFormResponse {
   id: number;
   cycleId: number;
   cycleName: string;
+  cycleType?: AppraisalCycleType | null;
+  cycleYear?: number | null;
+  cycleStartDate?: string | null;
+  cycleEndDate?: string | null;
+  cycleSubmissionDeadline?: string | null;
+  cycleLocked?: boolean | null;
   employeeId: number;
   employeeName: string;
   employeeCode?: string | null;
@@ -166,10 +198,14 @@ export interface EmployeeAppraisalFormResponse {
   visibleToEmployee: boolean;
   locked: boolean;
   pmSubmittedAt?: string | null;
+  managerCheckedByEmployeeId?: string | null;
   deptHeadSubmittedAt?: string | null;
+  deptHeadCheckedByEmployeeId?: string | null;
   hrApprovedAt?: string | null;
+  hrCheckedByEmployeeId?: string | null;
   sections: AppraisalSectionResponse[];
   reviews: AppraisalReviewResponse[];
+  scoreBands?: AppraisalScoreBandResponse[];
 }
 
 export interface AppraisalScoreBandRequest {

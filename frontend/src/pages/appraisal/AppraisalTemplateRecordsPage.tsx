@@ -21,6 +21,13 @@ type TemplateRecordLocationState = {
   templateId?: number;
 };
 
+type PopupState = {
+  title: string;
+  message: string;
+  type?: 'success' | 'error' | 'info';
+  onOk?: () => void | Promise<void>;
+};
+
 
 type ScoreBandLike = {
   minScore: number;
@@ -39,6 +46,8 @@ const defaultScoreBands = (): AppraisalScoreBandRequest[] => [
   { minScore: 0, maxScore: 39, label: 'Unsatisfactory', description: 'Performance does not meet the minimum requirement of the job.', sortOrder: 5, active: true },
 ];
 
+
+const clampScore = (value: number) => Math.min(100, Math.max(0, Number.isFinite(value) ? value : 0));
 
 const uniqueScoreBands = <T extends ScoreBandLike>(bands: T[]) => {
   const unique = new Map<string, T>();
@@ -296,8 +305,8 @@ const normalizeForm = (form: AppraisalTemplateRequest): AppraisalTemplateRequest
   })),
   scoreBands: uniqueScoreBands(form.scoreBands?.length ? form.scoreBands : defaultScoreBands()).map((band, index) => ({
     ...band,
-    minScore: Number(band.minScore),
-    maxScore: Number(band.maxScore),
+    minScore: clampScore(Number(band.minScore)),
+    maxScore: clampScore(Number(band.maxScore)),
     label: band.label,
     description: band.description ?? '',
     sortOrder: index + 1,
@@ -316,8 +325,7 @@ const AppraisalTemplateRecordsPage = () => {
   const [form, setForm] = useState<AppraisalTemplateRequest>(() => emptyTemplate());
   const [modalMode, setModalMode] = useState<TemplateModalMode>(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
+  const [popup, setPopup] = useState<PopupState | null>(null);
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [signatureLoading, setSignatureLoading] = useState(false);
 
@@ -329,9 +337,19 @@ const AppraisalTemplateRecordsPage = () => {
     return map;
   }, [signatures]);
 
-  const setAlert = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setMessage(text);
-    setMessageType(type);
+  const setAlert = (text: string, type: 'success' | 'error' | 'info' = 'info', onOk?: () => void | Promise<void>) => {
+    setPopup({
+      title: type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Notice',
+      message: text,
+      type,
+      onOk,
+    });
+  };
+
+  const handlePopupOk = () => {
+    const handler = popup?.onOk;
+    setPopup(null);
+    if (handler) void handler();
   };
 
   const loadTemplates = async () => {
@@ -455,9 +473,10 @@ const AppraisalTemplateRecordsPage = () => {
     setLoading(true);
     try {
       const created = await appraisalTemplateService.create(normalizeForm(form));
-      setAlert(`Template form "${created.templateName}" created successfully.`, 'success');
-      closeModal();
-      await loadTemplates();
+      setAlert(`Template form "${created.templateName}" created successfully.`, 'success', async () => {
+        closeModal();
+        await loadTemplates();
+      });
     } catch (error) {
       setAlert(extractApiErrorMessage(error, 'Form template create failed.'), 'error');
     } finally {
@@ -475,9 +494,10 @@ const AppraisalTemplateRecordsPage = () => {
     setLoading(true);
     try {
       const updated = await appraisalTemplateService.updateDraft(editingTemplate.id, normalizeForm(form));
-      setAlert(`Template form "${updated.templateName}" updated successfully to v${updated.versionNo ?? (editingTemplate.versionNo ?? 1) + 1}.`, 'success');
-      closeModal();
-      await loadTemplates();
+      setAlert(`Template form "${updated.templateName}" updated successfully to v${updated.versionNo ?? (editingTemplate.versionNo ?? 1) + 1}.`, 'success', async () => {
+        closeModal();
+        await loadTemplates();
+      });
     } catch (error) {
       setAlert(extractApiErrorMessage(error, 'Template update failed.'), 'error');
     } finally {
@@ -573,7 +593,7 @@ const AppraisalTemplateRecordsPage = () => {
                   min={0}
                   max={100}
                   value={band.minScore}
-                  onChange={(event) => updateScoreBand(index, { minScore: Number(event.target.value) })}
+                  onChange={(event) => updateScoreBand(index, { minScore: clampScore(Number(event.target.value)) })}
                 />
                 <span>-</span>
                 <input
@@ -581,7 +601,7 @@ const AppraisalTemplateRecordsPage = () => {
                   min={0}
                   max={100}
                   value={band.maxScore}
-                  onChange={(event) => updateScoreBand(index, { maxScore: Number(event.target.value) })}
+                  onChange={(event) => updateScoreBand(index, { maxScore: clampScore(Number(event.target.value)) })}
                 />
               </>
             )}
@@ -605,7 +625,7 @@ const AppraisalTemplateRecordsPage = () => {
     return (
       <div className="appraisal-form-block">
         <h3>Signature Section</h3>
-        {!readOnly && <p className="appraisal-muted">Choose saved signatures and date format to print directly in this template.</p>}
+        {!readOnly && <p className="appraisal-muted">Signature fields are display-only in this template and cannot be edited here.</p>}
         {!readOnly && (
           <div className="appraisal-inline-grid two appraisal-signature-controls">
             <label className="appraisal-field">
@@ -613,6 +633,7 @@ const AppraisalTemplateRecordsPage = () => {
               <select
                 value={form.appraiseeSignatureId ?? ''}
                 onChange={(event) => setForm({ ...form, appraiseeSignatureId: event.target.value ? Number(event.target.value) : null })}
+                disabled
               >
                 <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
                 {signatures.map((item) => (
@@ -625,6 +646,7 @@ const AppraisalTemplateRecordsPage = () => {
               <select
                 value={form.appraiserSignatureId ?? ''}
                 onChange={(event) => setForm({ ...form, appraiserSignatureId: event.target.value ? Number(event.target.value) : null })}
+                disabled
               >
                 <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
                 {signatures.map((item) => (
@@ -637,6 +659,7 @@ const AppraisalTemplateRecordsPage = () => {
               <select
                 value={form.hrSignatureId ?? ''}
                 onChange={(event) => setForm({ ...form, hrSignatureId: event.target.value ? Number(event.target.value) : null })}
+                disabled
               >
                 <option value="">{signatureLoading ? 'Loading signatures...' : 'Select signature'}</option>
                 {signatures.map((item) => (
@@ -649,6 +672,7 @@ const AppraisalTemplateRecordsPage = () => {
               <select
                 value={dateFormat}
                 onChange={(event) => setForm({ ...form, signatureDateFormat: event.target.value as AppraisalTemplateRequest['signatureDateFormat'] })}
+                disabled
               >
                 {signatureDateFormats.map((format) => (
                   <option key={format} value={format}>{format}</option>
@@ -810,6 +834,19 @@ const AppraisalTemplateRecordsPage = () => {
           {renderScoreBandEditor(uniqueScoreBands(form.scoreBands?.length ? form.scoreBands : defaultScoreBands()))}
         </div>
 
+        <div className="appraisal-form-block">
+          <h3>Other Remarks</h3>
+          <p className="appraisal-muted">Appraiser's comment for discussion, recommendation, or promotion notes. This section is printed in the template and filled during the appraisal review flow.</p>
+          <textarea
+            className="appraisal-other-remarks-textarea"
+            rows={4}
+            value=""
+            placeholder="Appraiser's Comment for Discussion"
+            readOnly
+            disabled
+          />
+        </div>
+
         {renderTemplateSignatureSection()}
       </>
     );
@@ -902,6 +939,14 @@ const AppraisalTemplateRecordsPage = () => {
           {renderScoreBandEditor(bands, true)}
         </div>
 
+        <div className="appraisal-form-block">
+          <h3>Other Remarks</h3>
+          <p className="appraisal-muted">Appraiser's comment for discussion, recommendation, or promotion notes will be filled during the appraisal review flow.</p>
+          <div className="appraisal-other-remarks-preview">
+            <span>Appraiser's Comment for Discussion</span>
+          </div>
+        </div>
+
         {renderTemplateSignaturePreview()}
       </>
     );
@@ -920,8 +965,6 @@ const AppraisalTemplateRecordsPage = () => {
         </div>
       </div>
 
-      {message && <div className={`appraisal-alert ${messageType}`}>{message}</div>}
-
       <div className="appraisal-card">
         <div className="appraisal-form-block-header">
           <div>
@@ -938,13 +981,14 @@ const AppraisalTemplateRecordsPage = () => {
                 <th>Sections</th>
                 <th>Criteria</th>
                 <th>Version</th>
+                <th>Created By</th>
                 <th>Created At</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {templates.length === 0 && (
-                <tr><td colSpan={7}><div className="appraisal-empty">No template forms yet.</div></td></tr>
+                <tr><td colSpan={8}><div className="appraisal-empty">No template forms yet.</div></td></tr>
               )}
               {templates.map((template) => {
                 const criteriaCount = template.sections.reduce((sum, section) => sum + section.criteria.length, 0);
@@ -955,6 +999,7 @@ const AppraisalTemplateRecordsPage = () => {
                     <td>{template.sections.length}</td>
                     <td>{criteriaCount}</td>
                     <td>v{template.versionNo ?? 1}</td>
+                    <td>{template.createdByEmployeeId || '-'}</td>
                     <td>{displayDateTime(template.createdAt)}</td>
                     <td>
                       <div className="appraisal-button-row record-actions">
@@ -969,6 +1014,20 @@ const AppraisalTemplateRecordsPage = () => {
           </table>
         </div>
       </div>
+
+
+      {popup && (
+        <div className="appraisal-popup-backdrop">
+          <div className={`appraisal-popup-box ${popup.type ?? 'info'}`}>
+            <div className="appraisal-popup-icon"><i className={`bi ${popup.type === 'success' ? 'bi-check-circle' : popup.type === 'error' ? 'bi-exclamation-circle' : 'bi-info-circle'}`} /></div>
+            <h3>{popup.title}</h3>
+            <p>{popup.message}</p>
+            <div className="appraisal-popup-actions">
+              <button className="appraisal-button primary" type="button" onClick={handlePopupOk}>Okay</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalMode && (
         <div className="appraisal-modal-backdrop">

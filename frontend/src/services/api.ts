@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosHeaders } from 'axios';
 import { authStorage } from './authStorage';
 
 const api = axios.create({
@@ -22,10 +22,10 @@ api.interceptors.request.use((config) => {
     config.url = config.url.substring('/api'.length);
   }
 
-  config.headers = config.headers ?? {};
+  config.headers = AxiosHeaders.from(config.headers);
 
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    config.headers.set('Authorization', `Bearer ${token}`);
   }
 
   if (!token && !isAuthEndpoint(config.url)) {
