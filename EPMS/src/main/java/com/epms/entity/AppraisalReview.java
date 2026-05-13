@@ -44,6 +44,13 @@ public class AppraisalReview {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
+    @Lob
+    @Column(name = "signature_image_data", columnDefinition = "LONGTEXT")
+    private String signatureImageData;
+
+    @Column(name = "signature_image_type", length = 80)
+    private String signatureImageType;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private AppraisalDecision decision = AppraisalDecision.SUBMITTED;

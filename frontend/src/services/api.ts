@@ -1,4 +1,3 @@
-/*
 import axios from 'axios';
 import { authStorage } from './authStorage';
 
@@ -67,7 +66,7 @@ api.interceptors.response.use(
   },
 );
 
-export default api; */
+
 
 
 

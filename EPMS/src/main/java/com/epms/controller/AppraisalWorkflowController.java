@@ -3,14 +3,18 @@ package com.epms.controller;
 import com.epms.dto.GenericApiResponse;
 import com.epms.dto.appraisal.AppraisalReturnRequest;
 import com.epms.dto.appraisal.AppraisalReviewSubmitRequest;
+import com.epms.dto.appraisal.AppraisalTemplateResponse;
 import com.epms.dto.appraisal.AppraisalCycleResponse;
+import com.epms.dto.appraisal.AppraisalEmployeeOptionResponse;
 import com.epms.dto.appraisal.EmployeeAppraisalFormResponse;
 import com.epms.dto.appraisal.PmAppraisalSubmitRequest;
 import com.epms.entity.enums.AppraisalCycleStatus;
 import com.epms.exception.BadRequestException;
 import com.epms.repository.UserRepository;
 import com.epms.security.SecurityUtils;
+import com.epms.security.UserPrincipal;
 import com.epms.service.AppraisalCycleService;
+import com.epms.service.AppraisalTemplateService;
 import com.epms.service.EmployeeAppraisalWorkflowService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +40,7 @@ public class AppraisalWorkflowController {
 
     private final EmployeeAppraisalWorkflowService workflowService;
     private final AppraisalCycleService appraisalCycleService;
+    private final AppraisalTemplateService appraisalTemplateService;
     private final UserRepository userRepository;
 
 
@@ -49,8 +54,52 @@ public class AppraisalWorkflowController {
                     + "or authentication.principal.dashboard == 'ADMIN_DASHBOARD'"
     )
     public ResponseEntity<GenericApiResponse<List<AppraisalCycleResponse>>> getActiveCyclesForPm() {
-        List<AppraisalCycleResponse> response = appraisalCycleService.getCycles(AppraisalCycleStatus.ACTIVE);
+        List<AppraisalCycleResponse> reviewCycles = new java.util.ArrayList<>();
+        reviewCycles.addAll(appraisalCycleService.getCycles(AppraisalCycleStatus.ACTIVE));
+        reviewCycles.addAll(appraisalCycleService.getCycles(AppraisalCycleStatus.LOCKED));
+        UserPrincipal currentUser = SecurityUtils.currentUser();
+
+        List<AppraisalCycleResponse> response = shouldFilterForManager(currentUser)
+                ? reviewCycles.stream()
+                .filter(cycle -> currentUser.getDepartmentId() != null
+                        && cycle.getDepartmentIds() != null
+                        && cycle.getDepartmentIds().contains(currentUser.getDepartmentId()))
+                .toList()
+                : reviewCycles;
+
         return ResponseEntity.ok(GenericApiResponse.success("Active appraisal cycles fetched", response));
+    }
+
+
+    @GetMapping("/pm/cycles/{cycleId}/template-form")
+    @PreAuthorize(
+            "hasRole('MANAGER') "
+                    + "or hasAuthority('ROLE_MANAGER') "
+                    + "or authentication.principal.dashboard == 'MANAGER_DASHBOARD' "
+                    + "or hasAnyRole('HR', 'ADMIN') "
+                    + "or authentication.principal.dashboard == 'HR_DASHBOARD' "
+                    + "or authentication.principal.dashboard == 'ADMIN_DASHBOARD'"
+    )
+    public ResponseEntity<GenericApiResponse<AppraisalTemplateResponse>> getPmCycleTemplate(@PathVariable Integer cycleId) {
+        AppraisalCycleResponse cycle = appraisalCycleService.getCycle(cycleId);
+        AppraisalTemplateResponse response = appraisalTemplateService.getTemplate(cycle.getTemplateId());
+        return ResponseEntity.ok(GenericApiResponse.success("Appraisal cycle template form fetched", response));
+    }
+
+    @GetMapping("/pm/cycles/{cycleId}/employees")
+    @PreAuthorize(
+            "hasRole('MANAGER') "
+                    + "or hasAuthority('ROLE_MANAGER') "
+                    + "or authentication.principal.dashboard == 'MANAGER_DASHBOARD' "
+                    + "or hasAnyRole('HR', 'ADMIN') "
+                    + "or authentication.principal.dashboard == 'HR_DASHBOARD' "
+                    + "or authentication.principal.dashboard == 'ADMIN_DASHBOARD'"
+    )
+    public ResponseEntity<GenericApiResponse<List<AppraisalEmployeeOptionResponse>>> getPmEligibleEmployees(
+            @PathVariable Integer cycleId
+    ) {
+        List<AppraisalEmployeeOptionResponse> response = workflowService.getPmEligibleEmployees(cycleId, SecurityUtils.currentUserId());
+        return ResponseEntity.ok(GenericApiResponse.success("Eligible employee list fetched", response));
     }
 
     @PostMapping("/pm/cycles/{cycleId}/employees/{employeeId}/draft")
@@ -231,6 +280,31 @@ public class AppraisalWorkflowController {
         }
         List<EmployeeAppraisalFormResponse> response = workflowService.getEmployeeVisibleForms(employeeId);
         return ResponseEntity.ok(GenericApiResponse.success("Employee completed appraisal forms fetched", response));
+    }
+
+    private boolean shouldFilterForManager(UserPrincipal user) {
+        if (user == null) {
+            return false;
+        }
+        boolean isHrOrAdmin = hasRole(user, "HR") || hasRole(user, "ADMIN")
+                || "HR_DASHBOARD".equalsIgnoreCase(user.getDashboard())
+                || "ADMIN_DASHBOARD".equalsIgnoreCase(user.getDashboard());
+        boolean isManager = hasRole(user, "MANAGER")
+                || hasRole(user, "PROJECT_MANAGER")
+                || "MANAGER_DASHBOARD".equalsIgnoreCase(user.getDashboard());
+        return isManager && !isHrOrAdmin;
+    }
+
+    private boolean hasRole(UserPrincipal user, String roleName) {
+        if (user.getRoles() == null) {
+            return false;
+        }
+        String normalized = roleName == null ? "" : roleName.replaceFirst("(?i)^ROLE_", "").trim().replace('-', '_').toUpperCase();
+        return user.getRoles()
+                .stream()
+                .filter(role -> role != null)
+                .map(role -> role.replaceFirst("(?i)^ROLE_", "").trim().replace('-', '_').toUpperCase())
+                .anyMatch(normalized::equals);
     }
 
     @GetMapping("/employee/{employeeId}/forms")

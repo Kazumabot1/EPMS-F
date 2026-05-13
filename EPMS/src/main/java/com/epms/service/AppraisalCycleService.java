@@ -27,4 +27,6 @@ public interface AppraisalCycleService {
 
     AppraisalCycleResponse reuseCycle(Integer cycleId, AppraisalCycleRequest overrideRequest, Integer createdByUserId);
 
+    int autoLockExpiredActiveCycles();
+
 }

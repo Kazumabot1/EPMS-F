@@ -10,4 +10,7 @@ import lombok.NoArgsConstructor;
 public class AppraisalReviewSubmitRequest {
     private String recommendation;
     private String comment;
+    private Long signatureId;
+    private String signatureImageData;
+    private String signatureImageType;
 }

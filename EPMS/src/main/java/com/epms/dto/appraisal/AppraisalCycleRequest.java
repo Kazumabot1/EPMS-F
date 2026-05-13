@@ -20,6 +20,7 @@ public class AppraisalCycleRequest {
     private Integer cycleYear;
     private Integer periodNo;
     private LocalDate startDate;
+    private LocalDate endDate;
     private LocalDate submissionDeadline;
     private List<Integer> departmentIds = new ArrayList<>();
 }
