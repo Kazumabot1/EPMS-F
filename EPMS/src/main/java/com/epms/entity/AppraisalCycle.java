@@ -13,13 +13,7 @@ import java.util.Date;
 import java.util.List;
 
 @Entity
-@Table(
-    name = "appraisal_cycle",
-    uniqueConstraints = @UniqueConstraint(
-        name = "uk_appraisal_cycle_type_year_period",
-        columnNames = {"cycle_type", "cycle_year", "period_no"}
-    )
-)
+@Table(name = "appraisal_cycle")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

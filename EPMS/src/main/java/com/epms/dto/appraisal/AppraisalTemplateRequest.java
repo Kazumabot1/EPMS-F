@@ -22,4 +22,6 @@ public class AppraisalTemplateRequest {
     private Boolean targetAllDepartments = false;
     private List<Integer> departmentIds = new ArrayList<>();
     private List<AppraisalSectionRequest> sections = new ArrayList<>();
+    private List<AppraisalScoreBandRequest> scoreBands = new ArrayList<>();
+    private Boolean cycleSpecificCopy = false;
 }

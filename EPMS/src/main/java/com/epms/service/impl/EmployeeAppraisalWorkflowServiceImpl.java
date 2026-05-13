@@ -7,10 +7,12 @@ import com.epms.exception.BadRequestException;
 import com.epms.exception.ResourceNotFoundException;
 import com.epms.repository.*;
 import com.epms.service.EmployeeAppraisalWorkflowService;
+import com.epms.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -19,6 +21,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWorkflowService {
+
+    private static final int MAX_SIGNATURE_BASE64_LENGTH = 2_000_000;
+    private static final Set<String> ALLOWED_SIGNATURE_IMAGE_TYPES = Set.of("image/png", "image/jpg", "image/jpeg");
 
     private final AppraisalCycleRepository cycleRepository;
     private final AppraisalFormCriteriaRepository criteriaRepository;
@@ -31,6 +36,27 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
+    private final TeamRepository teamRepository;
+    private final SignatureRepository signatureRepository;
+    private final NotificationService notificationService;
+
+    @Override
+    public List<AppraisalEmployeeOptionResponse> getPmEligibleEmployees(Integer cycleId, Integer pmUserId) {
+        AppraisalCycle cycle = getActiveCycle(cycleId);
+
+        List<Employee> candidateEmployees = new ArrayList<>();
+        Set<Integer> seenEmployeeIds = new HashSet<>();
+        collectManagerTeamEmployees(pmUserId, candidateEmployees, seenEmployeeIds);
+
+        Set<Integer> employeeLevelEmployeeIds = getActiveEmployeeLevelEmployeeIds();
+
+        return candidateEmployees.stream()
+                .filter(employee -> isEmployeeLevelCandidate(employee, employeeLevelEmployeeIds))
+                .map(employee -> toPmEmployeeOption(cycle, employee))
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(AppraisalEmployeeOptionResponse::getEmployeeName, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .toList();
+    }
 
     @Override
     public EmployeeAppraisalFormResponse createPmDraft(Integer cycleId, Integer employeeId, Integer pmUserId) {
@@ -40,15 +66,24 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + employeeId));
 
         User managerUser = getUser(pmUserId);
+        if (!isEmployeeLevelCandidate(employee, getActiveEmployeeLevelEmployeeIds())) {
+            throw new BadRequestException("Only employee-level team members can be selected for this appraisal review.");
+        }
         User employeeUser = userRepository.findActiveByEmployeeId(employeeId).orElse(null);
 
         Department department = resolveEmployeeDepartment(employee, employeeUser);
 
         ensureCycleTargetsDepartment(cycle, department.getId());
+        ensureManagerCanReviewEmployee(managerUser, employee);
 
         Optional<EmployeeAppraisalForm> existing = formRepository.findByCycleIdAndEmployeeId(cycleId, employeeId);
         if (existing.isPresent()) {
-            return mapForm(existing.get());
+            EmployeeAppraisalForm existingForm = existing.get();
+            if (existingForm.getStatus() != EmployeeAppraisalStatus.PM_DRAFT
+                    && existingForm.getStatus() != EmployeeAppraisalStatus.RETURNED) {
+                throw new BadRequestException("This employee appraisal has already been submitted for this cycle.");
+            }
+            return mapForm(existingForm);
         }
 
         EmployeeAppraisalForm form = new EmployeeAppraisalForm();
@@ -89,8 +124,9 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
         if (request == null || request.getRatings() == null || request.getRatings().isEmpty()) {
             throw new BadRequestException("Manager ratings are required.");
         }
-
         EmployeeAppraisalForm form = getFormEntity(employeeAppraisalFormId);
+
+        ensureFormAndCycleUnlocked(form);
 
         if (form.getStatus() != EmployeeAppraisalStatus.PM_DRAFT
                 && form.getStatus() != EmployeeAppraisalStatus.RETURNED) {
@@ -98,6 +134,13 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
         }
 
         User managerUser = getUser(pmUserId);
+        SignaturePayload managerSignature = resolveWorkflowSignature(
+                request.getManagerSignatureId(),
+                request.getManagerSignatureImageData(),
+                request.getManagerSignatureImageType(),
+                pmUserId,
+                "Manager signature is required."
+        );
 
         form.setProjectManager(managerUser);
         form.setAssessmentDate(form.getCycle() != null ? form.getCycle().getStartDate() : form.getAssessmentDate());
@@ -112,6 +155,8 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 managerUser,
                 request.getRecommendation(),
                 request.getComment(),
+                managerSignature.imageData(),
+                managerSignature.imageType(),
                 AppraisalDecision.APPROVED
         );
 
@@ -131,6 +176,8 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 "Manager submitted appraisal to Dept Head."
         );
 
+        notifyDepartmentHeads(saved);
+
         return mapForm(saved);
     }
 
@@ -142,11 +189,20 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
     ) {
         EmployeeAppraisalForm form = getFormEntity(employeeAppraisalFormId);
 
+        ensureFormAndCycleUnlocked(form);
+
         if (form.getStatus() != EmployeeAppraisalStatus.DEPT_HEAD_PENDING) {
             throw new BadRequestException("Only Dept Head pending forms can be reviewed by Dept Head.");
         }
 
         User deptHead = getUser(deptHeadUserId);
+        SignaturePayload deptHeadSignature = resolveWorkflowSignature(
+                request != null ? request.getSignatureId() : null,
+                request != null ? request.getSignatureImageData() : null,
+                request != null ? request.getSignatureImageType() : null,
+                deptHeadUserId,
+                "Dept Head signature is required."
+        );
 
         form.setDepartmentHead(deptHead);
 
@@ -156,6 +212,8 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 deptHead,
                 safeRecommendation(request),
                 safeComment(request),
+                deptHeadSignature.imageData(),
+                deptHeadSignature.imageType(),
                 AppraisalDecision.APPROVED
         );
 
@@ -175,6 +233,8 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 "Dept Head reviewed and submitted appraisal to HR."
         );
 
+        notifyHrReviewers(saved);
+
         return mapForm(saved);
     }
 
@@ -186,11 +246,20 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
     ) {
         EmployeeAppraisalForm form = getFormEntity(employeeAppraisalFormId);
 
+        ensureFormAndCycleUnlocked(form);
+
         if (form.getStatus() != EmployeeAppraisalStatus.HR_PENDING) {
             throw new BadRequestException("Only HR pending forms can be approved by HR.");
         }
 
         User hrUser = getUser(hrUserId);
+        SignaturePayload hrSignature = resolveWorkflowSignature(
+                request != null ? request.getSignatureId() : null,
+                request != null ? request.getSignatureImageData() : null,
+                request != null ? request.getSignatureImageType() : null,
+                hrUserId,
+                "HR signature is required."
+        );
 
         upsertReview(
                 form,
@@ -198,6 +267,8 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 hrUser,
                 safeRecommendation(request),
                 safeComment(request),
+                hrSignature.imageData(),
+                hrSignature.imageType(),
                 AppraisalDecision.APPROVED
         );
 
@@ -218,6 +289,8 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 "HR_APPROVE",
                 "HR approved appraisal. Employee can view the form."
         );
+
+        notifyEmployeeCompleted(saved);
 
         return mapForm(saved);
     }
@@ -264,7 +337,7 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeAppraisalFormResponse> getPmHistory(Integer pmUserId) {
-        return formRepository.findByProjectManagerIdOrderByUpdatedAtDesc(pmUserId)
+        return formRepository.findByProjectManagerIdAndStatusNotOrderByUpdatedAtDesc(pmUserId, EmployeeAppraisalStatus.PM_DRAFT)
                 .stream()
                 .map(this::mapForm)
                 .toList();
@@ -309,9 +382,216 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 .toList();
     }
 
+    private Set<Integer> getActiveEmployeeLevelEmployeeIds() {
+        return userRepository.findActiveUsersByNormalizedRoleNames(List.of("EMPLOYEE"))
+                .stream()
+                .map(User::getEmployeeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private boolean isEmployeeLevelCandidate(Employee employee, Set<Integer> employeeLevelEmployeeIds) {
+        if (employee == null || employee.getId() == null) {
+            return false;
+        }
+        // Keep backwards compatibility for databases that do not have role rows yet.
+        if (employeeLevelEmployeeIds == null || employeeLevelEmployeeIds.isEmpty()) {
+            return true;
+        }
+        return employeeLevelEmployeeIds.contains(employee.getId());
+    }
+
+    private void collectManagerTeamEmployees(Integer managerUserId, List<Employee> candidates, Set<Integer> seenEmployeeIds) {
+        if (managerUserId == null) {
+            return;
+        }
+
+        List<Team> managerTeams = new ArrayList<>();
+        managerTeams.addAll(teamRepository.findByProjectManagerIdAndStatusIgnoreCase(managerUserId, "Active"));
+        managerTeams.addAll(teamRepository.findByTeamLeaderIdAndStatusIgnoreCase(managerUserId, "Active"));
+
+        managerTeams.stream()
+                .filter(Objects::nonNull)
+                .filter(Team::isActiveTeam)
+                .forEach(team -> collectTeamEmployees(team, managerUserId, candidates, seenEmployeeIds));
+    }
+
+    private void collectTeamEmployees(Team team, Integer managerUserId, List<Employee> candidates, Set<Integer> seenEmployeeIds) {
+        addUserEmployeeCandidate(candidates, seenEmployeeIds, team.getTeamLeader(), managerUserId);
+
+        if (team.getTeamMembers() == null) {
+            return;
+        }
+
+        team.getTeamMembers()
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(member -> member.getEndedDate() == null)
+                .map(TeamMember::getMemberUser)
+                .forEach(memberUser -> addUserEmployeeCandidate(candidates, seenEmployeeIds, memberUser, managerUserId));
+    }
+
+    private void addUserEmployeeCandidate(List<Employee> candidates, Set<Integer> seenEmployeeIds, User user, Integer managerUserId) {
+        if (user == null || user.getEmployeeId() == null || Boolean.FALSE.equals(user.getActive())) {
+            return;
+        }
+
+        if (managerUserId != null && Objects.equals(user.getId(), managerUserId)) {
+            return;
+        }
+
+        employeeRepository.findWithDepartmentsById(user.getEmployeeId())
+                .ifPresent(employee -> addCandidate(candidates, seenEmployeeIds, employee));
+    }
+
+    private void addCandidate(List<Employee> candidates, Set<Integer> seenEmployeeIds, Employee employee) {
+        if (employee == null || employee.getId() == null || seenEmployeeIds.contains(employee.getId())) {
+            return;
+        }
+        candidates.add(employee);
+        seenEmployeeIds.add(employee.getId());
+    }
+
+    private AppraisalEmployeeOptionResponse toPmEmployeeOption(AppraisalCycle cycle, Employee employee) {
+        User employeeUser = userRepository.findActiveByEmployeeId(employee.getId()).orElse(null);
+        Department department = resolveEmployeeDepartment(employee, employeeUser);
+
+        try {
+            ensureCycleTargetsDepartment(cycle, department.getId());
+        } catch (BadRequestException ex) {
+            return null;
+        }
+
+        EmployeeAppraisalForm existingForm = formRepository
+                .findByCycleIdAndEmployeeId(cycle.getId(), employee.getId())
+                .orElse(null);
+
+        if (existingForm != null
+                && existingForm.getStatus() != EmployeeAppraisalStatus.PM_DRAFT
+                && existingForm.getStatus() != EmployeeAppraisalStatus.RETURNED) {
+            return null;
+        }
+
+        return new AppraisalEmployeeOptionResponse(
+                employee.getId(),
+                resolveEmployeeName(employee, employeeUser),
+                resolveEmployeeCode(employeeUser),
+                department.getId(),
+                department.getDepartmentName(),
+                employee.getPosition() != null ? employee.getPosition().getPositionTitle() : null,
+                existingForm != null ? existingForm.getId() : null,
+                existingForm != null ? existingForm.getStatus() : null
+        );
+    }
+
+    private String resolveEmployeeCode(User employeeUser) {
+        return employeeUser != null ? employeeUser.getEmployeeCode() : null;
+    }
+
+    private void ensureManagerCanReviewEmployee(User managerUser, Employee employee) {
+        if (managerUser == null || managerUser.getId() == null || employee == null || employee.getId() == null) {
+            throw new BadRequestException("This employee is not assigned to your team for appraisal review.");
+        }
+
+        Set<Integer> managerTeamEmployeeIds = new HashSet<>();
+        List<Employee> managerTeamEmployees = new ArrayList<>();
+        collectManagerTeamEmployees(managerUser.getId(), managerTeamEmployees, managerTeamEmployeeIds);
+
+        if (!managerTeamEmployeeIds.contains(employee.getId())) {
+            throw new BadRequestException("Only employees from your assigned team can be selected for appraisal review.");
+        }
+    }
+
+    private void notifyDepartmentHeads(EmployeeAppraisalForm form) {
+        if (form.getDepartment() == null || form.getDepartment().getId() == null) {
+            return;
+        }
+        String employeeName = form.getEmployeeNameSnapshot() != null ? form.getEmployeeNameSnapshot() : "Employee";
+        String cycleName = form.getCycle() != null ? form.getCycle().getCycleName() : "Appraisal cycle";
+        String title = "Manager Appraisal Submitted";
+        String message = employeeName + " appraisal for " + cycleName + " is ready for Dept Head review.";
+
+        userRepository.findActiveDepartmentHeadsByDepartmentId(form.getDepartment().getId())
+                .forEach(deptHead -> notificationService.sendOnce(deptHead.getId(), title, message, "APPRAISAL"));
+    }
+
+
+    private void ensureFormAndCycleUnlocked(EmployeeAppraisalForm form) {
+        if (Boolean.TRUE.equals(form.getLocked())) {
+            throw new BadRequestException("This appraisal form is locked and can only be viewed.");
+        }
+        AppraisalCycle cycle = form.getCycle();
+        autoLockCycleIfExpired(cycle);
+        if (cycle != null && Boolean.TRUE.equals(cycle.getLocked())) {
+            throw new BadRequestException("This appraisal cycle is locked because the end date has been reached.");
+        }
+    }
+
+    private SignaturePayload resolveWorkflowSignature(
+            Long signatureId,
+            String fallbackImageData,
+            String fallbackImageType,
+            Integer currentUserId,
+            String requiredMessage
+    ) {
+        if (signatureId != null) {
+            Signature signature = signatureRepository.findByIdAndUserIdAndIsActiveTrue(signatureId, Long.valueOf(currentUserId.longValue()))
+                    .orElseThrow(() -> new BadRequestException("Selected signature is not available for the current user."));
+            validateWorkflowSignatureImage(signature.getImageData(), signature.getImageType(), requiredMessage);
+            return new SignaturePayload(signature.getImageData().trim(), signature.getImageType().trim().toLowerCase());
+        }
+
+        validateWorkflowSignatureImage(fallbackImageData, fallbackImageType, requiredMessage);
+        return new SignaturePayload(fallbackImageData.trim(), fallbackImageType.trim().toLowerCase());
+    }
+
+    private void validateWorkflowSignatureImage(String imageData, String imageType, String requiredMessage) {
+        if (imageData == null || imageData.trim().isBlank() || imageType == null || imageType.trim().isBlank()) {
+            throw new BadRequestException(requiredMessage);
+        }
+        if (imageData.length() > MAX_SIGNATURE_BASE64_LENGTH) {
+            throw new BadRequestException("Signature image is too large.");
+        }
+        if (!ALLOWED_SIGNATURE_IMAGE_TYPES.contains(imageType.trim().toLowerCase())) {
+            throw new BadRequestException("Only png, jpg, and jpeg signature images are supported.");
+        }
+    }
+
+    private record SignaturePayload(String imageData, String imageType) {
+    }
+
+    private void notifyHrReviewers(EmployeeAppraisalForm form) {
+        String employeeName = form.getEmployeeNameSnapshot() != null ? form.getEmployeeNameSnapshot() : "Employee";
+        String cycleName = form.getCycle() != null ? form.getCycle().getCycleName() : "Appraisal cycle";
+        String title = "Dept Head Appraisal Submitted";
+        String message = employeeName + " appraisal for " + cycleName + " is ready for HR final review.";
+
+        userRepository.findActiveUsersByNormalizedRoleNames(List.of("HR", "HUMAN_RESOURCES", "ADMIN"))
+                .forEach(hrUser -> notificationService.sendOnce(hrUser.getId(), title, message, "APPRAISAL"));
+    }
+
+    private void notifyEmployeeCompleted(EmployeeAppraisalForm form) {
+        if (form.getEmployee() == null || form.getEmployee().getId() == null) {
+            return;
+        }
+        User employeeUser = userRepository.findActiveByEmployeeId(form.getEmployee().getId()).orElse(null);
+        if (employeeUser == null) {
+            return;
+        }
+        String cycleName = form.getCycle() != null ? form.getCycle().getCycleName() : "Appraisal cycle";
+        notificationService.sendOnce(
+                employeeUser.getId(),
+                "Appraisal Form Completed",
+                cycleName + " has been approved by HR and is available for you to view.",
+                "APPRAISAL"
+        );
+    }
+
     private AppraisalCycle getActiveCycle(Integer cycleId) {
         AppraisalCycle cycle = cycleRepository.findById(cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Appraisal cycle not found with id: " + cycleId));
+
+        autoLockCycleIfExpired(cycle);
 
         if (cycle.getStatus() != AppraisalCycleStatus.ACTIVE) {
             throw new BadRequestException("Only active appraisal cycles can be used for Manager review.");
@@ -322,6 +602,20 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
         }
 
         return cycle;
+    }
+
+    private void autoLockCycleIfExpired(AppraisalCycle cycle) {
+        if (cycle == null
+                || cycle.getEndDate() == null
+                || cycle.getStatus() != AppraisalCycleStatus.ACTIVE
+                || Boolean.TRUE.equals(cycle.getLocked())
+                || cycle.getEndDate().isAfter(LocalDate.now())) {
+            return;
+        }
+
+        cycle.setLocked(true);
+        cycle.setStatus(AppraisalCycleStatus.LOCKED);
+        cycleRepository.save(cycle);
     }
 
     private EmployeeAppraisalForm getFormEntity(Integer formId) {
@@ -459,11 +753,36 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
         form.setTotalPoints(totalPoints);
         form.setAnsweredCriteriaCount(answeredCount);
         form.setScorePercent(Math.round(scorePercent * 100.0) / 100.0);
-        form.setPerformanceLabel(
-                scoreBandRepository.findBandForScore(roundedScore)
-                        .map(AppraisalScoreBand::getLabel)
-                        .orElse(resolveFallbackLabel(roundedScore))
-        );
+        form.setPerformanceLabel(resolvePerformanceLabel(form, roundedScore));
+    }
+
+
+    private String resolvePerformanceLabel(EmployeeAppraisalForm form, int roundedScore) {
+        if (form != null && form.getCycle() != null && form.getCycle().getTemplate() != null) {
+            Optional<AppraisalTemplateScoreBand> matchedBand = findTemplateScoreBand(form.getCycle().getTemplate(), roundedScore);
+            if (matchedBand.isPresent()) {
+                return matchedBand.get().getLabel();
+            }
+        }
+
+        return resolveFallbackLabel(roundedScore);
+    }
+
+    private Optional<AppraisalTemplateScoreBand> findTemplateScoreBand(AppraisalFormTemplate template, int roundedScore) {
+        if (template.getScoreBands() == null || template.getScoreBands().isEmpty()) {
+            return Optional.empty();
+        }
+
+        return template.getScoreBands()
+                .stream()
+                .filter(band -> band.getActive() == null || band.getActive())
+                .filter(band -> band.getMinScore() != null && band.getMaxScore() != null)
+                .filter(band -> roundedScore >= band.getMinScore() && roundedScore <= band.getMaxScore())
+                .sorted(Comparator.comparing(
+                        AppraisalTemplateScoreBand::getSortOrder,
+                        Comparator.nullsLast(Integer::compareTo)
+                ))
+                .findFirst();
     }
 
     private String resolveFallbackLabel(int roundedScore) {
@@ -492,6 +811,8 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
             User reviewer,
             String recommendation,
             String comment,
+            String signatureImageData,
+            String signatureImageType,
             AppraisalDecision decision
     ) {
         AppraisalReview review = reviewRepository
@@ -503,6 +824,8 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
         review.setReviewerUser(reviewer);
         review.setRecommendation(recommendation);
         review.setComment(comment);
+        review.setSignatureImageData(signatureImageData);
+        review.setSignatureImageType(signatureImageType);
         review.setDecision(decision);
         review.setSubmittedAt(new Date());
 
@@ -543,6 +866,12 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
         response.setId(form.getId());
         response.setCycleId(form.getCycle() != null ? form.getCycle().getId() : null);
         response.setCycleName(form.getCycle() != null ? form.getCycle().getCycleName() : null);
+        response.setCycleType(form.getCycle() != null ? form.getCycle().getCycleType() : null);
+        response.setCycleYear(form.getCycle() != null ? form.getCycle().getCycleYear() : null);
+        response.setCycleStartDate(form.getCycle() != null ? form.getCycle().getStartDate() : null);
+        response.setCycleEndDate(form.getCycle() != null ? form.getCycle().getEndDate() : null);
+        response.setCycleSubmissionDeadline(form.getCycle() != null ? form.getCycle().getSubmissionDeadline() : null);
+        response.setCycleLocked(form.getCycle() != null ? form.getCycle().getLocked() : null);
         response.setEmployeeId(form.getEmployee() != null ? form.getEmployee().getId() : null);
         response.setEmployeeName(form.getEmployeeNameSnapshot());
         response.setEmployeeCode(form.getEmployeeCodeSnapshot());
@@ -562,16 +891,65 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
         response.setDeptHeadSubmittedAt(form.getDeptHeadSubmittedAt());
         response.setHrApprovedAt(form.getHrApprovedAt());
 
+        List<AppraisalReview> reviews = reviewRepository.findByEmployeeAppraisalFormIdOrderByCreatedAtAsc(form.getId());
+        reviews.forEach(review -> {
+            if (review.getReviewStage() == AppraisalReviewStage.PM) {
+                response.setManagerCheckedByEmployeeId(displayEmployeeId(review.getReviewerUser()));
+            } else if (review.getReviewStage() == AppraisalReviewStage.DEPT_HEAD) {
+                response.setDeptHeadCheckedByEmployeeId(displayEmployeeId(review.getReviewerUser()));
+            } else if (review.getReviewStage() == AppraisalReviewStage.HR) {
+                response.setHrCheckedByEmployeeId(displayEmployeeId(review.getReviewerUser()));
+            }
+        });
+
+        if (form.getCycle() != null && form.getCycle().getTemplate() != null) {
+            response.setScoreBands(mapTemplateScoreBands(form.getCycle().getTemplate()));
+        }
+
         response.setSections(mapSectionsWithRatings(form));
 
         response.setReviews(
-                reviewRepository.findByEmployeeAppraisalFormIdOrderByCreatedAtAsc(form.getId())
-                        .stream()
+                reviews.stream()
                         .map(this::mapReview)
                         .toList()
         );
 
         return response;
+    }
+
+
+    private List<AppraisalScoreBandResponse> mapTemplateScoreBands(AppraisalFormTemplate template) {
+        if (template == null || template.getScoreBands() == null || template.getScoreBands().isEmpty()) {
+            return defaultScoreBands();
+        }
+
+        return template.getScoreBands()
+                .stream()
+                .filter(band -> band.getActive() == null || band.getActive())
+                .sorted(Comparator.comparing(
+                        AppraisalTemplateScoreBand::getSortOrder,
+                        Comparator.nullsLast(Integer::compareTo)
+                ))
+                .map(band -> new AppraisalScoreBandResponse(
+                        band.getId(),
+                        band.getMinScore(),
+                        band.getMaxScore(),
+                        band.getLabel(),
+                        band.getDescription(),
+                        band.getSortOrder(),
+                        band.getActive()
+                ))
+                .toList();
+    }
+
+    private List<AppraisalScoreBandResponse> defaultScoreBands() {
+        List<AppraisalScoreBandResponse> defaults = new ArrayList<>();
+        defaults.add(new AppraisalScoreBandResponse(null, 86, 100, "Outstanding", "Performance exceptional and far exceeds expectations.", 1, true));
+        defaults.add(new AppraisalScoreBandResponse(null, 71, 85, "Exceeds Requirements", "Performance is consistent and clearly meets essential requirements.", 2, true));
+        defaults.add(new AppraisalScoreBandResponse(null, 60, 70, "Meet Requirement", "Performance is satisfactory and meets requirements of the job.", 3, true));
+        defaults.add(new AppraisalScoreBandResponse(null, 40, 59, "Need Improvement", "Performance is inconsistent. Supervision and training are needed.", 4, true));
+        defaults.add(new AppraisalScoreBandResponse(null, 0, 39, "Unsatisfactory", "Performance does not meet the minimum requirement of the job.", 5, true));
+        return defaults;
     }
 
     private List<AppraisalSectionResponse> mapSectionsWithRatings(EmployeeAppraisalForm form) {
@@ -639,10 +1017,26 @@ public class EmployeeAppraisalWorkflowServiceImpl implements EmployeeAppraisalWo
                 review.getReviewStage(),
                 review.getReviewerUser() != null ? review.getReviewerUser().getId() : null,
                 review.getReviewerUser() != null ? review.getReviewerUser().getFullName() : null,
+                displayEmployeeId(review.getReviewerUser()),
                 review.getRecommendation(),
                 review.getComment(),
+                review.getSignatureImageData(),
+                review.getSignatureImageType(),
                 review.getDecision(),
                 review.getSubmittedAt()
         );
+    }
+
+    private String displayEmployeeId(User user) {
+        if (user == null) {
+            return null;
+        }
+        if (user.getEmployeeCode() != null && !user.getEmployeeCode().isBlank()) {
+            return user.getEmployeeCode();
+        }
+        if (user.getEmployeeId() != null) {
+            return String.valueOf(user.getEmployeeId());
+        }
+        return user.getId() != null ? String.valueOf(user.getId()) : null;
     }
 }

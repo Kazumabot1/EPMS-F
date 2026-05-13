@@ -16,8 +16,11 @@ public class AppraisalReviewResponse {
     private AppraisalReviewStage reviewStage;
     private Integer reviewerUserId;
     private String reviewerName;
+    private String reviewerEmployeeId;
     private String recommendation;
     private String comment;
+    private String signatureImageData;
+    private String signatureImageType;
     private AppraisalDecision decision;
     private Date submittedAt;
 }
