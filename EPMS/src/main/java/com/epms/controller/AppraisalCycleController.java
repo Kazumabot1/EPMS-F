@@ -11,7 +11,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,11 +19,6 @@ import java.util.List;
 @RequestMapping("/api/hr/appraisal/cycles")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
-@PreAuthorize(
-        "hasAnyRole('HR', 'ADMIN') "
-                + "or principal.dashboard == 'HR_DASHBOARD' "
-                + "or principal.dashboard == 'ADMIN_DASHBOARD'"
-)
 public class AppraisalCycleController {
 
     private final AppraisalCycleService appraisalCycleService;
@@ -33,7 +27,11 @@ public class AppraisalCycleController {
     public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> createCycle(
             @Valid @RequestBody AppraisalCycleRequest request
     ) {
-        AppraisalCycleResponse response = appraisalCycleService.createCycle(request, SecurityUtils.currentUserId());
+        AppraisalCycleResponse response = appraisalCycleService.createCycle(
+                request,
+                SecurityUtils.currentUserId()
+        );
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(GenericApiResponse.success("Appraisal cycle created", response));
     }
@@ -42,7 +40,11 @@ public class AppraisalCycleController {
     public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> createTemplateAndCycle(
             @Valid @RequestBody AppraisalTemplateCycleRequest request
     ) {
-        AppraisalCycleResponse response = appraisalCycleService.createTemplateAndCycle(request, SecurityUtils.currentUserId());
+        AppraisalCycleResponse response = appraisalCycleService.createTemplateAndCycle(
+                request,
+                SecurityUtils.currentUserId()
+        );
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(GenericApiResponse.success("Appraisal form template and cycle created", response));
     }
@@ -53,13 +55,21 @@ public class AppraisalCycleController {
             @Valid @RequestBody AppraisalCycleRequest request
     ) {
         AppraisalCycleResponse response = appraisalCycleService.updateDraftCycle(cycleId, request);
-        return ResponseEntity.ok(GenericApiResponse.success("Draft appraisal cycle updated", response));
+
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Draft appraisal cycle updated", response)
+        );
     }
 
     @GetMapping("/{cycleId}")
-    public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> getCycle(@PathVariable Integer cycleId) {
+    public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> getCycle(
+            @PathVariable Integer cycleId
+    ) {
         AppraisalCycleResponse response = appraisalCycleService.getCycle(cycleId);
-        return ResponseEntity.ok(GenericApiResponse.success("Appraisal cycle fetched", response));
+
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Appraisal cycle fetched", response)
+        );
     }
 
     @GetMapping
@@ -67,25 +77,43 @@ public class AppraisalCycleController {
             @RequestParam(required = false) AppraisalCycleStatus status
     ) {
         List<AppraisalCycleResponse> response = appraisalCycleService.getCycles(status);
-        return ResponseEntity.ok(GenericApiResponse.success("Appraisal cycles fetched", response));
+
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Appraisal cycles fetched", response)
+        );
     }
 
     @PatchMapping("/{cycleId}/activate")
-    public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> activateCycle(@PathVariable Integer cycleId) {
+    public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> activateCycle(
+            @PathVariable Integer cycleId
+    ) {
         AppraisalCycleResponse response = appraisalCycleService.activateCycle(cycleId);
-        return ResponseEntity.ok(GenericApiResponse.success("Appraisal cycle activated", response));
+
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Appraisal cycle activated", response)
+        );
     }
 
     @PatchMapping("/{cycleId}/lock")
-    public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> lockCycle(@PathVariable Integer cycleId) {
+    public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> lockCycle(
+            @PathVariable Integer cycleId
+    ) {
         AppraisalCycleResponse response = appraisalCycleService.lockCycle(cycleId);
-        return ResponseEntity.ok(GenericApiResponse.success("Appraisal cycle locked", response));
+
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Appraisal cycle locked", response)
+        );
     }
 
     @PatchMapping("/{cycleId}/complete")
-    public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> completeCycle(@PathVariable Integer cycleId) {
+    public ResponseEntity<GenericApiResponse<AppraisalCycleResponse>> completeCycle(
+            @PathVariable Integer cycleId
+    ) {
         AppraisalCycleResponse response = appraisalCycleService.completeCycle(cycleId);
-        return ResponseEntity.ok(GenericApiResponse.success("Appraisal cycle completed", response));
+
+        return ResponseEntity.ok(
+                GenericApiResponse.success("Appraisal cycle completed", response)
+        );
     }
 
     @PostMapping("/{cycleId}/reuse")
@@ -93,10 +121,13 @@ public class AppraisalCycleController {
             @PathVariable Integer cycleId,
             @Valid @RequestBody AppraisalCycleRequest request
     ) {
-        AppraisalCycleResponse response = appraisalCycleService.reuseCycle(cycleId, request, SecurityUtils.currentUserId());
+        AppraisalCycleResponse response = appraisalCycleService.reuseCycle(
+                cycleId,
+                request,
+                SecurityUtils.currentUserId()
+        );
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(GenericApiResponse.success("Appraisal cycle re-used", response));
     }
-
-
 }

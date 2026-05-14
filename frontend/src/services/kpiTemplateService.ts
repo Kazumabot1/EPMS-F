@@ -1,3 +1,4 @@
+
 import api from './api';
 import { extractApiErrorMessage } from './apiError';
 import type { UseKpiTemplateResult } from '../types/kpiWorkflow';
@@ -58,12 +59,17 @@ export const kpiTemplateService = {
       | { departmentId: number },
   ): Promise<UseKpiTemplateResult> {
     try {
-      const body =
-        'applyToAllDepartments' in payload && payload.applyToAllDepartments
-          ? { applyToAllDepartments: true }
-          : 'departmentIds' in payload
-            ? { departmentIds: payload.departmentIds }
-            : { departmentId: payload.departmentId };
+      let body: { applyToAllDepartments?: true; departmentIds?: number[]; departmentId?: number };
+
+      if ('applyToAllDepartments' in payload && payload.applyToAllDepartments === true) {
+        body = { applyToAllDepartments: true };
+      } else if ('departmentIds' in payload) {
+        body = { departmentIds: payload.departmentIds };
+      } else if ('departmentId' in payload) {
+        body = { departmentId: payload.departmentId };
+      } else {
+        throw new Error('Department selection is required.');
+      }
       const response = await api.post<UseKpiTemplateResult>(
         `${BASE}/${templateId}/use-for-department`,
         body,

@@ -154,7 +154,7 @@ const FeedbackLayoutPage = () => {
         storedWorkspace.draftTargetIds.length ? storedWorkspace.draftTargetIds : storedWorkspace.savedTargetIds,
     );
     const [evalConfig, setEvalConfig] = useState<EvaluatorConfigInput>(storedWorkspace.evalConfig);
-    const [assignmentResult, setAssignmentResult] = useState<FeedbackAssignmentGenerationResponse | null>(null);
+   const [, setAssignmentResult] = useState<FeedbackAssignmentGenerationResponse | null>(null);
     const [workspaceNotice, setWorkspaceNotice] = useState('');
 
     const activeModule = getModuleKey(location.pathname);
