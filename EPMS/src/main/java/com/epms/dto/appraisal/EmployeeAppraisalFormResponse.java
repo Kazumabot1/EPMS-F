@@ -1,5 +1,6 @@
 package com.epms.dto.appraisal;
 
+import com.epms.entity.enums.AppraisalCycleType;
 import com.epms.entity.enums.EmployeeAppraisalStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,6 +18,12 @@ public class EmployeeAppraisalFormResponse {
     private Integer id;
     private Integer cycleId;
     private String cycleName;
+    private AppraisalCycleType cycleType;
+    private Integer cycleYear;
+    private LocalDate cycleStartDate;
+    private LocalDate cycleEndDate;
+    private LocalDate cycleSubmissionDeadline;
+    private Boolean cycleLocked;
     private Integer employeeId;
     private String employeeName;
     private String employeeCode;
@@ -33,8 +40,12 @@ public class EmployeeAppraisalFormResponse {
     private Boolean visibleToEmployee;
     private Boolean locked;
     private Date pmSubmittedAt;
+    private String managerCheckedByEmployeeId;
     private Date deptHeadSubmittedAt;
+    private String deptHeadCheckedByEmployeeId;
     private Date hrApprovedAt;
+    private String hrCheckedByEmployeeId;
     private List<AppraisalSectionResponse> sections = new ArrayList<>();
     private List<AppraisalReviewResponse> reviews = new ArrayList<>();
+    private List<AppraisalScoreBandResponse> scoreBands = new ArrayList<>();
 }

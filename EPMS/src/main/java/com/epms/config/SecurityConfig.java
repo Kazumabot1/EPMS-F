@@ -1,4 +1,5 @@
 
+
 package com.epms.config;
 
 import com.epms.security.JwtAuthenticationFilter;
@@ -291,6 +292,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/employee-assessments/{id}")
                         .access((authentication, context) ->
                                 hasRoleDashboardOrPosition(authentication.get(), SCORE_TABLE_ROLES, SCORE_TABLE_DASHBOARDS)
+                        )
+
+                        .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/manager-remark")
+                        .access((authentication, context) ->
+                                hasRoleDashboardOrPosition(authentication.get(), MANAGER_ROLES, MANAGER_DASHBOARDS)
                         )
 
                         .requestMatchers(HttpMethod.POST, "/api/employee-assessments/{id}/manager-sign")

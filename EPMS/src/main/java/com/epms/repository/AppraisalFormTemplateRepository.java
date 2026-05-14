@@ -17,6 +17,9 @@ public interface AppraisalFormTemplateRepository extends JpaRepository<Appraisal
 
     List<AppraisalFormTemplate> findByStatus(AppraisalTemplateStatus status);
 
+    List<AppraisalFormTemplate> findByCycleSpecificCopyFalse();
+
+    List<AppraisalFormTemplate> findByStatusAndCycleSpecificCopyFalse(AppraisalTemplateStatus status);
 
     List<AppraisalFormTemplate> findByFormType(AppraisalCycleType formType);
 

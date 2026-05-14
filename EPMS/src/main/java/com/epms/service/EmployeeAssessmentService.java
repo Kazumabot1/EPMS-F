@@ -1,3 +1,4 @@
+
 package com.epms.service;
 
 import com.epms.dto.EmployeeAssessmentDtos.AssessmentItemRequest;
@@ -181,11 +182,7 @@ public class EmployeeAssessmentService {
         validateAssessmentBelongsToAssignedForm(assessment, form);
         validateRequestFormMatchesAssignedForm(request, form);
 
-        if (assessment.getManagerUserId() == null) {
-            throw new BadRequestException("You cannot submit because no manager is assigned to your account.");
-        }
-
-        applyRequest(assessment, request, AssessmentStatus.PENDING_MANAGER, form);
+        applyRequest(assessment, request, AssessmentStatus.PENDING_DEPARTMENT_HEAD, form);
         validateComplete(assessment);
         calculateScores(assessment, form);
         attachEmployeeSignature(assessment);
@@ -196,29 +193,38 @@ public class EmployeeAssessmentService {
     }
 
     @Transactional
-    public AssessmentResponse managerSign(Long id, ReviewActionRequest request) {
+    public AssessmentResponse managerRemark(Long id, ReviewActionRequest request) {
         EmployeeAssessment assessment = findAssessment(id);
         UserPrincipal principal = SecurityUtils.currentUser();
 
         if (!Objects.equals(assessment.getManagerUserId(), principal.getId())) {
-            throw new UnauthorizedActionException("Only this employee's assigned manager can sign this self-assessment.");
+            throw new UnauthorizedActionException("Only this employee's assigned manager can add remarks to this self-assessment.");
         }
 
-        if (!AssessmentStatus.PENDING_MANAGER.equals(assessment.getStatus())) {
-            throw new BadRequestException("This assessment is not waiting for manager signature.");
+        if (AssessmentStatus.DRAFT.equals(assessment.getStatus())) {
+            throw new BadRequestException("Manager cannot review a draft assessment.");
         }
 
-        Signature signature = currentDefaultSignature();
+        if (AssessmentStatus.PENDING_HR.equals(assessment.getStatus())
+                || AssessmentStatus.APPROVED.equals(assessment.getStatus())
+                || AssessmentStatus.DECLINED.equals(assessment.getStatus())
+                || AssessmentStatus.REJECTED.equals(assessment.getStatus())) {
+            throw new BadRequestException("Manager remarks can no longer be changed after the assessment leaves department-head review.");
+        }
 
-        assessment.setManagerSignatureId(signature.getId());
-        assessment.setManagerSignatureName(signature.getName());
-        assessment.setManagerSignatureImageData(signature.getImageData());
-        assessment.setManagerSignatureImageType(signature.getImageType());
-        assessment.setManagerSignedAt(LocalDateTime.now());
         assessment.setManagerComment(clean(request == null ? null : request.getComment()));
-        assessment.setStatus(AssessmentStatus.PENDING_DEPARTMENT_HEAD);
+
+        if (AssessmentStatus.PENDING_MANAGER.equals(assessment.getStatus())
+                || AssessmentStatus.SUBMITTED.equals(assessment.getStatus())) {
+            assessment.setStatus(AssessmentStatus.PENDING_DEPARTMENT_HEAD);
+        }
 
         return toResponse(assessmentRepository.save(assessment));
+    }
+
+    @Transactional
+    public AssessmentResponse managerSign(Long id, ReviewActionRequest request) {
+        return managerRemark(id, request);
     }
 
     @Transactional
@@ -239,7 +245,9 @@ public class EmployeeAssessmentService {
             throw new UnauthorizedActionException("Only the department head of this employee's department can sign this self-assessment.");
         }
 
-        if (!AssessmentStatus.PENDING_DEPARTMENT_HEAD.equals(assessment.getStatus())) {
+        if (!AssessmentStatus.PENDING_DEPARTMENT_HEAD.equals(assessment.getStatus())
+                && !AssessmentStatus.PENDING_MANAGER.equals(assessment.getStatus())
+                && !AssessmentStatus.SUBMITTED.equals(assessment.getStatus())) {
             throw new BadRequestException("This assessment is not waiting for department head signature.");
         }
 
@@ -273,8 +281,8 @@ public class EmployeeAssessmentService {
             throw new BadRequestException("This assessment is not ready for HR approval.");
         }
 
-        if (assessment.getManagerSignatureId() == null || assessment.getDepartmentHeadSignatureId() == null) {
-            throw new BadRequestException("HR cannot approve until manager and department head signatures are completed.");
+        if (assessment.getDepartmentHeadSignatureId() == null) {
+            throw new BadRequestException("HR cannot approve until the department head signature is completed.");
         }
 
         Signature signature = currentDefaultSignature();

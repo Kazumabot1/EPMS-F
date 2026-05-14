@@ -17,4 +17,7 @@ public class PmAppraisalSubmitRequest {
     private List<AppraisalRatingInput> ratings = new ArrayList<>();
     private String recommendation;
     private String comment;
+    private Long managerSignatureId;
+    private String managerSignatureImageData;
+    private String managerSignatureImageType;
 }

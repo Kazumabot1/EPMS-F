@@ -1,3 +1,4 @@
+
 package com.epms.service.auth;
 
 import com.epms.dto.auth.AuthResponse;
@@ -36,6 +37,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final CustomUserDetailsService customUserDetailsService;
     private final AuthRateLimitService authRateLimitService;
+    private final PasswordPolicyService passwordPolicyService;
 
     @Value("${app.jwt.refresh-token-expiration-ms:604800000}")
     private long refreshTokenExpirationMs;
@@ -115,9 +117,7 @@ public class AuthService {
             throw new BadRequestException("Current password is incorrect");
         }
 
-        if (request.getNewPassword() == null || request.getNewPassword().length() < 8) {
-            throw new BadRequestException("New password must be at least 8 characters long");
-        }
+        passwordPolicyService.validateOrThrow(request.getNewPassword(), "New password");
 
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
             throw new BadRequestException("New password must be different from the current password");

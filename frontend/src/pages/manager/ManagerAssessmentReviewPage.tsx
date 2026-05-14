@@ -164,39 +164,39 @@ const EmployeeSignatureSlot = ({ assessment }: { assessment: EmployeeAssessment 
 const ReviewModal = ({
   assessment,
   onClose,
-  onSigned,
+  onSaved,
 }: {
   assessment: EmployeeAssessment;
   onClose: () => void;
-  onSigned: (assessment: EmployeeAssessment) => void;
+  onSaved: (assessment: EmployeeAssessment) => void;
 }) => {
-  const [comment, setComment] = useState('');
-  const [signing, setSigning] = useState(false);
+  const [comment, setComment] = useState(assessment.managerComment || '');
+  const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
 
   const items = flattenItems(assessment);
   const scoreBands = assessment.scoreBands?.length ? assessment.scoreBands : defaultScoreBands;
-  const canSign = assessment.status === 'PENDING_MANAGER' && Boolean(assessment.id);
+  const canSaveRemark = ['PENDING_MANAGER', 'PENDING_DEPARTMENT_HEAD', 'SUBMITTED'].includes(assessment.status) && Boolean(assessment.id);
 
-  const handleSign = async () => {
+  const handleSaveRemark = async () => {
     if (!assessment.id) return;
 
-    setSigning(true);
+    setSaving(true);
     setActionError('');
     setActionMessage('');
 
     try {
-      const updated = await employeeAssessmentService.managerSign(
+      const updated = await employeeAssessmentService.managerRemark(
         assessment.id,
         comment.trim() || undefined,
       );
-      setActionMessage('Assessment signed and forwarded to Department Head.');
-      onSigned(updated);
+      setActionMessage('Manager remarks saved. Department Head can sign this assessment without manager signature.');
+      onSaved(updated);
     } catch (err) {
-      setActionError(getErrorMessage(err, 'Unable to sign assessment.'));
+      setActionError(getErrorMessage(err, 'Unable to save manager remarks.'));
     } finally {
-      setSigning(false);
+      setSaving(false);
     }
   };
 
@@ -206,7 +206,7 @@ const ReviewModal = ({
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Manager Assessment Review</h2>
-            <p className="text-sm text-slate-500">Review the employee self-assessment before signing.</p>
+            <p className="text-sm text-slate-500">Read-only review. Manager remarks are optional and do not require a signature.</p>
           </div>
 
           <button
@@ -316,49 +316,59 @@ const ReviewModal = ({
               </div>
             </div>
 
-            <div className="appraisal-signature-grid" style={{ gridTemplateColumns: 'minmax(220px, 360px)' }}>
-              <EmployeeSignatureSlot assessment={assessment} />
+            <div className="appraisal-inline-grid">
+              <div className="appraisal-review-block">
+                <h4>Employee Signature</h4>
+                <EmployeeSignatureSlot assessment={assessment} />
+              </div>
+
+              <div className="appraisal-review-block">
+                <h4>Current Manager Remarks</h4>
+                <p>{assessment.managerComment || 'No manager remarks yet.'}</p>
+              </div>
             </div>
 
-            {canSign ? (
-              <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <h4 className="mb-4 text-base font-bold text-slate-900">Manager Signature Action</h4>
-                <label className="block text-sm font-semibold text-slate-700">
-                  Manager comment optional
-                  <textarea
-                    value={comment}
-                    onChange={(event) => setComment(event.target.value)}
-                    rows={4}
-                    className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                    placeholder="Write review notes before forwarding to Department Head..."
-                  />
-                </label>
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <h4 className="mb-2 text-base font-bold text-slate-900">Manager Remarks</h4>
+              <p className="mb-4 text-sm text-slate-500">
+                Manager signature is no longer required. Add remarks only. Department Head can sign and forward to HR.
+              </p>
 
+              <textarea
+                value={comment}
+                disabled={!canSaveRemark || saving}
+                onChange={(event) => setComment(event.target.value)}
+                rows={4}
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-100"
+                placeholder="Optional manager remarks..."
+              />
+
+              {canSaveRemark ? (
                 <button
                   type="button"
-                  disabled={signing}
-                  onClick={() => void handleSign()}
+                  disabled={saving}
+                  onClick={() => void handleSaveRemark()}
                   className="mt-4 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
                 >
-                  {signing ? 'Signing...' : 'Sign & Forward to Dept Head'}
+                  {saving ? 'Saving...' : 'Save Remarks'}
                 </button>
+              ) : (
+                <p className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+                  Remarks are locked because this assessment has already moved past department-head review.
+                </p>
+              )}
 
-                {actionMessage && (
-                  <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-                    {actionMessage}
-                  </p>
-                )}
-                {actionError && (
-                  <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                    {actionError}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
-                This assessment is not currently waiting for manager signature.
-              </div>
-            )}
+              {actionMessage && (
+                <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                  {actionMessage}
+                </p>
+              )}
+              {actionError && (
+                <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                  {actionError}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -379,9 +389,9 @@ const ManagerAssessmentReviewPage = () => {
       setLoading(true);
       setError('');
       const data = await employeeAssessmentService.scoreTable();
-      setRows(data);
+      setRows(data.filter((row) => row.status !== 'DRAFT'));
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to load manager assessment review queue.'));
+      setError(getErrorMessage(err, 'Unable to load assigned assessments.'));
     } finally {
       setLoading(false);
     }
@@ -391,8 +401,13 @@ const ManagerAssessmentReviewPage = () => {
     void loadRows();
   }, []);
 
-  const pendingRows = useMemo(
-    () => rows.filter((row) => row.status === 'PENDING_MANAGER'),
+  const remarkableRows = useMemo(
+    () => rows.filter((row) => ['PENDING_MANAGER', 'PENDING_DEPARTMENT_HEAD', 'SUBMITTED'].includes(row.status)),
+    [rows],
+  );
+
+  const forwardedRows = useMemo(
+    () => rows.filter((row) => ['PENDING_HR', 'APPROVED', 'DECLINED', 'REJECTED'].includes(row.status)),
     [rows],
   );
 
@@ -405,10 +420,10 @@ const ManagerAssessmentReviewPage = () => {
       row.employeeName?.toLowerCase().includes(normalizedSearch) ||
       row.employeeCode?.toLowerCase().includes(normalizedSearch) ||
       row.departmentName?.toLowerCase().includes(normalizedSearch) ||
-      row.formName?.toLowerCase().includes(normalizedSearch) ||
       row.period?.toLowerCase().includes(normalizedSearch) ||
       row.status?.toLowerCase().includes(normalizedSearch) ||
-      row.performanceLabel?.toLowerCase().includes(normalizedSearch),
+      row.performanceLabel?.toLowerCase().includes(normalizedSearch) ||
+      row.formName?.toLowerCase().includes(normalizedSearch),
     );
   }, [rows, search]);
 
@@ -425,7 +440,7 @@ const ManagerAssessmentReviewPage = () => {
     }
   };
 
-  const handleSigned = async (updated: EmployeeAssessment) => {
+  const handleSaved = async (updated: EmployeeAssessment) => {
     setSelectedAssessment(updated);
     await loadRows();
   };
@@ -436,7 +451,7 @@ const ManagerAssessmentReviewPage = () => {
         <ReviewModal
           assessment={selectedAssessment}
           onClose={() => setSelectedAssessment(null)}
-          onSigned={(updated) => void handleSigned(updated)}
+          onSaved={(updated) => void handleSaved(updated)}
         />
       )}
 
@@ -452,7 +467,7 @@ const ManagerAssessmentReviewPage = () => {
               <h1 className="text-3xl font-bold text-white">Assessment Review</h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-emerald-100">
-                Review self-assessments assigned to you and sign them forward to the Department Head.
+                Review self-assessments assigned to you. Manager signature is removed; you may add optional remarks only.
               </p>
             </div>
 
@@ -474,13 +489,13 @@ const ManagerAssessmentReviewPage = () => {
           </div>
 
           <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
-            <p className="text-sm font-medium text-slate-500">Waiting For My Signature</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-600">{pendingRows.length}</p>
+            <p className="text-sm font-medium text-slate-500">Can Add Remarks</p>
+            <p className="mt-2 text-3xl font-bold text-emerald-600">{remarkableRows.length}</p>
           </div>
 
           <div className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
-            <p className="text-sm font-medium text-slate-500">Forwarded / Completed</p>
-            <p className="mt-2 text-3xl font-bold text-teal-600">{Math.max(rows.length - pendingRows.length, 0)}</p>
+            <p className="text-sm font-medium text-slate-500">Forwarded / Final</p>
+            <p className="mt-2 text-3xl font-bold text-teal-600">{forwardedRows.length}</p>
           </div>
         </div>
 
@@ -507,12 +522,12 @@ const ManagerAssessmentReviewPage = () => {
           <div className="flex flex-col justify-between gap-3 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Assigned Self-Assessments</h2>
-              <p className="text-sm text-slate-500">Open a record to review answers and sign.</p>
+              <p className="text-sm text-slate-500">Open a record to review answers and add optional manager remarks.</p>
             </div>
 
             <span className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Manager view
+              Manager view · read-only
             </span>
           </div>
 
@@ -528,7 +543,7 @@ const ManagerAssessmentReviewPage = () => {
               </div>
               <h3 className="font-bold text-slate-900">No assigned assessments found</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Assessments waiting for your review will appear here after employees submit.
+                Assessments assigned to you will appear here after employees submit.
               </p>
             </div>
           ) : (
@@ -592,8 +607,8 @@ const ManagerAssessmentReviewPage = () => {
                         >
                           {detailLoadingId === row.id
                             ? 'Opening...'
-                            : row.status === 'PENDING_MANAGER'
-                              ? 'Review & Sign'
+                            : ['PENDING_MANAGER', 'PENDING_DEPARTMENT_HEAD', 'SUBMITTED'].includes(row.status)
+                              ? 'Review / Remarks'
                               : 'View Details'}
                         </button>
                       </td>
@@ -610,4 +625,3 @@ const ManagerAssessmentReviewPage = () => {
 };
 
 export default ManagerAssessmentReviewPage;
-

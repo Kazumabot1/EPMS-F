@@ -178,7 +178,7 @@ public class HrEmployeeAccountService {
             throw new BadRequestException("Full name is required");
         }
 
-        userRepository.findByEmail(email).ifPresent(existing -> {
+        userRepository.findByEmailIgnoreCase(email).ifPresent(existing -> {
             if (!existing.getId().equals(userId)) {
                 throw new BadRequestException("Email is already used by another user");
             }
@@ -274,7 +274,7 @@ public class HrEmployeeAccountService {
                 continue;
             }
 
-            boolean existed = userRepository.findByEmail(cleanEmail(email)).isPresent();
+            boolean existed = userRepository.findByEmailIgnoreCase(cleanEmail(email)).isPresent();
 
             HrEmployeeAccountCreateRequest request = new HrEmployeeAccountCreateRequest();
             request.setEmployeeCode(staffNo);

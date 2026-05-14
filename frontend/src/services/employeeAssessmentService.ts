@@ -1,3 +1,4 @@
+
 import api from './api';
 import type {
   AssessmentRequest,
@@ -382,11 +383,15 @@ export const employeeAssessmentService = {
     return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
   },
 
-  async managerSign(id: number, comment?: string): Promise<EmployeeAssessment> {
-    const response = await api.post(`/employee-assessments/${id}/manager-sign`, {
+  async managerRemark(id: number, comment?: string): Promise<EmployeeAssessment> {
+    const response = await api.post(`/employee-assessments/${id}/manager-remark`, {
       comment: comment ?? null,
     });
     return normalizeAssessment(unwrap<any>(response, null)) as EmployeeAssessment;
+  },
+
+  async managerSign(id: number, comment?: string): Promise<EmployeeAssessment> {
+    return this.managerRemark(id, comment);
   },
 
   async departmentHeadSign(id: number, comment?: string): Promise<EmployeeAssessment> {

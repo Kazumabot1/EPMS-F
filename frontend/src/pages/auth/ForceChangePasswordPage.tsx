@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,11 +29,39 @@ const resolveRoute = (dashboard?: string) => {
     case 'EXECUTIVE_DASHBOARD':
       return '/executive/dashboard';
     case 'ADMIN_DASHBOARD':
+      return '/admin/dashboard';
     case 'HR_DASHBOARD':
     default:
       return '/dashboard';
   }
 };
+
+type PasswordRule = {
+  label: string;
+  passed: boolean;
+};
+
+const getPasswordRules = (password: string): PasswordRule[] => [
+  { label: 'At least 8 characters', passed: password.length >= 8 },
+  { label: 'At least 1 uppercase letter', passed: /[A-Z]/.test(password) },
+  { label: 'At least 1 lowercase letter', passed: /[a-z]/.test(password) },
+  { label: 'At least 1 number', passed: /\d/.test(password) },
+  { label: 'At least 1 special character', passed: /[^A-Za-z0-9]/.test(password) },
+  { label: 'No spaces', passed: password.length > 0 && !/\s/.test(password) },
+];
+
+const getPasswordWarning = (password: string) => {
+  if (!password) return '';
+
+  const failed = getPasswordRules(password).filter((rule) => !rule.passed);
+
+  if (failed.length === 0) return '';
+
+  return `Weak password: ${failed.map((rule) => rule.label).join(', ')}.`;
+};
+
+const isStrongPassword = (password: string) =>
+  getPasswordRules(password).every((rule) => rule.passed);
 
 const ForceChangePasswordPage = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -45,6 +74,9 @@ const ForceChangePasswordPage = () => {
   const currentRole = resolveUserRole(user);
   const currentRoleLabel = currentRole === 'DepartmentHead' ? 'Department Head Dashboard' : `${currentRole} Dashboard`;
 
+  const passwordRules = useMemo(() => getPasswordRules(newPassword), [newPassword]);
+  const passwordWarning = useMemo(() => getPasswordWarning(newPassword), [newPassword]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -53,14 +85,17 @@ const ForceChangePasswordPage = () => {
       setError('Login session is missing. Please sign in again.');
       return;
     }
-    if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters long.');
+
+    if (!isStrongPassword(newPassword)) {
+      setError('Please choose a stronger password before continuing.');
       return;
     }
+
     if (newPassword !== confirmPassword) {
       setError('New password and confirmation do not match.');
       return;
     }
+
     if (currentPassword === newPassword) {
       setError('New password must be different from the current password.');
       return;
@@ -117,6 +152,33 @@ const ForceChangePasswordPage = () => {
             onChange={(e) => setNewPassword(e.target.value)}
             required
           />
+
+          {newPassword && (
+            <div
+              style={{
+                textAlign: 'left',
+                fontSize: '.82rem',
+                borderRadius: 12,
+                padding: '.85rem 1rem',
+                background: passwordWarning ? '#fff7ed' : '#ecfdf5',
+                border: `1px solid ${passwordWarning ? '#fed7aa' : '#bbf7d0'}`,
+                color: passwordWarning ? '#9a3412' : '#047857',
+              }}
+            >
+              <strong>
+                <i className={`bi ${passwordWarning ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill'}`} />{' '}
+                {passwordWarning ? 'Weak password warning' : 'Strong password'}
+              </strong>
+              <ul style={{ margin: '.5rem 0 0', paddingLeft: '1.25rem' }}>
+                {passwordRules.map((rule) => (
+                  <li key={rule.label} style={{ color: rule.passed ? '#047857' : '#9a3412' }}>
+                    {rule.passed ? '✓' : '⚠'} {rule.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <input
             type="password"
             className="force-password-input"

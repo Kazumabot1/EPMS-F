@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import api from '../../services/api';
 import { exportToExcel, todayStr } from '../../utils/exportExcel';
@@ -226,6 +227,20 @@ const AdminDashboard = () => {
     );
   }, [options.roles]);
 
+  const duplicateEmailUser = useMemo(() => {
+    const email = form.email.trim().toLowerCase();
+
+    if (!email) return null;
+
+    return (
+      users.find((user) => {
+        if (!user.email) return false;
+        if (editingUserId && user.userId === editingUserId) return false;
+        return user.email.trim().toLowerCase() === email;
+      }) ?? null
+    );
+  }, [editingUserId, form.email, users]);
+
   const openCreate = () => {
     resetForm();
     setShowForm(true);
@@ -257,6 +272,9 @@ const AdminDashboard = () => {
   const validate = () => {
     if (!form.fullName.trim()) return 'Full name is required.';
     if (!form.email.trim()) return 'Email is required.';
+    if (duplicateEmailUser) {
+      return `Email is already used by ${duplicateEmailUser.fullName || duplicateEmailUser.email}.`;
+    }
     if (!form.roleName.trim()) return 'Role is required.';
     return '';
   };
@@ -437,6 +455,16 @@ const AdminDashboard = () => {
                     }
                     required
                   />
+
+                  {duplicateEmailUser && (
+                    <div
+                      className="adm-alert error"
+                      style={{ marginTop: 8, padding: '8px 10px', fontSize: '.82rem' }}
+                    >
+                      <i className="bi bi-exclamation-triangle-fill" /> Email already exists for{' '}
+                      <strong>{duplicateEmailUser.fullName || duplicateEmailUser.email}</strong>.
+                    </div>
+                  )}
                 </div>
 
                 <div className="adm-field">

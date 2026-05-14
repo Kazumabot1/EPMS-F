@@ -1,3 +1,4 @@
+
 package com.epms.service.auth;
 
 import com.epms.dto.EmailSendResult;
@@ -42,6 +43,7 @@ public class ForgotPasswordService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final OnboardingEmailService onboardingEmailService;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordPolicyService passwordPolicyService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -121,6 +123,8 @@ public class ForgotPasswordService {
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new BadRequestException("New password and confirm password do not match.");
         }
+
+        passwordPolicyService.validateOrThrow(request.getNewPassword(), "New password");
 
         PasswordResetOtp row = passwordResetOtpRepository.findByResetTokenHashAndConsumedAtIsNull(hash(request.getResetToken()))
                 .orElseThrow(() -> new BadRequestException("Invalid or expired reset token."));

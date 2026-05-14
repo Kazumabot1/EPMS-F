@@ -2,11 +2,14 @@ package com.epms.service;
 
 import com.epms.dto.appraisal.AppraisalReviewSubmitRequest;
 import com.epms.dto.appraisal.EmployeeAppraisalFormResponse;
+import com.epms.dto.appraisal.AppraisalEmployeeOptionResponse;
 import com.epms.dto.appraisal.PmAppraisalSubmitRequest;
 
 import java.util.List;
 
 public interface EmployeeAppraisalWorkflowService {
+
+    List<AppraisalEmployeeOptionResponse> getPmEligibleEmployees(Integer cycleId, Integer pmUserId);
 
     EmployeeAppraisalFormResponse createPmDraft(Integer cycleId, Integer employeeId, Integer pmUserId);
 
